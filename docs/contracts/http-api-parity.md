@@ -94,3 +94,7 @@ MyDmsVnWebRuntimeRole **before granting any Desktop object or procedure rights**
 The elevated-permission SQL extension now rejects exact-fragment drift instead
 of silently changing the security allowlist. Real SQL execution and live HTTPS
 positive/negative cases remain mandatory under [Issue #4](https://github.com/chung6a8m/MyDmsVn-Vps/issues/4).
+
+## VPS-03 HTTP client cutover — implementation status (2026-11-16)
+
+The VPS-02 46-method register above remains the source of API route identities, not proof of live Desktop integration. The dedicated net48 HTTP adapter in draft PR #6 implements typed clients for these 46 methods, preserves frozen WEB2–WEB6 server routes, and removes Local/Server dependencies from production Desktop.App. Windows **SQL-free** builds/contract/session tests and their exact commit are listed in [VPS-03 evidence](../evidence/vps-03-desktop-http-cutover.md). Live Windows Desktop → HTTPS Host → SQL test evidence, real cookies, write recovery and published binary audits are **NOT RUN**. Neither source mapping nor mocked HTTP transports satisfy VPS-03 acceptance.
