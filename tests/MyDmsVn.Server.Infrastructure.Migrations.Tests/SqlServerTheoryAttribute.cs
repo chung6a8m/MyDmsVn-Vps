@@ -1,15 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Xunit;
-using Xunit.Sdk;
 
 namespace MyDmsVn.Server.Infrastructure.IntegrationTests;
 
-[TraitDiscoverer(
-    "MyDmsVn.Server.Infrastructure.IntegrationTests.SqlTestCategoryDiscoverer",
-    "MyDmsVn.Server.Infrastructure.Migrations.Tests")]
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
-public sealed class SqlServerTheoryAttribute : TheoryAttribute, Xunit.Sdk.ITraitAttribute
+public sealed class SqlServerTheoryAttribute : TheoryAttribute, Xunit.v3.ITraitAttribute
 {
     public SqlServerTheoryAttribute(params string[] categories)
     {
@@ -21,4 +18,7 @@ public sealed class SqlServerTheoryAttribute : TheoryAttribute, Xunit.Sdk.ITrait
         }
     }
     public IReadOnlyList<string> Categories { get; }
+
+    public IReadOnlyCollection<KeyValuePair<string, string>> GetTraits() =>
+        Categories.Select(category => new KeyValuePair<string, string>("Category", category)).ToArray();
 }
