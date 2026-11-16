@@ -21,6 +21,12 @@ VPS-00B Windows-2022 evidence before this increment: four SQL-free suites totali
 - [CI run 43849209711](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43849209711) on intermediate `d14bd5a`: static topology **PASS**, but eight Windows compile/discovery jobs failed due `xUnit1051`, `xUnit3003` and one nullable warning in a Security test. These failures remain recorded. Temporary `xunit.v3` lock regeneration was successful but does **not** count as executed tests.
 - Follow-up code scopes analyzer compatibility only to tests, fixes nullable, removes temporary write-enabled workflow and mandates new final-HEAD CI.
 
+## Verified intermediate Windows results — SHA 751b8f1
+
+[Foundation workflow 43850012731](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43850012731) completed **8/8 jobs SUCCESS** at `751b8f1`: static Linux, three net48 Windows builds, and TRX-backed Architecture **13/13**, Desktop.Session **212/212**, Application **363/363**, HttpHost **648/648**. Combined **1,236 passed, 0 failed, 0 skipped** (new contract tests contribute eight).
+
+[VPS-01 workflow 43850012712](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43850012712) completed **9/9 jobs SUCCESS** at `751b8f1`: Linux project topology/route/fixture static checks and eight Windows locked build and test discovery jobs. **3,255 discovered, not executed**: Desktop 813, Desktop.Ui 382, Catalog 17, Foundation 66, IntegrationTests 59, Inventory 127, Migrations 107, Security 1,684. These intermediate results do not automatically attest later commits.
+
 ## VPS-01 acceptance checklist
 
 | Requirement | State (update against final PR HEAD only) |

@@ -56,3 +56,7 @@ xUnit v3 custom SQL Fact/Theory category traits use `Xunit.v3.ITraitAttribute.Ge
 New contract gates compare the 29 source-declared controller route signatures against `docs/contracts/vps-01-route-inventory.json`, verify 178 local frozen WEB2-WEB6 fixture names and pin representative Newtonsoft success/error envelopes including decimal/int64 lexical forms and HTTP 401. The 29-row inventory is a **source map**, not evidence of live endpoint parity. Route coverage, Desktop HTTP parity, permission and SQL-backed effects remain VPS-02/03 gates.
 
 See [VPS-01 evidence](../evidence/vps-01-foundation.md) and [route inventory](../contracts/vps-01-route-inventory.json).
+
+### Eight additional Windows discovery floors (VPS-01)
+
+Run `dotnet test --list-tests` on each `net48` executable and count only indented `MyDmsVn.*` fully qualified test-case lines (not VSTest diagnostics). Windows-2022 VPS-01 reference run [#43850012712](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43850012712) discovered: Desktop **813**, Desktop.Ui **382**, SQL Catalog **17**, SQL Foundation **66**, SQL Harness **59**, SQL Inventory **127**, SQL Migrations **107**, SQL Security **1,684** — **3,255** listed cases total. The CI matrix fails if any suite drops below its floor; intentional changes require a reviewed inventory update. **These cases are discovered-only, not executed tests.**
