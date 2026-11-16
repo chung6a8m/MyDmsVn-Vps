@@ -118,18 +118,18 @@ public sealed class Vps02DesktopApiPrincipalSqlTests
                 }
 
                 var id = await connection.QuerySingleAsync<int>(
-                    "INSERT dbo.Products(Code,Name,Unit,IsActive) OUTPUT INSERTED.Id " +
+                    "INSERT dbo.Products(Code,Name,Unit,IsActive) OUTPUT INSERTED.ProductId " +
                     "VALUES(N'VPS02-PROBE',N'VPS-02 Product',N'EA',1);");
                 Assert.True(id > 0);
-                await connection.ExecuteAsync("UPDATE dbo.Products SET Name=N'VPS-02 Updated' WHERE Id=@id;", new { id });
+                await connection.ExecuteAsync("UPDATE dbo.Products SET Name=N'VPS-02 Updated' WHERE ProductId=@id;", new { id });
                 Assert.Equal("VPS-02 Updated", await connection.QuerySingleAsync<string>(
-                    "SELECT Name FROM dbo.Products WHERE Id=@id;", new { id }));
+                    "SELECT Name FROM dbo.Products WHERE ProductId=@id;", new { id }));
 
                 foreach (var statement in new[]
                 {
                     "INSERT dbo.Roles(RoleName,NormalizedRoleName) VALUES(N'Bypass',N'BYPASS');",
                     "UPDATE dbo.Users SET IsActive=0;",
-                    "DELETE dbo.Products WHERE Id=-1;",
+                    "DELETE dbo.Products WHERE ProductId=-1;",
                     "SELECT TOP(1) * FROM dbo.SecurityAuditEvents;",
                     "UPDATE dbo.SchemaVersions SET Applied=SYSUTCDATETIME();",
                     "CREATE TABLE dbo.UnsafeVps02(Id int);"
