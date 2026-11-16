@@ -126,7 +126,7 @@ internal static class SalesWireInput
         var search = query.TryGetValue("search", out var text) ? text : null; if (search != null) Text(search, 256, "search");
         return new CatalogLookupRequest(search, Int(limit, "limit", 200));
     }
-    private static Dictionary<string, string> Query(HttpRequestMessage request, string[] allowed)
+    internal static Dictionary<string, string> Query(HttpRequestMessage request, string[] allowed)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         var query = request.GetOwinContext().Request.QueryString.Value ?? "";
