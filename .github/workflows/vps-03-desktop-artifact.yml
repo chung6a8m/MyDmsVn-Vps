@@ -1,0 +1,60 @@
+name: VPS-03 Desktop published artifact boundary
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-published-boundary:
+    name: Windows net48 publish and dependency audit (not GUI/SQL E2E)
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.400'
+      - name: Locked restore and publish actual Desktop.App x86
+        shell: pwsh
+        run: |
+          dotnet restore src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj --locked-mode -v minimal
+          if ($LASTEXITCODE -ne 0) { throw 'VPS03.LockedRestoreFailed' }
+          dotnet publish src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj -c Release -f net48 --no-restore -p:PlatformTarget=x86 -o "$env:RUNNER_TEMP\vps03-desktop"
+          if ($LASTEXITCODE -ne 0) { throw 'VPS03.PublishFailed' }
+      - name: Enforce transitive lock and binary exclusion
+        shell: pwsh
+        run: |
+          $root = "$env:RUNNER_TEMP\vps03-desktop"
+          $exe = Join-Path $root 'MyDmsVn.Desktop.App.exe'
+          if (-not (Test-Path -LiteralPath $exe)) { throw 'VPS03.PublishedExeMissing' }
+          $lockPath = 'src/MyDmsVn.Desktop.App/packages.lock.json'
+          $lock = Get-Content -LiteralPath $lockPath -Raw | ConvertFrom-Json
+          $dependencies = @($lock.dependencies.'.NETFramework,Version=v4.8'.PSObject.Properties.Name)
+          if ($dependencies.Count -lt 5) { throw 'VPS03.LockfileEmpty' }
+          $forbidden = '(?i)(^|[.])(SqlClient|MediatR|RepoDb|Dapper|linq2db)([.]|$)|(?i)mydmsvn[.]server|mydmsvn[.]desktop[.]infrastructure[.]local'
+          $badDependencies = @($dependencies | Where-Object { $_ -match $forbidden })
+          if ($badDependencies.Count -gt 0) { throw "VPS03.UnsafePackageGraph: $($badDependencies -join ',')" }
+          $files = @(Get-ChildItem -LiteralPath $root -Recurse -File)
+          if ($files.Count -lt 3) { throw 'VPS03.PublishedPayloadEmpty' }
+          $badFiles = @($files | Where-Object {
+            $_.Name -match '(?i)^MyDmsVn[.]Server[.]' -or
+            $_.Name -match '(?i)^MyDmsVn[.]Desktop[.]Infrastructure[.]Local' -or
+            $_.Name -match '(?i)^MediatR' -or
+            $_.Name -match '(?i)(SqlClient|linq2db|RepoDb|Dapper|DbMigrator)'
+          })
+          if ($badFiles.Count -gt 0) { throw "VPS03.UnsafePublishedFiles: $(($badFiles.Name) -join ',')" }
+          foreach ($file in @($files | Where-Object { $_.Extension -in @('.json', '.config', '.ini', '.xml', '.txt') })) {
+            $content = [System.IO.File]::ReadAllText($file.FullName)
+            if ($content -match '(?i)(data\s+source|server)\s*=.+;(database|initial\s+catalog)\s*=' -or
+                $content -match '(?i)(password|pwd|user\s+id|uid)\s*[:=]' -or
+                $content -match '(?i)MYDMSVN_MIGRATION_SQLSERVER_CONNECTION_STRING') {
+              throw "VPS03.PublishedSecretOrSqlConfiguration: $($file.Name)"
+            }
+          }
+          Write-Host "PASS: $($dependencies.Count) lock graph entries, $($files.Count) published files; zero forbidden database/server/local runtime artifacts."
