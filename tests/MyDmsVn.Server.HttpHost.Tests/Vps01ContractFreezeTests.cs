@@ -29,9 +29,17 @@ public sealed class Vps01ContractFreezeTests
         var expected = endpoints.Select(e => Signature((string)e["httpMethod"]!,
             (string)e["path"]!, (string)e["controller"]!, (string)e["action"]!))
             .OrderBy(e => e, StringComparer.Ordinal).ToArray();
-        Assert.Equal(9, ControllerTypes.Length);
+        Assert.Equal(15, ControllerTypes.Length);
         Assert.Equal(29, expected.Length);
         Assert.Equal(29, expected.Distinct(StringComparer.Ordinal).Count());
+        var additions = (JArray)JObject.Parse(File.ReadAllText(Path.Combine(ContractsDirectory(),
+            "vps-02-route-additions.json")))["endpoints"]!;
+        var added = additions.Select(e => Signature((string)e["httpMethod"]!,
+            (string)e["path"]!, (string)e["controller"]!, (string)e["action"]!))
+            .OrderBy(e => e, StringComparer.Ordinal).ToArray();
+        Assert.Equal(28, added.Length);
+        Assert.Equal(28, added.Distinct(StringComparer.Ordinal).Count());
+        Assert.Empty(added.Intersect(expected, StringComparer.Ordinal));
 
         var actual = new List<string>();
         foreach (var type in ControllerTypes)
@@ -54,7 +62,8 @@ public sealed class Vps01ContractFreezeTests
                 actual.Add(Signature(verb, path, type.Name, method.Name));
             }
         }
-        Assert.Equal(expected, actual.OrderBy(e => e, StringComparer.Ordinal).ToArray());
+        Assert.Equal(expected.Concat(added).OrderBy(e => e, StringComparer.Ordinal).ToArray(),
+            actual.OrderBy(e => e, StringComparer.Ordinal).ToArray());
     }
 
     [Theory]

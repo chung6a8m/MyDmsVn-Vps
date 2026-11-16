@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 1,
+  "sourceBaseline": "767f352183bed6c66af5c677977232c9907bd23d",
+  "description": "VPS-02 additive attribute routes. VPS-01 baseline routes and golden corpora must remain unchanged. Source inventory, not HTTP/SQL acceptance.",
+  "endpoints": [
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/products",
+      "controller": "ProductsController",
+      "action": "List",
+      "feature": "Catalog.products",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/products/{id}",
+      "controller": "ProductsController",
+      "action": "Get",
+      "feature": "Catalog.products",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/catalog/products",
+      "controller": "ProductsController",
+      "action": "Create",
+      "feature": "Catalog.products",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/products/{id}",
+      "controller": "ProductsController",
+      "action": "Update",
+      "feature": "Catalog.products",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/products/{id}/active",
+      "controller": "ProductsController",
+      "action": "SetActive",
+      "feature": "Catalog.products",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/warehouses",
+      "controller": "WarehousesController",
+      "action": "List",
+      "feature": "Catalog.warehouses",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/warehouses/{id}",
+      "controller": "WarehousesController",
+      "action": "Get",
+      "feature": "Catalog.warehouses",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/catalog/warehouses",
+      "controller": "WarehousesController",
+      "action": "Create",
+      "feature": "Catalog.warehouses",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/warehouses/{id}",
+      "controller": "WarehousesController",
+      "action": "Update",
+      "feature": "Catalog.warehouses",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/warehouses/{id}/active",
+      "controller": "WarehousesController",
+      "action": "SetActive",
+      "feature": "Catalog.warehouses",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/employees",
+      "controller": "EmployeesController",
+      "action": "List",
+      "feature": "Catalog.employees",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/employees/{id}",
+      "controller": "EmployeesController",
+      "action": "Get",
+      "feature": "Catalog.employees",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/catalog/employees",
+      "controller": "EmployeesController",
+      "action": "Create",
+      "feature": "Catalog.employees",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/employees/{id}",
+      "controller": "EmployeesController",
+      "action": "Update",
+      "feature": "Catalog.employees",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/employees/{id}/active",
+      "controller": "EmployeesController",
+      "action": "SetActive",
+      "feature": "Catalog.employees",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/customers",
+      "controller": "CustomersController",
+      "action": "List",
+      "feature": "Catalog.customers",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/customers/{id}",
+      "controller": "CustomersController",
+      "action": "Get",
+      "feature": "Catalog.customers",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/catalog/customers",
+      "controller": "CustomersController",
+      "action": "Create",
+      "feature": "Catalog.customers",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/customers/{id}",
+      "controller": "CustomersController",
+      "action": "Update",
+      "feature": "Catalog.customers",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/customers/{id}/active",
+      "controller": "CustomersController",
+      "action": "SetActive",
+      "feature": "Catalog.customers",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/security/permissions/check",
+      "controller": "SecurityParityController",
+      "action": "CheckPermission",
+      "feature": "Security",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/security/permissions/catalog",
+      "controller": "SecurityParityController",
+      "action": "PermissionCatalog",
+      "feature": "Security",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/security/users",
+      "controller": "SecurityParityController",
+      "action": "ListUsers",
+      "feature": "Security",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/security/roles",
+      "controller": "SecurityParityController",
+      "action": "ListRoles",
+      "feature": "Security",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/security/mutations",
+      "controller": "SecurityParityController",
+      "action": "Mutate",
+      "feature": "Security",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/security/import/preview",
+      "controller": "SecurityParityController",
+      "action": "PreviewImport",
+      "feature": "Security",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/security/import/apply",
+      "controller": "SecurityParityController",
+      "action": "ApplyImport",
+      "feature": "Security",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/foundation/status",
+      "controller": "FoundationParityController",
+      "action": "Status",
+      "feature": "Foundation",
+      "authentication": "bearer",
+      "desktopApiMode": "enabled"
+    }
+  ]
+}
