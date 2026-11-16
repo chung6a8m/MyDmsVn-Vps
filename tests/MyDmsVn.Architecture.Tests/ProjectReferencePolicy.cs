@@ -17,6 +17,7 @@ namespace MyDmsVn.Architecture.Tests
                 ["MyDmsVn.Server.Application"] = Set("MyDmsVn.Contracts", "MyDmsVn.Server.Domain"),
                 ["MyDmsVn.Server.Infrastructure"] = Set("MyDmsVn.Server.Application", "MyDmsVn.Server.Domain"),
                 ["MyDmsVn.Server.DbMigrator"] = Set("MyDmsVn.Server.Infrastructure"),
+                ["MyDmsVn.Server.HttpHost"] = Set("MyDmsVn.Contracts", "MyDmsVn.Server.Application", "MyDmsVn.Server.Infrastructure"),
                 ["MyDmsVn.Desktop.Application"] = Set("MyDmsVn.Contracts"),
                 ["MyDmsVn.Desktop.Infrastructure.Local"] = Set(
                     "MyDmsVn.Desktop.Application",
@@ -25,10 +26,6 @@ namespace MyDmsVn.Architecture.Tests
                     "MyDmsVn.Desktop.Application",
                     "MyDmsVn.BootstrapSourceGrid"),
                 ["MyDmsVn.Desktop.App"] = Set(
-                    "MyDmsVn.Desktop.Infrastructure.Local",
-                    "MyDmsVn.Desktop.WinForms",
-                    "MyDmsVn.Server.Infrastructure"),
-                ["MyDmsVn.Desktop.AppCore"] = Set(
                     "MyDmsVn.Desktop.Infrastructure.Local",
                     "MyDmsVn.Desktop.WinForms",
                     "MyDmsVn.Server.Infrastructure"),

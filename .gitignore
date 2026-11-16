@@ -85,6 +85,13 @@ node_modules/
 dist/
 
 # ------------------------------
+# Python / foundation validation
+# ------------------------------
+__pycache__/
+*.pyc
+foundation-report.json
+
+# ------------------------------
 # OS files
 # ------------------------------
 Thumbs.db
