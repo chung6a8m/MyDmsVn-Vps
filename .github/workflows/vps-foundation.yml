@@ -1,0 +1,119 @@
+name: VPS foundation — legacy net48
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps-foundation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-foundation:
+    name: Linux static source foundation (not runtime)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Python checker compiles
+        run: python3 -m py_compile scripts/verify-vps-foundation.py
+      - name: Check in-repository projects, links and provenance
+        run: python3 scripts/verify-vps-foundation.py --report foundation-report.json
+      - name: Upload static report, including on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vps-static-foundation
+          path: foundation-report.json
+          if-no-files-found: warn
+
+  windows-net48:
+    name: Windows net48 build — ${{ matrix.id }}
+    runs-on: windows-2022
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: desktop
+            project: src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj
+          - id: legacy-http-host
+            project: src/MyDmsVn.Server.HttpHost/MyDmsVn.Server.HttpHost.csproj
+          - id: legacy-db-migrator
+            project: src/MyDmsVn.Server.DbMigrator/MyDmsVn.Server.DbMigrator.csproj
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.400'
+      - name: Verify Windows Framework and SDK
+        shell: pwsh
+        run: |
+          dotnet --info
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet --info failed' }
+          if (-not (Test-Path 'C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8')) {
+            throw 'Missing .NET Framework 4.8 reference assemblies on Windows runner'
+          }
+      - name: Locked restore and Release build
+        shell: pwsh
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: |
+          dotnet restore $env:PROJECT --locked-mode -v minimal
+          if ($LASTEXITCODE -ne 0) { throw "Locked restore failed: $env:PROJECT" }
+          dotnet build $env:PROJECT --no-restore -c Release -f net48 -v minimal
+          if ($LASTEXITCODE -ne 0) { throw "Release net48 build failed: $env:PROJECT" }
+
+  windows-smoke:
+    name: Windows SQL-free smoke — ${{ matrix.id }}
+    runs-on: windows-2022
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: application
+            project: tests/MyDmsVn.Server.Application.Tests/MyDmsVn.Server.Application.Tests.csproj
+          - id: architecture
+            project: tests/MyDmsVn.Architecture.Tests/MyDmsVn.Architecture.Tests.csproj
+          - id: desktop-session
+            project: tests/MyDmsVn.Desktop.Session.Tests/MyDmsVn.Desktop.Session.Tests.csproj
+          - id: legacy-http-host
+            project: tests/MyDmsVn.Server.HttpHost.Tests/MyDmsVn.Server.HttpHost.Tests.csproj
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.400'
+      - name: Locked restore and SQL-free smoke with TRX
+        shell: pwsh
+        env:
+          TEST_PROJECT: ${{ matrix.project }}
+          TEST_ID: ${{ matrix.id }}
+        run: |
+          dotnet restore $env:TEST_PROJECT --locked-mode -v minimal
+          if ($LASTEXITCODE -ne 0) { throw "Locked restore failed: $env:TEST_PROJECT" }
+          New-Item -ItemType Directory -Path "$env:RUNNER_TEMP\trx" -Force | Out-Null
+          dotnet test $env:TEST_PROJECT -c Release -f net48 --no-restore -v minimal --logger "trx;LogFileName=$env:TEST_ID.trx" --results-directory "$env:RUNNER_TEMP\trx"
+          if ($LASTEXITCODE -ne 0) { throw "Test run failed: $env:TEST_PROJECT" }
+          $reports = @(Get-ChildItem -Path "$env:RUNNER_TEMP\trx" -Filter '*.trx')
+          if ($reports.Count -ne 1) { throw "Expected one TRX file; found $($reports.Count)" }
+          [xml]$trx = Get-Content -LiteralPath $reports[0].FullName -Raw
+          $counts = $trx.TestRun.ResultSummary.Counters
+          if ([int]$counts.total -le 0 -or [int]$counts.executed -le 0) {
+            throw "Zero-test execution is not PASS: $env:TEST_PROJECT"
+          }
+          Write-Host "Test counts: total=$($counts.total), executed=$($counts.executed), failed=$($counts.failed), notExecuted=$($counts.notExecuted)"
+      - name: Preserve test evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vps-smoke-${{ matrix.id }}
+          path: ${{ runner.temp }}/trx/*.trx
+          if-no-files-found: warn
