@@ -1,6 +1,6 @@
 # Issue #7 — UNKNOWN write recovery (VPS-03, operator runbook)
 
-**Status:** source implementation / mock tests are not production acceptance. **No automatic replay.** This runbook is scoped to this repository and the exact deployed origin, schema, and commit. Maintain PR #6 as Draft until independent Windows GUI + HTTPS + SQL evidence and an Owner decision on any exceptions.
+**Status (17 November 2026):** code `4a16c3a` verified on Windows CI (18/18 jobs; 1,296/1,296 SQL-free tests). This is **not** production acceptance. **No automatic replay.** This runbook is scoped to this repository and the exact deployed origin, schema, and commit. Maintain PR #6 as Draft until independent Windows GUI + HTTPS + SQL evidence and an Owner decision on any exceptions.
 
 ## Durable owner boundary
 
