@@ -10,25 +10,41 @@
 
 ## First CI observation — Run #1, HEAD e8ecfc0
 
-[GitHub Actions run #1](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43839674651), first PR HEAD §e8ecfc0f781c4515aa87a9443418b59955012a17§:
+[GitHub Actions run #1](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43839674651), first PR HEAD `e8ecfc0f781c4515aa87a9443418b59955012a17`:
 
 - Linux static foundation: **PASS**.
 - Windows Release net48 locked builds: **Desktop.App PASS; legacy HttpHost PASS; DbMigrator PASS**.
 - Windows SQL-free smoke: Application PASS, Desktop.Session PASS.
 - Architecture: **FAIL** (11 passed, 2 failed, total 13); one missing allowed-reference policy for existing HttpHost, and one expected but absent independent Security Administration runbook.
-- HttpHost: **FAIL** (324 passed, 211 failed, total 535); tests expect canonical WEB2–WEB6 JSON corpora under §docs/contracts/§ omitted by one-time import. This was a fixture availability failure, not evidence of product API regression.
+- HttpHost: **FAIL** (324 passed, 211 failed, total 535); tests expect canonical WEB2–WEB6 JSON corpora under `docs/contracts/` omitted by one-time import. This was a fixture availability failure, not evidence of product API regression.
 - Failures are not waived or relabeled. VPS-00B repairs the test harness/document fixture boundary, then requires rerun on a **new final HEAD**.
+
+## Verified correction — Run #2, HEAD a726e42
+
+[GitHub Actions run #2](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43841290090) completed **SUCCESS (8/8 jobs)** on SHA `a726e4223d53b889b714e1539a34ca4dd9ae86c0`, after retaining the original failures above as evidence.
+
+- Ubuntu static guard: **PASS**. 44 projects, 92 in-tree ProjectReferences, 5 solutions/50 solution entries, 13 historic SQL scripts, 45 governance links, zero checker errors. Fixture corpus count guard PASS.
+- Windows locked Release `net48` builds: **Desktop.App PASS**, **legacy HttpHost PASS**, **DbMigrator PASS**.
+- Architecture.Tests: **13 passed / 13 total, 0 skipped, 0 failed**.
+- Desktop.Session.Tests: **212 passed / 212 total, 0 skipped, 0 failed**.
+- Server.Application.Tests: **363 passed / 363 total, 0 skipped, 0 failed**.
+- Server.HttpHost.Tests: **640 passed / 640 total, 0 skipped, 0 failed**.
+- **Combined SQL-free tests: 1,228 passed / 1,228 total**, zero failed or skipped, verified from TRX counts in job logs.
+- Frozen WEB2–WEB6 corpus assets: **178/178 SHA-identical blobs** compared against pinned source snapshot `bac73004328884f5322c7c87d9787b8150885ac0` (no Git link or runtime dependency).
+- Fixed architecture policy for imported HttpHost and removed excluded AppCore policy; created independent Security Administration runbook. No production `src/` implementation was modified.
+
+**Review boundary:** This ledger update is documentation-only and creates a subsequent commit. A new CI run on the final documentation HEAD is required before merging PR #1. Results above apply **exactly** to `a726e42`, not automatically to any subsequent SHA.
 
 ## VPS-00B verification checklist
 
-| Gate | Initial state | Evidence required before completing VPS-00B |
+| Gate | Verified at a726e42 | Remaining condition |
 | --- | --- | --- |
-| Root docs, three Owner decisions and independent roadmap | IMPLEMENTED on branch | PR diff and cross-links reviewed |
-| Static repo boundary guard | NOT RUN at initial commit | Linux CI success + JSON checker report on HEAD |
-| Desktop.App net48 Windows build | NOT RUN at initial commit | Windows locked restore/build job on HEAD |
-| Legacy HttpHost net48 Windows build | NOT RUN at initial commit | Windows locked restore/build job on HEAD |
-| Legacy DbMigrator net48 Windows build | NOT RUN at initial commit | Windows locked restore/build job on HEAD |
-| SQL-free smoke tests (nonempty count) | NOT RUN at initial commit | Windows TRX artifact / executed-count guard on HEAD |
+| Root docs, three Owner decisions and independent roadmap | IMPLEMENTED | Independent PR review before merge |
+| Static repo boundary guard | PASS — Ubuntu checker | Rerun after final docs commit |
+| Desktop.App net48 Windows build | PASS — Windows 2022 | Rerun after final docs commit |
+| Legacy HttpHost net48 Windows build | PASS — Windows 2022 | Rerun after final docs commit |
+| Legacy DbMigrator net48 Windows build | PASS — Windows 2022 | Rerun after final docs commit |
+| SQL-free smoke tests (nonempty count) | PASS — 1,228/1,228 | Rerun after final docs commit |
 | SQL Server integration | NOT RUN, excluded from VPS-00B CI | Separate non-production SQL instance needed |
 | Windows attended UI | NOT RUN, excluded from headless CI | Later attended test protocol |
 | ASP.NET Core 10 running on Linux | NOT RUN, not in VPS-00B | VPS-04/VPS-09 |

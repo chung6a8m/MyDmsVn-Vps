@@ -2,10 +2,10 @@
 
 **Owner decisions:** OWN-VPS-01, OWN-VPS-02 and OWN-VPS-03 APPROVED on 2026-11-16. See [decision register](../decisions/README.md). State below is for this repository **only**, never inherited from the source.
 
-| Increment | Status as of VPS-00B branch creation | Evidence/next gate |
+| Increment | Current branch status | Evidence/next gate |
 | --- | --- | --- |
 | VPS-00A — One-time Source Import | COMPLETE (static integrity only) | [2,282/2,282 source parity](../import/README.md), import verification SHA in import report |
-| VPS-00B — Documentation & Build Foundation | IN PROGRESS / PR REVIEW | [baseline evidence ledger](../evidence/vps-00b-baseline.md): Windows net48 build and CI must be checked on final PR HEAD |
+| VPS-00B — Documentation & Build Foundation | IMPLEMENTED / CI VERIFIED; PR #1 REVIEW PENDING | [evidence ledger](../evidence/vps-00b-baseline.md): 8/8 jobs, 1,228/1,228 smoke tests at `a726e42`; review and check the final PR HEAD before merge |
 | VPS-01 — Test & Contract Foundation | NOT STARTED | xUnit v3, zero-test prevention, contract fixtures |
 | VPS-02 — HTTP API Parity | NOT STARTED | API parity matrix and real endpoint validation |
 | VPS-03 — Desktop HTTP Cutover | NOT STARTED | Remove production Local/SQL/Server dependencies |
@@ -19,7 +19,7 @@
 ## Status rules
 
 - `NOT STARTED` means no implementation or acceptance evidence.
-- `IN PROGRESS` means work exists; no acceptance implied. Review and CI failures remain open until resolved.
+- `IN PROGRESS` means work exists; no acceptance implied. `IMPLEMENTED / CI VERIFIED` means code and specified CI gates passed on a named commit; review/merge and any new final-HEAD rerun remain separate.
 - `COMPLETE` requires all documented **increment-specific** gates with commit-specific evidence; it does not imply production readiness.
 - `BLOCKED` requires precise failed gate, environment, owner and next action. `EXCEPTION` requires explicit dated Owner acceptance; never infer one.
 - Link PRs, HEAD SHA, CI runs, test counts, and any skipped/failed obligations under `docs/evidence/`. Distinguish Windows build, Linux static validation, real Linux runtime, SQL integration and attended GUI evidence.

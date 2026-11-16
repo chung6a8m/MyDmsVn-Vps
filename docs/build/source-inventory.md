@@ -26,7 +26,7 @@ The *primary* `src/` and test projects still target net48. Some vendored/sample 
 
 ## Test fixture recovery in VPS-00B
 
-The first Windows HttpHost smoke revealed 211 failures due to absent canonical JSON corpora under §docs/contracts/§ (these were excluded along with source governance during import). VPS-00B restores the **178 immutable contract fixture files only**, with an [independent register](../contracts/README.md). These assets are now local; no cross-repository fetch is needed at build or test time.
+The first Windows HttpHost smoke revealed 211 failures due to absent canonical JSON corpora under `docs/contracts/` (these were excluded along with source governance during import). VPS-00B restores the **178 immutable contract fixture files only**, with an [independent register](../contracts/README.md). These assets are now local; no cross-repository fetch is needed at build or test time.
 
 ## Import isolation already verified
 

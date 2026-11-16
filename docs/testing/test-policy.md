@@ -39,7 +39,7 @@ The only approved test connection variable in the imported harness is `MYDMSVN_T
 
 ## Frozen fixture corpus
 
-The first CI run exposed missing imported WEB2–WEB6 fixture assets. VPS-00B recovers them as **local, immutable** technical files under §docs/contracts/§, with an independent provenance register. Existing HttpHost tests read those paths; never fetch them from upstream at test time. Preserve their exact input/output JSON until a separately accepted contract migration.
+The first CI run exposed missing imported WEB2–WEB6 fixture assets. VPS-00B recovers them as **local, immutable** technical files under `docs/contracts/`, with an independent provenance register. Existing HttpHost tests read those paths; never fetch them from upstream at test time. Preserve their exact input/output JSON until a separately accepted contract migration.
 
 ## Contract, concurrency and E2E later
 
