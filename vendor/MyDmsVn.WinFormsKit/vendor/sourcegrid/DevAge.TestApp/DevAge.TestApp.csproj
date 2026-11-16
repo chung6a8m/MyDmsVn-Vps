@@ -1,0 +1,68 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>TestApp</RootNamespace>
+    <AssemblyName>TestApp</AssemblyName>
+    <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Update="Properties\Resources.resources">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <None Update="Samples\TypedDatasetSample.xsc">
+      <DependentUpon>TypedDatasetSample.xsd</DependentUpon>
+    </None>
+    <None Update="Samples\TypedDatasetSample.xss">
+      <DependentUpon>TypedDatasetSample.xsd</DependentUpon>
+    </None>
+    <None Update="Samples\TypedDatasetSample.xsx">
+      <DependentUpon>TypedDatasetSample.xsd</DependentUpon>
+    </None>
+    <Content Include="Samples\TypedDatasetSample.xsd">
+      <Generator>MSDataSetGenerator</Generator>
+      <LastGenOutput>TypedDatasetSample.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SourceGrid\SourceGrid.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Samples\Resources\Sample30Menu0.png">
+      <LogicalName>DevAge.TestApp.Samples.Resources.Sample30Menu0.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Samples\Resources\Sample30Menu1.png">
+      <LogicalName>DevAge.TestApp.Samples.Resources.Sample30Menu1.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Samples\Resources\Sample30Menu2.png">
+      <LogicalName>DevAge.TestApp.Samples.Resources.Sample30Menu2.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Samples\Resources\Sample30Menu3.png">
+      <LogicalName>DevAge.TestApp.Samples.Resources.Sample30Menu3.png</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Data.DataSetExtensions" />
+    <PackageReference Include="System.Resources.Extensions" Condition="'$(TargetFramework)' == 'net48'" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Properties\TestAppResources.Designer.cs" />
+    <Compile Remove="Samples\frmSample1.cs" />
+    <Compile Remove="Samples\frmSample1.Designer.cs" />
+    <EmbeddedResource Remove="Properties\TestAppResources.resx" />
+    <EmbeddedResource Remove="Samples\frmSample1.resx" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Update="Properties\Settings.Designer.cs">
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+    </Compile>
+  </ItemGroup>
+</Project>

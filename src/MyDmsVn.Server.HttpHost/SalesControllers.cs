@@ -1,0 +1,123 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Web.Http;
+using ErrorOr;
+using MediatR;
+using Microsoft.Extensions.DependencyInjection;
+using MyDmsVn.Contracts;
+using MyDmsVn.Server.Application;
+using MyDmsVn.Server.Application.Catalog;
+using MyDmsVn.Server.Application.Identity;
+using MyDmsVn.Server.Application.Sales;
+using MyDmsVn.Server.Application.Operations;
+using Newtonsoft.Json.Linq;
+
+namespace MyDmsVn.Server.HttpHost;
+
+public abstract class WireApiController : ApiController
+{
+    protected WireApiController(IMediator mediator, IRequestCorrelationAccessor correlation) { Mediator = mediator; Correlation = correlation; }
+    protected IMediator Mediator { get; }
+    private IRequestCorrelationAccessor Correlation { get; }
+    private protected WebOperationContext? Operation<T>(WebOperationKind kind, long? target, StrictJsonRequest<T> request) =>
+        Operation(kind, target, request.Source);
+
+    private protected WebOperationContext? Operation(WebOperationKind kind, long? target, JObject body)
+    {
+        var context = Request.GetOwinContext();
+        if (!context.Get<WebHostOptions>(AuthController.OptionsKey).Web4Enabled)
+        {
+            if (Request.Headers.Contains("Idempotency-Key") || Request.Headers.Contains("X-MyDmsVn-Deployment-Epoch") || Request.Headers.Contains("X-MyDmsVn-Operation-Fingerprint"))
+                throw new WireInputException();
+            return null;
+        }
+        var identity = context.Get<IServiceProvider>(Web2Pipeline.ScopeKey).GetRequiredService<RequestIdentityAdmission>();
+        return WebOperationWireInput.CreateContext(Request, kind, target, body,
+            identity.SessionId ?? throw new WebOperationException("Auth.Unauthorized"));
+    }
+    protected async Task<HttpResponseMessage> Execute<T>(Func<Task<ErrorOr<T>>> operation, Func<T, object> map)
+    {
+        try
+        {
+            var result = await operation().ConfigureAwait(false);
+            if (result.IsError && result.Errors.Count == 1 && !result.FirstError.Code.StartsWith("Auth.", StringComparison.Ordinal) &&
+                WebOperationHttpErrors.TryMap(result.FirstError.Code, Correlation.CorrelationId, out var protocolError))
+                return protocolError!;
+            return result.IsError ? HttpJson.From(ApiResponseMapper.Map(result, "Request", Correlation.CorrelationId)) : HttpJson.Success(map(result.Value));
+        }
+        catch (WireInputException error)
+        {
+            return HttpJson.From(ApiResponse<object>.Failure(new ApiError(ApiStatusCode.BadRequest, "ValidationError", "The request is invalid.",
+                new[] { new ApiErrorDetail("Validation.InvalidValue", "The field or request format is invalid.", error.Field) }, Correlation.CorrelationId)));
+        }
+        catch (WebOperationException error)
+        {
+            return WebOperationHttpErrors.Map(error.Code, Correlation.CorrelationId);
+        }
+    }
+}
+
+[RoutePrefix("api/v1/sales-receipts")]
+public sealed class SalesReceiptsController : WireApiController
+{
+    public SalesReceiptsController(IMediator mediator, IRequestCorrelationAccessor correlation) : base(mediator, correlation) { }
+    [HttpGet, Route("")]
+    public Task<HttpResponseMessage> List(CancellationToken cancellationToken) => Execute<SalesReceiptListPage>(async () =>
+    {
+        await SalesWireInput.EmptyBody(Request).ConfigureAwait(false);
+        return await Mediator.Send(new ListSalesReceiptsQuery(SalesHttpRequestMapper.ToApplication(SalesWireInput.List(Request))), cancellationToken).ConfigureAwait(false);
+    }, SalesWireOutput.Page);
+    [HttpGet, Route("{saleId}")]
+    public Task<HttpResponseMessage> Get(string saleId, CancellationToken cancellationToken) => Execute<SalesReceiptDto>(async () =>
+    {
+        SalesWireInput.NoQuery(Request); await SalesWireInput.EmptyBody(Request).ConfigureAwait(false);
+        var input = SalesWireInput.Get(saleId);
+        return await Mediator.Send(new GetSalesReceiptByIdQuery(input.SaleId), cancellationToken).ConfigureAwait(false);
+    }, SalesWireOutput.Detail);
+    [HttpPost, Route("")]
+    public Task<HttpResponseMessage> Create(CancellationToken cancellationToken) => Execute<SalesReceiptDto>(async () =>
+    {
+        var request = await SalesWireInput.Body(Request, SalesWireInput.Create).ConfigureAwait(false);
+        var input = SalesHttpRequestMapper.ToApplication(request.Value);
+        return await Mediator.Send(new CreateSalesReceiptDraftCommand(input, Operation(WebOperationKind.SalesCreate, null, request)), cancellationToken).ConfigureAwait(false);
+    }, SalesWireOutput.Detail);
+    [HttpPut, Route("{saleId}/draft")]
+    public Task<HttpResponseMessage> Update(string saleId, CancellationToken cancellationToken) => Execute<SalesReceiptDto>(async () =>
+    {
+        var id = SalesWireInput.Long(saleId);
+        var request = await SalesWireInput.Body(Request, body => SalesWireInput.Update(id, body)).ConfigureAwait(false);
+        var input = SalesHttpRequestMapper.ToApplication(request.Value);
+        return await Mediator.Send(new UpdateSalesReceiptDraftCommand(input, Operation(WebOperationKind.SalesUpdate, id, request)), cancellationToken).ConfigureAwait(false);
+    }, SalesWireOutput.Detail);
+    [HttpPost, Route("{saleId}/post")]
+    public Task<HttpResponseMessage> Post(string saleId, CancellationToken cancellationToken) => Execute<PostSalesReceiptResponse>(async () =>
+    {
+        var id = SalesWireInput.Long(saleId);
+        var request = await SalesWireInput.Body(Request, body => SalesWireInput.Post(id, body)).ConfigureAwait(false);
+        var input = SalesHttpRequestMapper.ToApplication(request.Value);
+        return await Mediator.Send(new PostSalesReceiptCommand(input, Operation(WebOperationKind.SalesPost, id, request)), cancellationToken).ConfigureAwait(false);
+    }, SalesWireOutput.Post);
+}
+
+[RoutePrefix("api/v1/catalog")]
+public sealed class CatalogLookupController : WireApiController
+{
+    public CatalogLookupController(IMediator mediator, IRequestCorrelationAccessor correlation) : base(mediator, correlation) { }
+    [HttpGet, Route("products/lookup")]
+    public Task<HttpResponseMessage> Products(CancellationToken cancellationToken) => Lookup(request => new LookupProductsQuery(request), cancellationToken);
+    [HttpGet, Route("customers/lookup")]
+    public Task<HttpResponseMessage> Customers(CancellationToken cancellationToken) => Lookup(request => new LookupCustomersQuery(request), cancellationToken);
+    [HttpGet, Route("warehouses/lookup")]
+    public Task<HttpResponseMessage> Warehouses(CancellationToken cancellationToken) => Lookup(request => new LookupWarehousesQuery(request), cancellationToken);
+    [HttpGet, Route("employees/lookup")]
+    public Task<HttpResponseMessage> Employees(CancellationToken cancellationToken) => Lookup(request => new LookupEmployeesQuery(request), cancellationToken);
+    private Task<HttpResponseMessage> Lookup(Func<CatalogLookupRequest, IRequest<ErrorOr<IReadOnlyList<CatalogLookupDto>>>> query, CancellationToken cancellationToken) =>
+        Execute<IReadOnlyList<CatalogLookupDto>>(async () =>
+        {
+            await SalesWireInput.EmptyBody(Request).ConfigureAwait(false);
+            return await Mediator.Send(query(SalesWireInput.Lookup(Request)), cancellationToken).ConfigureAwait(false);
+        }, rows => rows);
+}

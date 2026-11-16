@@ -1,0 +1,63 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+    <ApplicationIcon>App.ico</ApplicationIcon>
+    <AssemblyName>WindowsFormsSample</AssemblyName>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>WindowsFormsSample</RootNamespace>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Deterministic>false</Deterministic>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="EmptyFirebirdDatabasePreparer.cs" />
+    <Compile Remove="FirebirdEmbeddedPreparer.cs" />
+    <Compile Remove="GridSamples\PingGrids\frmSample60.cs" />
+    <Compile Remove="GridSamples\PingGrids\frmSample60.Designer.cs" />
+    <Compile Remove="GridSamples\PingGrids\InsertRowsOperation.cs" />
+    <Compile Remove="GridSamples\PingGrids\SessionFactoryManager.cs" />
+    <Compile Remove="GridSamples\PingGrids\SessionManager.cs" />
+    <Compile Remove="GridSamples\PingGrids\TransactionManager.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Remove="GridSamples\PingGrids\frmSample60.resx" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Castle.Core">
+      <HintPath>..\libs\Castle.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="Castle.MicroKernel">
+      <HintPath>..\libs\Castle.MicroKernel.dll</HintPath>
+    </Reference>
+    <Reference Include="Castle.Windsor">
+      <HintPath>..\libs\Castle.Windsor.dll</HintPath>
+    </Reference>
+    <Reference Include="Esent.Collections">
+      <HintPath>..\libs\Esent.Collections.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="GridSamples\SampleData.xml" />
+    <EmbeddedResource Include="GridSamples\SampleData2.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SourceGrid.PingGrid.Backend.Essent\SourceGrid.PingGrid.Backend.Essent.csproj" />
+    <ProjectReference Include="..\SourceGrid.PingGrid.Backends.DSet\SourceGrid.PingGrid.Backends.DSet.csproj" />
+    <ProjectReference Include="..\SourceGrid\SourceGrid.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Resources.Extensions" Condition="'$(TargetFramework)' == 'net48'" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Update="Properties\Resources.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>

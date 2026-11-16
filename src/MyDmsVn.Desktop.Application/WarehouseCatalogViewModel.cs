@@ -1,0 +1,47 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Messaging;
+using MyDmsVn.Contracts;
+
+namespace MyDmsVn.Desktop.Application
+{
+    public sealed class WarehouseCatalogViewModel : CatalogViewModel<WarehouseDto>
+    {
+        private readonly IWarehouseApiClient _client;
+        private string _code = string.Empty;
+        private string _name = string.Empty;
+        private string? _address;
+
+        public WarehouseCatalogViewModel(IWarehouseApiClient client, IMessenger messenger, IUiDispatcher dispatcher, IDesktopNotificationService notifications, IAsyncDelay delay, TimeSpan? debounceInterval = null, IDesktopExceptionReporter? exceptionReporter = null)
+            : base(CatalogKind.Warehouse, messenger, dispatcher, notifications, delay, debounceInterval, exceptionReporter)
+        {
+            _client = client ?? throw new ArgumentNullException(nameof(client));
+            InitializeAcceptedEditor();
+        }
+        public string Code { get => _code; set => SetProperty(ref _code, value ?? string.Empty); }
+        public string Name { get => _name; set => SetProperty(ref _name, value ?? string.Empty); }
+        public string? Address { get => _address; set => SetProperty(ref _address, value); }
+        protected override Task<ApiResponse<PagedResult<WarehouseDto>>> ListAsync(CatalogListRequest request, CancellationToken cancellationToken) => _client.ListAsync(request, cancellationToken);
+        protected override Task<ApiResponse<WarehouseDto>> GetAsync(int id, CancellationToken cancellationToken) => _client.GetAsync(id, cancellationToken);
+        protected override Task<ApiResponse<WarehouseDto>> CreateAsync(CancellationToken cancellationToken) => _client.CreateAsync(new SaveWarehouseRequest(Code, Name, Address), cancellationToken);
+        protected override Task<ApiResponse<WarehouseDto>> UpdateAsync(int id, CancellationToken cancellationToken) => _client.UpdateAsync(id, new SaveWarehouseRequest(Code, Name, Address), cancellationToken);
+        protected override Task<ApiResponse<UnitResponse>> SetActiveCoreAsync(int id, bool isActive, CancellationToken cancellationToken) => _client.SetActiveAsync(id, isActive, cancellationToken);
+        protected override int GetId(WarehouseDto item) => item.Id;
+        protected override WarehouseDto WithActiveStatus(WarehouseDto item, bool isActive) => new WarehouseDto(item.Id, item.Code, item.Name, item.Address, isActive);
+        protected override void PopulateEditor(WarehouseDto item) { Code = item.Code; Name = item.Name; Address = item.Address; }
+        protected override void ClearEditor() { Code = string.Empty; Name = string.Empty; Address = null; }
+        protected override IReadOnlyDictionary<string, string> CaptureEditorFields() =>
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [nameof(Code)] = Code, [nameof(Name)] = Name, [nameof(Address)] = Address ?? string.Empty,
+            };
+        protected override IReadOnlyDictionary<string, string> CaptureAcceptedFields(WarehouseDto item) =>
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [nameof(Code)] = item.Code, [nameof(Name)] = item.Name,
+                [nameof(Address)] = item.Address ?? string.Empty,
+            };
+    }
+}

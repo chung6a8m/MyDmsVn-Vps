@@ -1,0 +1,892 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Drawing;
+using System.Threading;
+using System.Windows.Forms;
+using MyDmsVn.Bootstrap5WinFormUI.Controls;
+using MyDmsVn.Bootstrap5WinFormUI.Theme;
+using MyDmsVn.Desktop.Application;
+using MyDmsVn.Desktop.WinForms.Features.Security;
+
+namespace MyDmsVn.Desktop.WinForms
+{
+    public sealed class FoundationShellForm : Form
+    {
+        private readonly Dictionary<string, TabPage> _documents =
+            new Dictionary<string, TabPage>(StringComparer.Ordinal);
+        private readonly FoundationViewModel _viewModel;
+        private readonly ToolStripStatusLabel _statusLabel;
+        private readonly ToolStripStatusLabel _currentUserLabel;
+        private readonly ToolStripProgressBar _busyIndicator;
+        private readonly IDesktopSession? _session;
+        private readonly IDesktopNotificationService? _notifications;
+        private readonly ICatalogControlFactory? _catalogControlFactory;
+        private readonly IGoodsReceiptControlFactory? _goodsReceiptControlFactory;
+        private readonly IInventoryControlFactory? _inventoryControlFactory;
+        private readonly ISalesReceiptControlFactory? _salesReceiptControlFactory;
+        private readonly ISecurityAdministrationControlFactory? _securityAdministrationControlFactory;
+        private readonly int _uiThreadId;
+        private readonly WorkspaceCloseCoordinator _closeCoordinator;
+        private CancellationTokenSource _workspaceCloseLifetime = new CancellationTokenSource();
+        private long? _workspaceSessionVersion;
+        private bool _openingWorkspace;
+        private bool _disposedResources;
+        private Button? _themeButton;
+        private Label? _sessionUserLabel;
+
+        public FoundationShellForm(FoundationViewModel viewModel)
+            : this(viewModel, null, null, null, null, null, null, true)
+        {
+        }
+
+        public FoundationShellForm(
+            FoundationViewModel viewModel,
+            IDesktopSession session,
+            IDesktopNotificationService notifications)
+            : this(
+                viewModel,
+                session ?? throw new ArgumentNullException(nameof(session)),
+                notifications ?? throw new ArgumentNullException(nameof(notifications)),
+                null,
+                null,
+                null,
+                null,
+                true)
+        {
+        }
+
+        public FoundationShellForm(
+            FoundationViewModel viewModel,
+            IDesktopSession session,
+            IDesktopNotificationService notifications,
+            ICatalogControlFactory catalogControlFactory)
+            : this(
+                viewModel,
+                session ?? throw new ArgumentNullException(nameof(session)),
+                notifications ?? throw new ArgumentNullException(nameof(notifications)),
+                catalogControlFactory ?? throw new ArgumentNullException(nameof(catalogControlFactory)),
+                null,
+                null,
+                null,
+                true)
+        {
+        }
+
+        public FoundationShellForm(
+            FoundationViewModel viewModel,
+            IDesktopSession session,
+            IDesktopNotificationService notifications,
+            ICatalogControlFactory catalogControlFactory,
+            IGoodsReceiptControlFactory goodsReceiptControlFactory,
+            IInventoryControlFactory inventoryControlFactory,
+            ISecurityAdministrationControlFactory securityAdministrationControlFactory)
+            : this(
+                viewModel,
+                session ?? throw new ArgumentNullException(nameof(session)),
+                notifications ?? throw new ArgumentNullException(nameof(notifications)),
+                catalogControlFactory ?? throw new ArgumentNullException(nameof(catalogControlFactory)),
+                goodsReceiptControlFactory ?? throw new ArgumentNullException(nameof(goodsReceiptControlFactory)),
+                inventoryControlFactory ?? throw new ArgumentNullException(nameof(inventoryControlFactory)),
+                securityAdministrationControlFactory ?? throw new ArgumentNullException(nameof(securityAdministrationControlFactory)),
+                true)
+        {
+        }
+
+        public FoundationShellForm(
+            FoundationViewModel viewModel,
+            IDesktopSession session,
+            IDesktopNotificationService notifications,
+            ICatalogControlFactory catalogControlFactory,
+            IGoodsReceiptControlFactory goodsReceiptControlFactory)
+            : this(
+                viewModel,
+                session ?? throw new ArgumentNullException(nameof(session)),
+                notifications ?? throw new ArgumentNullException(nameof(notifications)),
+                catalogControlFactory ?? throw new ArgumentNullException(nameof(catalogControlFactory)),
+                goodsReceiptControlFactory ?? throw new ArgumentNullException(nameof(goodsReceiptControlFactory)),
+                null,
+                null,
+                true)
+        {
+        }
+
+        public FoundationShellForm(
+            FoundationViewModel viewModel,
+            IDesktopSession session,
+            IDesktopNotificationService notifications,
+            ICatalogControlFactory catalogControlFactory,
+            IGoodsReceiptControlFactory goodsReceiptControlFactory,
+            IInventoryControlFactory inventoryControlFactory)
+            : this(
+                viewModel,
+                session ?? throw new ArgumentNullException(nameof(session)),
+                notifications ?? throw new ArgumentNullException(nameof(notifications)),
+                catalogControlFactory ?? throw new ArgumentNullException(nameof(catalogControlFactory)),
+                goodsReceiptControlFactory ?? throw new ArgumentNullException(nameof(goodsReceiptControlFactory)),
+                inventoryControlFactory ?? throw new ArgumentNullException(nameof(inventoryControlFactory)),
+                null,
+                true)
+        {
+        }
+
+        public FoundationShellForm(FoundationViewModel viewModel, IDesktopSession session,
+            IDesktopNotificationService notifications, ICatalogControlFactory catalogControlFactory,
+            IGoodsReceiptControlFactory goodsReceiptControlFactory, IInventoryControlFactory inventoryControlFactory,
+            ISecurityAdministrationControlFactory securityAdministrationControlFactory, ISalesReceiptControlFactory salesReceiptControlFactory)
+            : this(viewModel, session, notifications, catalogControlFactory, goodsReceiptControlFactory, inventoryControlFactory,
+                securityAdministrationControlFactory)
+        { _salesReceiptControlFactory = salesReceiptControlFactory ?? throw new ArgumentNullException(nameof(salesReceiptControlFactory)); }
+
+        private FoundationShellForm(
+            FoundationViewModel viewModel,
+            IDesktopSession? session,
+            IDesktopNotificationService? notifications,
+            ICatalogControlFactory? catalogControlFactory,
+            IGoodsReceiptControlFactory? goodsReceiptControlFactory,
+            IInventoryControlFactory? inventoryControlFactory,
+            ISecurityAdministrationControlFactory? securityAdministrationControlFactory,
+            bool initialize)
+        {
+            _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+            _session = session;
+            _notifications = notifications;
+            _catalogControlFactory = catalogControlFactory;
+            _goodsReceiptControlFactory = goodsReceiptControlFactory;
+            _inventoryControlFactory = inventoryControlFactory;
+            _securityAdministrationControlFactory = securityAdministrationControlFactory;
+            _uiThreadId = Thread.CurrentThread.ManagedThreadId;
+            _closeCoordinator = new WorkspaceCloseCoordinator((state, token) => ClosePrompt!(state, token));
+            ClosePrompt = (state, token) =>
+            {
+                if (token.IsCancellationRequested) return System.Threading.Tasks.Task.FromResult(WorkspaceCloseChoice.Cancel);
+                var answer = MessageBox.Show(this, "Save changes before closing this workspace?", "Close workspace",
+                    MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button3);
+                return System.Threading.Tasks.Task.FromResult(answer == DialogResult.Yes ? WorkspaceCloseChoice.Save :
+                    answer == DialogResult.No ? WorkspaceCloseChoice.Discard : WorkspaceCloseChoice.Cancel);
+            };
+
+            Text = "MyDmsVn";
+            StartPosition = FormStartPosition.CenterScreen;
+            MinimumSize = new Size(900, 600);
+            Size = new Size(1200, 760);
+            AutoScaleMode = AutoScaleMode.Dpi;
+            BootstrapThemeManager.CurrentTheme = BusinessCompactAppearance.CreateTheme(BootstrapThemeManager.CurrentTheme.Mode);
+
+            Navigation = CreateNavigation();
+            Navigation.SelectedItemChanged += OnNavigationSelectedItemChanged;
+            Workspace = new BusinessCompactWorkspaceTabs
+            {
+                Dock = DockStyle.Fill,
+            };
+            Workspace.SelectedIndexChanged += OnWorkspaceSelectedIndexChanged;
+            Workspace.TabCloseRequested += OnTabCloseRequested;
+
+            CreateSessionArea();
+            var statusBar = new BootstrapStatusStrip
+            {
+                Dock = DockStyle.Bottom,
+                SizingGrip = false,
+            };
+            _statusLabel = new ToolStripStatusLabel("Ready")
+            {
+                Spring = true,
+                TextAlign = ContentAlignment.MiddleLeft,
+            };
+            _currentUserLabel = new ToolStripStatusLabel("Not signed in") { Visible = false };
+            _busyIndicator = new ToolStripProgressBar
+            {
+                Style = ProgressBarStyle.Marquee,
+                MarqueeAnimationSpeed = 30,
+                Visible = false,
+            };
+            statusBar.Items.Add(_statusLabel);
+            statusBar.Items.Add(_busyIndicator);
+            statusBar.Items.Add(_currentUserLabel);
+            statusBar.Items.Add(new ToolStripStatusLabel("Local mode"));
+
+            Controls.Add(Workspace);
+            Controls.Add(Navigation);
+            Controls.Add(statusBar);
+
+            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+            ApplyViewModelState();
+
+            if (_session != null)
+            {
+                _session.SessionChanged += OnSessionChanged;
+                ApplySessionState();
+            }
+
+            if (_notifications != null)
+            {
+                _notifications.NotificationPublished += OnNotificationPublished;
+            }
+            BootstrapThemeManager.ThemeChanged += OnThemeChanged;
+            BusinessCompactAppearance.Apply(this);
+        }
+
+        public FoundationViewModel ViewModel => _viewModel;
+
+        public BusinessCompactNavigation Navigation { get; }
+
+        public BootstrapTabControl Workspace { get; }
+
+        public string StatusText => _statusLabel.Text ?? string.Empty;
+
+        public string CurrentUserText => _currentUserLabel.Text ?? string.Empty;
+
+        public bool BusyIndicatorVisible => _busyIndicator.Available;
+
+        public long WorkspaceSessionVersion => _session?.Version ?? 0;
+
+        internal Func<WorkspaceCloseState, CancellationToken, System.Threading.Tasks.Task<WorkspaceCloseChoice>> ClosePrompt { get; set; }
+
+        public TabPage? OpenCatalog(CatalogKind kind)
+        {
+            if (_catalogControlFactory == null)
+            {
+                return null;
+            }
+
+            var key = "catalog-" + kind.ToString().ToLowerInvariant();
+            _openingWorkspace = true;
+            try
+            {
+                if (_documents.TryGetValue(key, out var existing))
+                {
+                    Workspace.SelectedTab = existing;
+                    ActivateCatalog(existing);
+                    return existing;
+                }
+
+                var content = _catalogControlFactory.Create(kind);
+                var page = OpenWorkspace(
+                    key,
+                    GetCatalogTitle(kind),
+                    content,
+                    WorkspaceSessionVersion);
+                ActivateCatalog(page);
+                return page;
+            }
+            finally
+            {
+                _openingWorkspace = false;
+            }
+        }
+
+        public TabPage? OpenSalesReceipts()
+        {
+            if (_salesReceiptControlFactory == null) return null;
+            const string key = "sales-receipts";
+            _openingWorkspace = true;
+            try
+            {
+                if (_documents.TryGetValue(key, out var existing))
+                { Workspace.SelectedTab = existing; ActivateWorkspace(existing); return existing; }
+                var page = OpenWorkspace(key, "Sales Receipts", _salesReceiptControlFactory.Create(), WorkspaceSessionVersion);
+                ActivateWorkspace(page); return page;
+            }
+            finally { _openingWorkspace = false; }
+        }
+
+        public TabPage? OpenGoodsReceipts()
+        {
+            if (_goodsReceiptControlFactory == null)
+            {
+                return null;
+            }
+
+            const string key = "goods-receipts";
+            _openingWorkspace = true;
+            try
+            {
+                if (_documents.TryGetValue(key, out var existing))
+                {
+                    Workspace.SelectedTab = existing;
+                    ActivateWorkspace(existing);
+                    return existing;
+                }
+
+                var page = OpenWorkspace(
+                    key,
+                    "Goods Receipts",
+                    _goodsReceiptControlFactory.Create(),
+                    WorkspaceSessionVersion);
+                ActivateWorkspace(page);
+                return page;
+            }
+            finally
+            {
+                _openingWorkspace = false;
+            }
+        }
+
+        public TabPage? OpenStockBalances() =>
+            OpenInventoryWorkspace(
+                "stock-balances",
+                "Tồn kho",
+                () => _inventoryControlFactory!.CreateStockBalances());
+
+        public TabPage? OpenStockCard() =>
+            OpenInventoryWorkspace(
+                "stock-card",
+                "Thẻ kho",
+                () => _inventoryControlFactory!.CreateStockCard());
+
+        public TabPage? OpenSecurityAdministration()
+        {
+            if (_securityAdministrationControlFactory == null || _session?.IsAuthenticated != true)
+            {
+                return null;
+            }
+
+            const string key = "security-administration";
+            _openingWorkspace = true;
+            try
+            {
+                if (_documents.TryGetValue(key, out var existing))
+                {
+                    Workspace.SelectedTab = existing;
+                    ActivateWorkspace(existing);
+                    return existing;
+                }
+
+                var page = OpenWorkspace(
+                    key,
+                    "Security administration",
+                    _securityAdministrationControlFactory.Create(),
+                    WorkspaceSessionVersion);
+                ActivateWorkspace(page);
+                return page;
+            }
+            finally
+            {
+                _openingWorkspace = false;
+            }
+        }
+
+        public TabPage? OpenWorkspace(
+            string key,
+            string title,
+            Control content,
+            long sessionVersion)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                throw new ArgumentException("A workspace key is required.", nameof(key));
+            }
+
+            if (content == null)
+            {
+                throw new ArgumentNullException(nameof(content));
+            }
+
+            if (!IsWorkspaceRequestCurrent(sessionVersion))
+            {
+                content.Dispose();
+                return null;
+            }
+
+            if (_documents.TryGetValue(key, out var existing))
+            {
+                if (!existing.Controls.Contains(content))
+                {
+                    content.Dispose();
+                }
+
+                Workspace.SelectedTab = existing;
+                return existing;
+            }
+
+            var page = new TabPage(title ?? string.Empty)
+            {
+                Name = key,
+            };
+            content.Dock = DockStyle.Fill;
+            var scope = content is CatalogControl catalogContent ? catalogContent.FeedbackScope :
+                content is SalesReceiptControl salesContent ? salesContent.FeedbackScope :
+                content is GoodsReceiptControl goodsContent ? goodsContent.FeedbackScope :
+                content is StockBalanceControl balanceContent ? balanceContent.FeedbackScope :
+                content is StockCardControl cardContent ? cardContent.FeedbackScope :
+                new WorkspaceFeedbackScope(sessionVersion);
+            var feedbackHost = new WorkspaceFeedbackHost(content, scope) { Dock = DockStyle.Fill };
+            feedbackHost.AttentionChanged += (_, __) =>
+            {
+                if (page.IsDisposed) return;
+                page.Text = title + (feedbackHost.HasAttention ? " !" : string.Empty);
+                page.AccessibleDescription = feedbackHost.HasAttention ? "Unread workspace error" : string.Empty;
+            };
+            page.Controls.Add(feedbackHost);
+            _documents.Add(key, page);
+            Workspace.TabPages.Add(page);
+            Workspace.SetTabClosable(page, true);
+            Workspace.SelectedTab = page;
+
+            if (!IsWorkspaceRequestCurrent(sessionVersion))
+            {
+                CloseAllWorkspaces();
+                return null;
+            }
+
+            return page;
+        }
+
+        public void SetStatus(string status)
+        {
+            _statusLabel.Text = string.IsNullOrWhiteSpace(status) ? "Ready" : status;
+        }
+
+        public void SetCurrentUser(string? displayName)
+        {
+            _currentUserLabel.Text = string.IsNullOrWhiteSpace(displayName)
+                ? "Not signed in"
+                : displayName;
+            if (_sessionUserLabel != null)
+            {
+                _sessionUserLabel.AccessibleName = _currentUserLabel.Text;
+                _sessionUserLabel.Text = Navigation.Expanded ? _currentUserLabel.Text : "●";
+                Navigation.SetToolTip(_sessionUserLabel, CurrentUserText);
+            }
+        }
+
+        public void ToggleTheme()
+        {
+            var nextMode = BootstrapThemeManager.CurrentTheme.Mode == BootstrapThemeMode.Light
+                ? BootstrapThemeMode.Dark
+                : BootstrapThemeMode.Light;
+            BootstrapThemeManager.CurrentTheme = BusinessCompactAppearance.CreateTheme(nextMode);
+        }
+
+        public void SignOut()
+        {
+            _session?.SignOut();
+            PublishSessionMessage(
+                DesktopNotificationKind.Information,
+                "You have been signed out.");
+        }
+
+        public void HandleSessionExpired()
+        {
+            _session?.SignOut();
+            PublishSessionMessage(
+                DesktopNotificationKind.Warning,
+                "Your session has expired. Please sign in again.");
+        }
+
+        protected override void OnHandleCreated(EventArgs eventArgs)
+        {
+            base.OnHandleCreated(eventArgs);
+            UpdateThemeDescription();
+            ApplyViewModelState();
+            if (_session != null)
+            {
+                ApplySessionState();
+            }
+
+            var lastNotification = _notifications?.LastNotification;
+            if (lastNotification != null)
+            {
+                SetStatus(lastNotification.Message);
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && !_disposedResources)
+            {
+                _disposedResources = true;
+                _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+                BootstrapThemeManager.ThemeChanged -= OnThemeChanged;
+                Navigation.SelectedItemChanged -= OnNavigationSelectedItemChanged;
+                Workspace.SelectedIndexChanged -= OnWorkspaceSelectedIndexChanged;
+                Workspace.TabCloseRequested -= OnTabCloseRequested;
+                CloseAllWorkspaces();
+                _workspaceCloseLifetime.Cancel();
+                _workspaceCloseLifetime.Dispose();
+                if (_session != null)
+                {
+                    _session.SessionChanged -= OnSessionChanged;
+                }
+
+                if (_notifications != null)
+                {
+                    _notifications.NotificationPublished -= OnNotificationPublished;
+                }
+                _viewModel.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+
+        private void OnSessionChanged(object? sender, EventArgs eventArgs)
+        {
+            DispatchToUi(ApplySessionState);
+        }
+
+        private void OnNotificationPublished(object? sender, DesktopNotification notification)
+        {
+            DispatchToUi(() => SetStatus(notification.Message));
+        }
+
+        private void OnThemeChanged(object? sender, BootstrapThemeChangedEventArgs eventArgs) =>
+            DispatchToUi(UpdateThemeDescription);
+
+        private void UpdateThemeDescription()
+        {
+            if (_themeButton != null && !_themeButton.IsDisposed)
+                _themeButton.AccessibleDescription = "Current theme: " + BootstrapThemeManager.CurrentTheme.Mode;
+        }
+
+        private void OnNavigationSelectedItemChanged(object? sender, EventArgs eventArgs)
+        {
+            if (Navigation.SelectedItem?.Tag is CatalogKind kind)
+            {
+                OpenCatalog(kind);
+            }
+            else if (string.Equals(Navigation.SelectedItem?.Tag as string, "sales-receipts", StringComparison.Ordinal))
+            { OpenSalesReceipts(); }
+            else if (string.Equals(
+                Navigation.SelectedItem?.Tag as string,
+                "goods-receipts",
+                StringComparison.Ordinal))
+            {
+                OpenGoodsReceipts();
+            }
+            else if (string.Equals(
+                Navigation.SelectedItem?.Tag as string,
+                "stock-balances",
+                StringComparison.Ordinal))
+            {
+                OpenStockBalances();
+            }
+            else if (string.Equals(
+                Navigation.SelectedItem?.Tag as string,
+                "stock-card",
+                StringComparison.Ordinal))
+            {
+                OpenStockCard();
+            }
+            else if (string.Equals(
+                Navigation.SelectedItem?.Tag as string,
+                "security-administration",
+                StringComparison.Ordinal))
+            {
+                OpenSecurityAdministration();
+            }
+        }
+
+        private void OnWorkspaceSelectedIndexChanged(object? sender, EventArgs eventArgs)
+        {
+            if (!_openingWorkspace)
+            {
+                ActivateWorkspace(Workspace.SelectedTab);
+            }
+        }
+
+        private void OnTabCloseRequested(object? sender, TabCloseRequestedEventArgs request)
+        {
+            _ = RequestWorkspaceCloseAsync(request.Page);
+        }
+
+        internal async System.Threading.Tasks.Task RequestWorkspaceCloseAsync(TabPage page)
+        {
+            if (page == null || IsDisposed || Disposing) return;
+            var key = page.Name;
+            if (!_documents.TryGetValue(key, out var current) || !ReferenceEquals(current, page)) return;
+            var sessionVersion = WorkspaceSessionVersion;
+            var token = _workspaceCloseLifetime.Token;
+            var content = WorkspaceContent(page);
+            WorkspaceCloseDecision decision;
+            if (content is IWorkspaceCloseParticipant participant)
+                decision = await _closeCoordinator.RequestCloseAsync(participant, token);
+            else
+                decision = token.IsCancellationRequested ? WorkspaceCloseDecision.KeepOpen : WorkspaceCloseDecision.Admitted;
+            if (decision != WorkspaceCloseDecision.Admitted || token.IsCancellationRequested) return;
+            await InvokeOnUiAsync(() =>
+            {
+                if (IsDisposed || Disposing || token.IsCancellationRequested || !IsWorkspaceRequestCurrent(sessionVersion) ||
+                    !_documents.TryGetValue(key, out var stillOpen) || !ReferenceEquals(stillOpen, page)) return;
+                _documents.Remove(key);
+                Workspace.TabPages.Remove(page);
+                page.Dispose();
+                if (Navigation.SelectedItem?.Tag is CatalogKind selectedKind)
+                {
+                    if (string.Equals(key, "catalog-" + selectedKind.ToString().ToLowerInvariant(), StringComparison.Ordinal))
+                        Navigation.SelectedItem = null;
+                }
+                else if (string.Equals(Navigation.SelectedItem?.Tag as string, key, StringComparison.Ordinal))
+                    Navigation.SelectedItem = null;
+            }, token);
+        }
+
+        private async System.Threading.Tasks.Task InvokeOnUiAsync(Action action, CancellationToken token)
+        {
+            if (Thread.CurrentThread.ManagedThreadId == _uiThreadId) { action(); return; }
+            if (!IsHandleCreated || IsDisposed || Disposing) return;
+            var done = new System.Threading.Tasks.TaskCompletionSource<bool>(
+                System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+            using var registration = token.Register(() => done.TrySetResult(false));
+            try
+            {
+                BeginInvoke((Action)(() =>
+                {
+                    try { if (!IsDisposed && !Disposing) action(); done.TrySetResult(true); }
+                    catch (Exception error) { done.TrySetException(error); }
+                }));
+            }
+            catch (InvalidOperationException) { done.TrySetResult(false); }
+            await done.Task.ConfigureAwait(false);
+        }
+
+        private static Control? WorkspaceContent(TabPage? page) => page?.Controls.Count > 0 ?
+            (page.Controls[0] is WorkspaceFeedbackHost host ? host.Content : page.Controls[0]) : null;
+
+        private static void ActivateWorkspace(TabPage? page)
+        {
+            ActivateCatalog(page);
+            if (WorkspaceContent(page) is GoodsReceiptControl goodsReceipts)
+            {
+                _ = goodsReceipts.ActivateAsync(CancellationToken.None);
+            }
+
+            if (WorkspaceContent(page) is StockBalanceControl balances)
+            {
+                _ = balances.ActivateAsync(CancellationToken.None);
+            }
+
+            if (WorkspaceContent(page) is StockCardControl card)
+            {
+                _ = card.ActivateAsync(CancellationToken.None);
+            }
+
+            if (WorkspaceContent(page) is IActivatableDesktopControl activatable)
+            {
+                _ = activatable.ActivateAsync(CancellationToken.None);
+            }
+        }
+
+        private static void ActivateCatalog(TabPage? page)
+        {
+            if (WorkspaceContent(page) is CatalogControl catalog)
+            {
+                _ = catalog.ActivateAsync(CancellationToken.None);
+            }
+        }
+
+        private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
+        {
+            DispatchToUi(ApplyViewModelState);
+        }
+
+        private void DispatchToUi(Action action)
+        {
+            if (IsDisposed || Disposing)
+            {
+                return;
+            }
+
+            if (Thread.CurrentThread.ManagedThreadId == _uiThreadId)
+            {
+                action();
+                return;
+            }
+
+            if (!IsHandleCreated)
+            {
+                return;
+            }
+
+            try
+            {
+                BeginInvoke(
+                    (Action)(() =>
+                    {
+                        if (!IsDisposed && !Disposing)
+                        {
+                            action();
+                        }
+                    }));
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        private void ApplyViewModelState()
+        {
+            _busyIndicator.Available = _viewModel.IsBusy;
+            if (!string.IsNullOrWhiteSpace(_viewModel.ErrorMessage))
+            {
+                SetStatus(_viewModel.ErrorMessage!);
+            }
+            else if (_viewModel.IsEmpty)
+            {
+                SetStatus("No data.");
+            }
+            else if (_viewModel.IsReady)
+            {
+                SetStatus(string.IsNullOrWhiteSpace(_viewModel.Runtime)
+                    ? "Ready"
+                    : $"Ready ({_viewModel.Runtime})");
+            }
+        }
+
+        private void ApplySessionState()
+        {
+            var isAuthenticated = _session?.IsAuthenticated ?? true;
+            var sessionVersion = _session?.Version;
+            var sessionChanged = _workspaceSessionVersion.HasValue &&
+                sessionVersion.HasValue &&
+                _workspaceSessionVersion.Value != sessionVersion.Value;
+            Navigation.Enabled = isAuthenticated;
+            Workspace.Enabled = isAuthenticated;
+            if (!isAuthenticated || sessionChanged)
+            {
+                CloseAllWorkspaces();
+            }
+
+            _workspaceSessionVersion = sessionVersion;
+            SetCurrentUser(_session?.CurrentUser?.DisplayName);
+        }
+
+        private void CloseAllWorkspaces()
+        {
+            var previousLifetime = _workspaceCloseLifetime;
+            _workspaceCloseLifetime = new CancellationTokenSource();
+            previousLifetime.Cancel();
+            previousLifetime.Dispose();
+            var pages = new TabPage[_documents.Count];
+            _documents.Values.CopyTo(pages, 0);
+            Workspace.TabPages.Clear();
+            _documents.Clear();
+            Navigation.SelectedItem = null;
+            foreach (var page in pages)
+            {
+                page.Dispose();
+            }
+        }
+
+        private bool IsWorkspaceRequestCurrent(long sessionVersion)
+        {
+            return _session == null ||
+                (_session.IsAuthenticated && _session.Version == sessionVersion);
+        }
+
+        private void PublishSessionMessage(DesktopNotificationKind kind, string message)
+        {
+            if (_notifications == null)
+            {
+                SetStatus(message);
+                return;
+            }
+
+            _notifications.Publish(new DesktopNotification(kind, message));
+        }
+
+        private static BusinessCompactNavigation CreateNavigation()
+        {
+            var navigation = new BusinessCompactNavigation
+            {
+                Dock = DockStyle.Left,
+                ExpandedWidth = 224,
+                CollapsedWidth = 64,
+            };
+            void Add(string text, object tag, string group, string icon) => navigation.Items.Add(
+                new BusinessCompactNavigationItem { Text = text, Tag = tag, Group = group, Icon = BusinessCompactIcons.For(icon) });
+            Add("Products", CatalogKind.Product, "Catalog", "product");
+            Add("Warehouses", CatalogKind.Warehouse, "Catalog", "warehouse");
+            Add("Employees", CatalogKind.Employee, "Catalog", "employee");
+            Add("Customers", CatalogKind.Customer, "Catalog", "customer");
+            Add("Sales Receipts", "sales-receipts", "Sales", "receipt");
+            Add("Goods Receipts", "goods-receipts", "Inventory", "receipt");
+            Add("Tồn kho", "stock-balances", "Inventory", "balance");
+            Add("Thẻ kho", "stock-card", "Inventory", "card");
+            Add("Foundation", "foundation", "System", "foundation");
+            Add("Security administration", "security-administration", "System", "security");
+            return navigation;
+        }
+
+        private TabPage? OpenInventoryWorkspace(
+            string key,
+            string title,
+            Func<Control> createControl)
+        {
+            if (_inventoryControlFactory == null)
+            {
+                return null;
+            }
+
+            _openingWorkspace = true;
+            try
+            {
+                if (_documents.TryGetValue(key, out var existing))
+                {
+                    Workspace.SelectedTab = existing;
+                    ActivateWorkspace(existing);
+                    return existing;
+                }
+
+                var page = OpenWorkspace(
+                    key,
+                    title,
+                    createControl(),
+                    WorkspaceSessionVersion);
+                ActivateWorkspace(page);
+                return page;
+            }
+            finally
+            {
+                _openingWorkspace = false;
+            }
+        }
+
+        private static string GetCatalogTitle(CatalogKind kind)
+        {
+            switch (kind)
+            {
+                case CatalogKind.Product:
+                    return "Products";
+                case CatalogKind.Warehouse:
+                    return "Warehouses";
+                case CatalogKind.Employee:
+                    return "Employees";
+                case CatalogKind.Customer:
+                    return "Customers";
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(kind));
+            }
+        }
+
+        private void CreateSessionArea()
+        {
+            _sessionUserLabel = new Label { Name = "CompactUser", AccessibleName = "Not signed in", AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft };
+            var themeButton = new BusinessCompactIconButton("theme") { Name = "ThemeToggle", AccessibleName = "Theme toggle", AccessibleRole = AccessibleRole.PushButton };
+            _themeButton = themeButton;
+            themeButton.Click += (_, _) => ToggleTheme();
+            var signOutButton = new BusinessCompactIconButton("signout") { AccessibleName = "Sign out" };
+            signOutButton.Click += (_, _) => SignOut();
+            Navigation.SessionArea.Controls.Add(_sessionUserLabel);
+            Navigation.SessionArea.Controls.Add(themeButton);
+            Navigation.SessionArea.Controls.Add(signOutButton);
+            Navigation.SetToolTip(themeButton, "Switch Light / Graphite theme");
+            Navigation.SetToolTip(signOutButton, "Sign out");
+            void LayoutSession()
+            {
+                var expanded = Navigation.Expanded;
+                int S(int value) => BusinessCompactAppearance.Scale(Navigation, value);
+                Navigation.SessionArea.Height = S(expanded ? 88 : 128);
+                _sessionUserLabel.SetBounds(S(12), S(4), Navigation.Width - S(24), S(30));
+                _sessionUserLabel.Text = expanded ? _sessionUserLabel.AccessibleName : "●";
+                themeButton.SetBounds(S(8), S(40), S(expanded ? 96 : 44), S(32));
+                signOutButton.SetBounds(S(expanded ? 108 : 8), S(expanded ? 40 : 80), S(expanded ? 108 : 44), S(32));
+                themeButton.Text = expanded ? "Theme" : "";
+                signOutButton.Text = expanded ? "Sign out" : "";
+                themeButton.Padding = signOutButton.Padding = new Padding(S(expanded ? 36 : 0), 0, 0, 0);
+            }
+            Navigation.SizeChanged += (_, _) => LayoutSession();
+            LayoutSession();
+            UpdateThemeDescription();
+        }
+    }
+}

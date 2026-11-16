@@ -1,0 +1,68 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <DefineConstants>$(DefineConstants);WEB6_SECURITY</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Update="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Management" />
+    <PackageReference Include="Respawn" />
+    <PackageReference Include="Microsoft.Owin.Testing" VersionOverride="[4.2.3]" />
+    <PackageReference Include="dbup-sqlserver" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyDmsVn.Desktop.Application\MyDmsVn.Desktop.Application.csproj" />
+    <ProjectReference Include="..\..\src\MyDmsVn.Desktop.Infrastructure.Local\MyDmsVn.Desktop.Infrastructure.Local.csproj" />
+    <ProjectReference Include="..\..\src\MyDmsVn.Server.DbMigrator\MyDmsVn.Server.DbMigrator.csproj" />
+    <ProjectReference Include="..\..\src\MyDmsVn.Server.Infrastructure\MyDmsVn.Server.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\MyDmsVn.Server.HttpHost\MyDmsVn.Server.HttpHost.csproj" />
+    <ProjectReference Include="..\..\tools\MyDmsVn.WebOperation.Operator\MyDmsVn.WebOperation.Operator.csproj" />
+    <ProjectReference Include="..\..\tools\MyDmsVn.Web6.CandidateBootstrap\MyDmsVn.Web6.CandidateBootstrap.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\Fixtures\ReusableSqlFixture.cs" Link="Fixtures\ReusableSqlFixture.cs" />
+    <Compile Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\Fixtures\SqlFixtureTestScope.cs" Link="Fixtures\SqlFixtureTestScope.cs" />
+    <Compile Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\Fixtures\SqlFixtureRunMode.cs" Link="Fixtures\SqlFixtureRunMode.cs" />
+    <Compile Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\Fixtures\RespawnResetProfile.cs" Link="Fixtures\RespawnResetProfile.cs" />
+    <Compile Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\Fixtures\ApplicationSqlCollectionFixture.cs" Link="Fixtures\ApplicationSqlCollectionFixture.cs" />
+    <Compile Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\SqlTestDatabase.cs" Link="SqlTestDatabase.cs" />
+    <Compile Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\SqlTestDatabaseName.cs" Link="SqlTestDatabaseName.cs" />
+    <Compile Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\SqlConcurrencyCleanup.cs" Link="SqlConcurrencyCleanup.cs" />
+    <Compile Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\SqlConcurrencyGate.cs" Link="SqlConcurrencyGate.cs" />
+    <Compile Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\TestDatabaseMigrationRunner.cs" Link="TestDatabaseMigrationRunner.cs" />
+    <EmbeddedResource Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\TestScripts\*.sql" Link="TestScripts\%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\SqlOracle\NativeSql.cs" Link="SqlOracle\NativeSql.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\SqlOracle\SqlTestOracle.cs" Link="SqlOracle\SqlTestOracle.cs" />
+    <Compile Include="..\MyDmsVn.Desktop.Tests\GuiOwnedProcess.cs" Link="Fixtures\GuiOwnedProcess.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\FrozenWeb11Migration.cs" Link="FrozenWeb11Migration.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyDmsVn.WebOperation.CrashHost\MyDmsVn.WebOperation.CrashHost.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <Target Name="CopyWeb5CrashHost" AfterTargets="Build">
+    <ItemGroup>
+      <Web5CrashHostFiles Include="$(MSBuildThisFileDirectory)..\MyDmsVn.WebOperation.CrashHost\bin\$(Configuration)\net48\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(Web5CrashHostFiles)" DestinationFiles="@(Web5CrashHostFiles->'$(OutDir)CrashHost\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
