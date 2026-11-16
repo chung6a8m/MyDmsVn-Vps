@@ -15,4 +15,6 @@ During VPS-00B the CI baseline exposed that VPS-00A omitted the test-owned corpo
 
 The in-corpus READMEs and scripts belong to the original fixture format and may reference historical design concepts. They do **not** govern MyDmsVn-Vps. Refer to [independent JSON contract policy](json-wire-compatibility.md) and [test policy](../testing/test-policy.md).
 
+**Integrity pin:** [corpus-blobs.sha1](corpus-blobs.sha1) lists Git blob SHA-1 values for all 178 files. The CI static guard rejects an altered, missing or unlisted corpus file. Any intentionally approved contract revision must change both the fixture and manifest in an explicitly reviewed diff; the manifest is local, not fetched from upstream.
+
 **Change control:** keep these files immutable until an explicit contract-change increment documents a compatibility diff, test oracle and owner acceptance. Do not silently regenerate or rewrite snapshots. The root `docs/roadmap/README.md` remains the only live task-status authority.

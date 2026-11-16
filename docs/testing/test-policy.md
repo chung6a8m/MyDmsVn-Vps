@@ -10,11 +10,11 @@ A gate is PASS only after running it in the correct environment on an identified
 
 | Gate | Environment | Requirement |
 | --- | --- | --- |
-| Source tree / project references | Linux Python 3 stdlib, Git checkout | Verify tracked local projects, solution refs, 13 embedded SQL scripts, no gitlinks/submodules or dynamic/escaping ProjectReferences |
+| Source tree / project references | Linux Python 3 stdlib, Git checkout | Verify tracked local projects, solution refs, 13 embedded SQL scripts, 178 frozen corpus Git blobs, no gitlinks/submodules or escaping literal build paths |
 | Desktop compile | Windows 2022 + .NET Framework 4.8 targeting pack + .NET SDK 8.0.400 | Locked restore + Release net48 build of Desktop.App |
 | Legacy HttpHost compile | Same Windows runner | Locked restore + Release net48 build of Server.HttpHost |
 | Legacy DbMigrator compile | Same Windows runner | Locked restore + Release net48 build of Server.DbMigrator |
-| SQL-free smoke | Windows runner | Focused existing assemblies (Application, Architecture, Desktop.Session, HttpHost), non-empty TRX executed count |
+| SQL-free smoke | Windows runner | Focused existing assemblies (Application, Architecture, Desktop.Session, HttpHost); non-empty TRX and no failed/skipped/not-executed selected tests |
 | SQL integration | Explicit isolated SQL Server | Deferred to separately provisioned gate, **NOT RUN** if environment absent |
 | GUI/native 100%/125% | Attended Windows session | Deferred; headless runner success cannot substitute |
 | ASP.NET Core 10 on Linux | Actual Linux runtime | Not applicable until VPS-04; static check is not a Linux Server build |

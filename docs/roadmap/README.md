@@ -5,7 +5,7 @@
 | Increment | Current branch status | Evidence/next gate |
 | --- | --- | --- |
 | VPS-00A — One-time Source Import | COMPLETE (static integrity only) | [2,282/2,282 source parity](../import/README.md), import verification SHA in import report |
-| VPS-00B — Documentation & Build Foundation | IMPLEMENTED / CI VERIFIED; PR #1 REVIEW PENDING | [evidence ledger](../evidence/vps-00b-baseline.md): 8/8 jobs, 1,228/1,228 smoke tests at `a726e42`; review and check the final PR HEAD before merge |
+| VPS-00B — Documentation & Build Foundation | COMPLETE UPON PR #1 MERGE, subject to passing CI on the final review-fix HEAD | [evidence ledger](../evidence/vps-00b-baseline.md): pre-review run #3, 8/8 jobs and 1,228/1,228 tests at `72ceef5`; final post-review SHA/CI and merge evidence in [PR #1](https://github.com/chung6a8m/MyDmsVn-Vps/pull/1) |
 | VPS-01 — Test & Contract Foundation | NOT STARTED | xUnit v3, zero-test prevention, contract fixtures |
 | VPS-02 — HTTP API Parity | NOT STARTED | API parity matrix and real endpoint validation |
 | VPS-03 — Desktop HTTP Cutover | NOT STARTED | Remove production Local/SQL/Server dependencies |

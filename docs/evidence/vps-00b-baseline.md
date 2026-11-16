@@ -33,18 +33,24 @@
 - Frozen WEB2–WEB6 corpus assets: **178/178 SHA-identical blobs** compared against pinned source snapshot `bac73004328884f5322c7c87d9787b8150885ac0` (no Git link or runtime dependency).
 - Fixed architecture policy for imported HttpHost and removed excluded AppCore policy; created independent Security Administration runbook. No production `src/` implementation was modified.
 
-**Review boundary:** This ledger update is documentation-only and creates a subsequent commit. A new CI run on the final documentation HEAD is required before merging PR #1. Results above apply **exactly** to `a726e42`, not automatically to any subsequent SHA.
+**Review boundary:** Run #2 applied only to `a726e42`, not automatically to subsequent commits. The documentation-only HEAD was then separately verified in Run #3 below. Any further review-fix HEAD still requires its own CI.
+
+## Verified pre-review final documentation HEAD — Run #3, SHA 72ceef5
+
+[GitHub Actions run #3](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43842062053) completed **SUCCESS (8/8 jobs)** for PR head `72ceef5d1d7790812b96eb7e751a5810d2c9f127` on 2026-11-16. Linux static source integrity and all three Windows net48 locked Release builds succeeded. Windows TRX evidence: Architecture **13/13**, Desktop.Session **212/212**, Application **363/363**, HttpHost **640/640**; sum **1,228 passed, 0 failed, 0 skipped**, checked independently in job logs.
+
+This was the latest *pre-review-fix* successful run, not an attestation about future commits. Review changes that strengthen the static guard or smoke gate require a **new** full workflow success on their own final SHA. Post-review validation/merge evidence is kept in [PR #1](https://github.com/chung6a8m/MyDmsVn-Vps/pull/1) to avoid an endless cycle of commits generated solely to record the latest CI SHA.
 
 ## VPS-00B verification checklist
 
-| Gate | Verified at a726e42 | Remaining condition |
+| Gate | Verified baseline | Remaining condition |
 | --- | --- | --- |
 | Root docs, three Owner decisions and independent roadmap | IMPLEMENTED | Independent PR review before merge |
-| Static repo boundary guard | PASS — Ubuntu checker | Rerun after final docs commit |
-| Desktop.App net48 Windows build | PASS — Windows 2022 | Rerun after final docs commit |
-| Legacy HttpHost net48 Windows build | PASS — Windows 2022 | Rerun after final docs commit |
-| Legacy DbMigrator net48 Windows build | PASS — Windows 2022 | Rerun after final docs commit |
-| SQL-free smoke tests (nonempty count) | PASS — 1,228/1,228 | Rerun after final docs commit |
+| Static repo boundary guard | PASS — Ubuntu checker | Rerun on final review-fix HEAD before merge |
+| Desktop.App net48 Windows build | PASS — Windows 2022 | Rerun on final review-fix HEAD before merge |
+| Legacy HttpHost net48 Windows build | PASS — Windows 2022 | Rerun on final review-fix HEAD before merge |
+| Legacy DbMigrator net48 Windows build | PASS — Windows 2022 | Rerun on final review-fix HEAD before merge |
+| SQL-free smoke tests (nonempty count) | PASS — 1,228/1,228 | Rerun on final review-fix HEAD before merge |
 | SQL Server integration | NOT RUN, excluded from VPS-00B CI | Separate non-production SQL instance needed |
 | Windows attended UI | NOT RUN, excluded from headless CI | Later attended test protocol |
 | ASP.NET Core 10 running on Linux | NOT RUN, not in VPS-00B | VPS-04/VPS-09 |

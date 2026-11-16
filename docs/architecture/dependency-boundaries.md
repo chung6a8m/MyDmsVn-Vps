@@ -13,7 +13,7 @@
 ## Current mandatory baseline rules (VPS-00B)
 
 - Each `.sln` and `.csproj` ProjectReference must point to an existing local file within this repository, not a sibling checkout or absolute location.
-- No Git gitlink, `.gitmodules`, hard-coded cross-repository MSBuild Import or required source fetch. NuGet packages may come from `NuGet.config`.
+- No Git gitlink, `.gitmodules`, literal escaping/absolute MSBuild Import or HintPath, or required source fetch. Property-derived SDK/package imports remain subject to successful locked restore/build. NuGet packages may come from `NuGet.config`.
 - Legacy Desktop -> Server edges are **recorded debt**, not yet a CI failure. This prevents false-green architecture claims as well as premature breaking changes.
 - Do not change the Desktop, Server, vendor or SQL production implementation in documentation/build foundation.
 

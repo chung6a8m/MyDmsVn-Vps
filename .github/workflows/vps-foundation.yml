@@ -109,7 +109,10 @@ jobs:
           if ([int]$counts.total -le 0 -or [int]$counts.executed -le 0) {
             throw "Zero-test execution is not PASS: $env:TEST_PROJECT"
           }
-          Write-Host "Test counts: total=$($counts.total), executed=$($counts.executed), failed=$($counts.failed), notExecuted=$($counts.notExecuted)"
+          if ([int]$counts.failed -ne 0 -or [int]$counts.notExecuted -ne 0 -or [int]$counts.passed -ne [int]$counts.total) {
+            throw "Smoke test results not fully passed: total=$($counts.total), passed=$($counts.passed), failed=$($counts.failed), notExecuted=$($counts.notExecuted)"
+          }
+          Write-Host "Test counts: total=$($counts.total), passed=$($counts.passed), executed=$($counts.executed), failed=$($counts.failed), notExecuted=$($counts.notExecuted)"
       - name: Preserve test evidence even on failure
         if: always()
         uses: actions/upload-artifact@v6

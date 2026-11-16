@@ -12,7 +12,7 @@
 python3 scripts/verify-vps-foundation.py --report foundation-report.json
 ```
 
-The checker validates 44 tracked C# projects, solution project targets, resolved in-tree ProjectReferences, required docs, 13 SQL scripts and absence of git submodules/gitlinks. A green static check is **not** a build or unit test.
+The checker validates 44 tracked C# projects, solution project targets, resolved in-tree ProjectReferences, literal MSBuild Import/HintPath boundaries, required docs, 13 SQL scripts, 178 frozen corpus Git blob SHAs and absence of git submodules/gitlinks. A green static check is **not** a build or unit test.
 
 ## Windows net48 compile commands
 
@@ -39,7 +39,7 @@ This compiles Desktop, legacy Server.HttpHost and legacy DbMigrator as **separat
 
 - `static-foundation` — Ubuntu runner, Python checker with JSON artifact. Cross-platform repository integrity **only**.
 - `windows-net48` — Windows 2022 matrix for Desktop.App, Server.HttpHost, DbMigrator. Pinned SDK and .NET Framework reference pack; locked restore; Release net48 build.
-- `windows-smoke` — Windows 2022, SQL-free xUnit v2 smoke tests from named projects, TRX artifacts and nonempty executed-count guard. It does not run SQL integration or attended GUI tests.
+- `windows-smoke` — Windows 2022, SQL-free xUnit v2 smoke tests from named projects, TRX artifacts and nonempty fully passed / no-skipped gate. It does not run SQL integration or attended GUI tests.
 
 No job may hide failure through `continue-on-error`. CI must be evaluated on the **last** PR HEAD after fixes. If a baseline restore or compilation problem exists, preserve red status and document exact error, owner and follow-up; do not label it PASS. Results are recorded in [VPS-00B evidence](../evidence/vps-00b-baseline.md). Later increments introduce Linux net10 build/test lanes only once real net10 project targets exist.
 

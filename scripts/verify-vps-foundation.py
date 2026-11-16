@@ -29,7 +29,8 @@ REQUIRED_DOCS = (
     "docs/contracts/json-wire-compatibility.md",
     "docs/migration/dbup-to-fluentmigrator.md",
     "docs/evidence/vps-00b-baseline.md",
-    "docs/contracts/README.md", "docs/SECURITY_ADMINISTRATION_RUNBOOK.md",
+    "docs/contracts/README.md", "docs/contracts/corpus-blobs.sha1",
+    "docs/SECURITY_ADMINISTRATION_RUNBOOK.md",
     "tests/README.md", ".github/workflows/vps-foundation.yml",
     "vendor/MyDmsVn.WinFormsKit/THIRD_PARTY_NOTICES.md",
     "vendor/MyDmsVn.WinFormsKit/vendor/sourcegrid/SourceGrid/SourceGrid.csproj",
@@ -42,31 +43,33 @@ ABSOLUTE_PATTERN = re.compile(r"^(?:[a-zA-Z]:[/\\]|/|\\\\|https?://)")
 SQL_PATTERN = re.compile(r"^src/MyDmsVn\.Server\.DbMigrator/Scripts/\d{3}_.+\.sql$")
 
 
-def tracked_files() -> tuple[dict[str, str], list[str]]:
+def tracked_files() -> tuple[dict[str, str], dict[str, str], list[str]]:
     """Return path->git stage mode, plus errors from Git index inspection."""
     p = subprocess.run(
         ["git", "ls-files", "--stage", "-z"], cwd=ROOT,
         capture_output=True, check=False,
     )
     if p.returncode:
-        return {}, ["git ls-files failed: " + p.stderr.decode("utf-8", "replace")]
+        return {}, {}, ["git ls-files failed: " + p.stderr.decode("utf-8", "replace")]
     modes: dict[str, str] = {}
+    blob_shas: dict[str, str] = {}
     errors: list[str] = []
     for record in p.stdout.decode("utf-8", "replace").split("\0"):
         if not record:
             continue
         try:
             metadata, path = record.split("\t", 1)
-            mode, _sha, stage = metadata.split()
+            mode, sha, stage = metadata.split()
         except ValueError:
             errors.append("Unparseable git index record")
             continue
         if stage != "0":
             errors.append("Unmerged index entry: " + path)
         modes[path] = mode
+        blob_shas[path] = sha
         if mode == "160000":
             errors.append("Forbidden Git submodule/gitlink: " + path)
-    return modes, errors
+    return modes, blob_shas, errors
 
 
 def safe_relative_target(parent: Path, raw: str, description: str,
@@ -101,14 +104,16 @@ def validate_project_references(project: str, errors: list[str]) -> int:
                 errors.append(project + ": ProjectReference missing Include")
             else:
                 safe_relative_target(path.parent, raw, project, errors)
-        elif tag in ("Import", "Reference"):
-            raw = node.get("Project") if tag == "Import" else None
-            if raw and ABSOLUTE_PATTERN.match(raw):
-                errors.append(project + ": absolute MSBuild Import: " + raw)
+        elif tag == "Import":
+            raw = node.get("Project")
+            # Property-based imports are resolved by MSBuild during restore/build.
+            # Literal paths must remain entirely inside this repository.
+            if raw and not any(token in raw for token in ("$(", "@(", "%(")):
+                safe_relative_target(path.parent, raw, project + " MSBuild Import", errors)
         elif tag == "HintPath" and node.text:
             raw = node.text.strip()
-            if ABSOLUTE_PATTERN.match(raw):
-                errors.append(project + ": absolute HintPath: " + raw)
+            if raw and not any(token in raw for token in ("$(", "@(", "%(")):
+                safe_relative_target(path.parent, raw, project + " HintPath", errors)
     return count
 
 
@@ -145,7 +150,7 @@ def main() -> int:
     parser.add_argument("--expected-projects", type=int, default=44)
     args = parser.parse_args()
     errors: list[str] = []
-    index, index_errors = tracked_files()
+    index, blob_shas, index_errors = tracked_files()
     errors.extend(index_errors)
     tracked = set(index)
 
@@ -181,6 +186,42 @@ def main() -> int:
         if actual != expected:
             errors.append(f"Fixture corpus {corpus}: expected {expected} files, got {actual}")
 
+    # Freeze WEB2-WEB6 technical corpora by Git blob identity, not only file count.
+    # The manifest itself is version-controlled: intentional changes require a
+    # visibly reviewed manifest diff as well as updated contract tests.
+    pinned_corpus: dict[str, str] = {}
+    try:
+        for number, line in enumerate(
+            (ROOT / "docs/contracts/corpus-blobs.sha1").read_text(
+                encoding="utf-8"
+            ).splitlines(), 1
+        ):
+            match = re.fullmatch(r"([0-9a-f]{40})  (docs/contracts/[^\\s]+)", line)
+            if not match:
+                errors.append(f"Invalid corpus blob manifest line {number}")
+                continue
+            sha, corpus_path = match.groups()
+            if not any(corpus_path.startswith(f"docs/contracts/{folder}/")
+                       for folder in fixture_dirs):
+                errors.append("Manifest references non-corpus path: " + corpus_path)
+            if corpus_path in pinned_corpus:
+                errors.append("Duplicate corpus manifest path: " + corpus_path)
+            pinned_corpus[corpus_path] = sha
+            if blob_shas.get(corpus_path) != sha:
+                errors.append("Frozen contract corpus Git blob drift: " + corpus_path)
+    except OSError as exc:
+        errors.append("Cannot read corpus blob manifest: " + str(exc))
+    tracked_corpus = {
+        path for path in tracked
+        if any(path.startswith(f"docs/contracts/{folder}/")
+               for folder in fixture_dirs)
+    }
+    if set(pinned_corpus) != tracked_corpus:
+        errors.append(
+            "Corpus manifest path mismatch (missing/unexpected): "
+            + str(sorted(tracked_corpus.symmetric_difference(pinned_corpus)))
+        )
+
     sql_scripts = sorted(p for p in tracked if SQL_PATTERN.match(p))
     if len(sql_scripts) != 13:
         errors.append(f"Historical SQL script count: expected 13; got {len(sql_scripts)}")
@@ -211,6 +252,7 @@ def main() -> int:
             "solutions": len(solutions),
             "solution_project_entries": solution_count,
             "historical_sql_scripts": len(sql_scripts),
+            "frozen_corpus_blobs": len(pinned_corpus),
             "governance_relative_links": checked_links,
         },
         "errors": errors,
