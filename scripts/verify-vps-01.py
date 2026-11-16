@@ -59,3 +59,22 @@ for test_id, floor in expected_smoke_floors.items():
 assert smoke_matrix.count("minimum_tests:") == len(expected_smoke_floors), "Unexpected smoke floor inventory"
 
 print("VPS-01 static topology: PASS 12 executable xUnit v3 projects; 29 routes; 178 fixtures; 4 smoke floors")
+
+
+# VPS-02 retains the 29 legacy routes; additions and Desktop mappings are versioned independently.
+additive = json.loads((contract_root / "vps-02-route-additions.json").read_text(encoding="utf-8-sig"))
+new_entries = additive["endpoints"]
+assert additive["schemaVersion"] == 1 and len(new_entries) == 28
+new_signatures = {(e["httpMethod"], e["path"]) for e in new_entries}
+old_signatures = {(e["httpMethod"], e["path"]) for e in entries}
+assert len(new_signatures) == 28 and old_signatures.isdisjoint(new_signatures)
+assert len({e["controller"] for e in new_entries}) == 6
+assert all(e["authentication"] == "bearer" and e["desktopApiMode"] == "enabled" for e in new_entries)
+matrix = json.loads((contract_root / "vps-02-desktop-method-matrix.json").read_text(encoding="utf-8-sig"))
+methods = matrix["methods"]
+assert matrix["schemaVersion"] == 1 and len(methods) == 46
+assert len({(m["interface"], m["method"]) for m in methods}) == 46
+assert len([m for m in methods if m["status"] == "NEW"]) == 28
+assert all((m["httpMethod"], m["path"]) in old_signatures | new_signatures for m in methods)
+assert all(m["status"] in {"NEW", "BASELINE"} for m in methods)
+print("VPS-02 static source map: PASS 28 new routes, 46 Desktop methods; not HTTP/SQL acceptance")

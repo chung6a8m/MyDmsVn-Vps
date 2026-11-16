@@ -10,8 +10,9 @@ public sealed class SqlWebRuntimePrincipalValidator : IRuntimeSqlPrincipalValida
 {
     private readonly bool _requireJournal;
     private readonly bool _requireResolution;
-    public SqlWebRuntimePrincipalValidator(bool requireJournal = true, bool requireResolution = false)
-    { _requireJournal = requireJournal || requireResolution; _requireResolution = requireResolution; }
+    private readonly bool _requireDesktopApi;
+    public SqlWebRuntimePrincipalValidator(bool requireJournal = true, bool requireResolution = false, bool requireDesktopApi = false)
+    { _requireJournal = requireJournal || requireResolution; _requireResolution = requireResolution; _requireDesktopApi = requireDesktopApi; }
     private const string MissingPermissionSql = @"SELECT CASE WHEN ISNULL(HAS_PERMS_BY_NAME(DB_NAME(),N'DATABASE',N'VIEW DEFINITION'),0)<>1 OR EXISTS (
 SELECT 1 FROM (VALUES (N'Users',N'SELECT'),
 (N'Roles',N'SELECT'),
@@ -86,6 +87,57 @@ OR EXISTS (SELECT 1 FROM sys.fn_my_permissions(NULL, N'DATABASE') WHERE permissi
 OR EXISTS (SELECT 1 FROM sys.objects o
 CROSS APPLY sys.fn_my_permissions(QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.'+QUOTENAME(o.name),N'OBJECT') p WHERE o.is_ms_shipped=0 AND p.permission_name IN (N'EXECUTE',N'REFERENCES')) THEN 1 ELSE 0 END;";
 
+
+    // The Desktop API must never run with a broad db_datawriter or security DML role.
+    // These are the only extra privileges the feature requires.
+    internal const string MissingDesktopApiPermissionsSql = @"SELECT CASE
+WHEN ISNULL(IS_ROLEMEMBER(N'MyDmsVnDesktopApiRuntimeRole'),0) <> 1
+OR EXISTS(SELECT 1 FROM (VALUES
+ (N'Products',N'INSERT'),(N'Products',N'UPDATE'),
+ (N'Warehouses',N'INSERT'),(N'Warehouses',N'UPDATE'),
+ (N'Employees',N'INSERT'),(N'Employees',N'UPDATE'),
+ (N'Customers',N'INSERT'),(N'Customers',N'UPDATE')
+) required(object_name,permission_name)
+WHERE ISNULL(HAS_PERMS_BY_NAME(N'dbo.'+required.object_name,N'OBJECT',required.permission_name),0)<>1)
+OR EXISTS(SELECT 1 FROM (VALUES
+ (N'ApplySecurityAdministration'),
+ (N'ReadSecurityPermissionImportTarget'),
+ (N'ApplySecurityPermissionImport')
+) required(object_name)
+WHERE ISNULL(HAS_PERMS_BY_NAME(N'dbo.'+required.object_name,N'OBJECT',N'EXECUTE'),0)<>1)
+THEN 1 ELSE 0 END;";
+
+    // Match one and only one known SQL fragment; a drift is a startup failure.
+    private static string ReplaceExactlyOnce(string sql, string from, string to)
+    {
+        var index = sql.IndexOf(from, StringComparison.Ordinal);
+        if (index < 0 || sql.IndexOf(from, index + from.Length, StringComparison.Ordinal) >= 0)
+            throw new InvalidOperationException("The Desktop HTTP SQL privilege allowlist drifted.");
+        return sql.Substring(0, index) + to + sql.Substring(index + from.Length);
+    }
+
+    internal static string EffectiveElevatedPermissionSql(bool requireResolution, bool requireDesktopApi)
+    {
+        var sql = requireResolution ? ElevatedPermissionSql.Replace(
+            "N'WebDeploymentState', N'WebOperationJournal'",
+            "N'WebDeploymentState', N'WebOperationJournal', N'WebOperationTerminalAudit'") : ElevatedPermissionSql;
+        if (!requireDesktopApi) return sql;
+        // Exact, bounded allowlist extensions; every other object/schema right remains forbidden.
+        sql = ReplaceExactlyOnce(sql, 
+            "(objectPermission.permission_name = N'INSERT' AND candidate.name IN (N'GoodsReceipts'",
+            "(objectPermission.permission_name = N'INSERT' AND candidate.name IN (N'Products', N'Warehouses', N'Employees', N'Customers', N'GoodsReceipts'");
+        sql = ReplaceExactlyOnce(sql, 
+            "(objectPermission.permission_name = N'UPDATE' AND candidate.name IN (N'Users'",
+            "(objectPermission.permission_name = N'UPDATE' AND candidate.name IN (N'Products', N'Warehouses', N'Employees', N'Customers', N'Users'");
+        sql = ReplaceExactlyOnce(sql, 
+            "(checkedPermission.permission_name = N'UPDATE' AND (ownerTable.name IN (N'GoodsReceipts'",
+            "(checkedPermission.permission_name = N'UPDATE' AND (ownerTable.name IN (N'Products', N'Warehouses', N'Employees', N'Customers', N'GoodsReceipts'");
+        sql = ReplaceExactlyOnce(sql, 
+            "WHERE o.is_ms_shipped=0 AND p.permission_name IN (N'EXECUTE',N'REFERENCES')",
+            "WHERE o.is_ms_shipped=0 AND (p.permission_name=N'REFERENCES' OR (p.permission_name=N'EXECUTE' AND NOT (OBJECT_SCHEMA_NAME(o.object_id)=N'dbo' AND o.name IN (N'ApplySecurityAdministration',N'ReadSecurityPermissionImportTarget',N'ApplySecurityPermissionImport'))))");
+        return sql;
+    }
+
     public async Task ValidateAsync(
         string connectionString,
         CancellationToken cancellationToken)
@@ -116,8 +168,7 @@ CROSS APPLY sys.fn_my_permissions(QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.
             throw new ArgumentException("The SQL connection must be open.", nameof(connection));
         }
 
-        var elevated = _requireResolution ? ElevatedPermissionSql.Replace("N'WebDeploymentState', N'WebOperationJournal'",
-            "N'WebDeploymentState', N'WebOperationJournal', N'WebOperationTerminalAudit'") : ElevatedPermissionSql;
+        var elevated = EffectiveElevatedPermissionSql(_requireResolution, _requireDesktopApi);
         using var command = SqlRead.Command(connection, null, elevated);
         var hasElevatedPermissions = await SqlRead.SingleAsync(command, reader => reader.GetInt32(0), cancellationToken).ConfigureAwait(false);
         if (hasElevatedPermissions == 1)
@@ -130,6 +181,13 @@ CROSS APPLY sys.fn_my_permissions(QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.
             SqlRead.P("@journal", System.Data.SqlDbType.Bit, _requireJournal));
         if (Convert.ToInt32(await minimum.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)) != 0)
             throw new DesktopStartupException("Security.WebRuntimePrincipalUnderprivileged", "Web runtime is missing required effective permissions.");
+        if (_requireDesktopApi)
+        {
+            using var extra = SqlRead.Command(connection, null, MissingDesktopApiPermissionsSql);
+            if (Convert.ToInt32(await extra.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)) != 0)
+                throw new DesktopStartupException("Security.WebRuntimePrincipalUnderprivileged",
+                    "Desktop HTTP parity requires a separate restricted SQL grant role.");
+        }
         if (_requireResolution)
         {
             using var resolution = SqlRead.Command(connection, null, @"

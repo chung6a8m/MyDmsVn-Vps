@@ -1,0 +1,329 @@
+{
+  "schemaVersion": 1,
+  "sourceBaseline": "767f352183bed6c66af5c677977232c9907bd23d",
+  "description": "46 remote HTTP calls; three ForSession methods are local session-binding operations and intentionally have no server route. Route placeholders with :int reflect Web API 2 route constraints.",
+  "methods": [
+    {
+      "interface": "IProductApiClient",
+      "method": "ListAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/products",
+      "status": "NEW"
+    },
+    {
+      "interface": "IProductApiClient",
+      "method": "GetAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/products/{id:int}",
+      "status": "NEW"
+    },
+    {
+      "interface": "IProductApiClient",
+      "method": "CreateAsync",
+      "httpMethod": "POST",
+      "path": "/api/v1/catalog/products",
+      "status": "NEW"
+    },
+    {
+      "interface": "IProductApiClient",
+      "method": "UpdateAsync",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/products/{id:int}",
+      "status": "NEW"
+    },
+    {
+      "interface": "IProductApiClient",
+      "method": "SetActiveAsync",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/products/{id:int}/active",
+      "status": "NEW"
+    },
+    {
+      "interface": "IProductApiClient",
+      "method": "LookupAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/products/lookup",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "IWarehouseApiClient",
+      "method": "ListAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/warehouses",
+      "status": "NEW"
+    },
+    {
+      "interface": "IWarehouseApiClient",
+      "method": "GetAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/warehouses/{id:int}",
+      "status": "NEW"
+    },
+    {
+      "interface": "IWarehouseApiClient",
+      "method": "CreateAsync",
+      "httpMethod": "POST",
+      "path": "/api/v1/catalog/warehouses",
+      "status": "NEW"
+    },
+    {
+      "interface": "IWarehouseApiClient",
+      "method": "UpdateAsync",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/warehouses/{id:int}",
+      "status": "NEW"
+    },
+    {
+      "interface": "IWarehouseApiClient",
+      "method": "SetActiveAsync",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/warehouses/{id:int}/active",
+      "status": "NEW"
+    },
+    {
+      "interface": "IWarehouseApiClient",
+      "method": "LookupAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/warehouses/lookup",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "IEmployeeApiClient",
+      "method": "ListAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/employees",
+      "status": "NEW"
+    },
+    {
+      "interface": "IEmployeeApiClient",
+      "method": "GetAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/employees/{id:int}",
+      "status": "NEW"
+    },
+    {
+      "interface": "IEmployeeApiClient",
+      "method": "CreateAsync",
+      "httpMethod": "POST",
+      "path": "/api/v1/catalog/employees",
+      "status": "NEW"
+    },
+    {
+      "interface": "IEmployeeApiClient",
+      "method": "UpdateAsync",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/employees/{id:int}",
+      "status": "NEW"
+    },
+    {
+      "interface": "IEmployeeApiClient",
+      "method": "SetActiveAsync",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/employees/{id:int}/active",
+      "status": "NEW"
+    },
+    {
+      "interface": "IEmployeeApiClient",
+      "method": "LookupAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/employees/lookup",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "ICustomerApiClient",
+      "method": "ListAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/customers",
+      "status": "NEW"
+    },
+    {
+      "interface": "ICustomerApiClient",
+      "method": "GetAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/customers/{id:int}",
+      "status": "NEW"
+    },
+    {
+      "interface": "ICustomerApiClient",
+      "method": "CreateAsync",
+      "httpMethod": "POST",
+      "path": "/api/v1/catalog/customers",
+      "status": "NEW"
+    },
+    {
+      "interface": "ICustomerApiClient",
+      "method": "UpdateAsync",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/customers/{id:int}",
+      "status": "NEW"
+    },
+    {
+      "interface": "ICustomerApiClient",
+      "method": "SetActiveAsync",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/customers/{id:int}/active",
+      "status": "NEW"
+    },
+    {
+      "interface": "ICustomerApiClient",
+      "method": "LookupAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/customers/lookup",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "ISalesReceiptApiClient",
+      "method": "ListAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/sales-receipts",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "ISalesReceiptApiClient",
+      "method": "GetAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/sales-receipts/{saleId}",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "ISalesReceiptApiClient",
+      "method": "CreateDraftAsync",
+      "httpMethod": "POST",
+      "path": "/api/v1/sales-receipts",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "ISalesReceiptApiClient",
+      "method": "UpdateDraftAsync",
+      "httpMethod": "PUT",
+      "path": "/api/v1/sales-receipts/{saleId}/draft",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "ISalesReceiptApiClient",
+      "method": "PostAsync",
+      "httpMethod": "POST",
+      "path": "/api/v1/sales-receipts/{saleId}/post",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "IGoodsReceiptApiClient",
+      "method": "ListAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/goods-receipts",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "IGoodsReceiptApiClient",
+      "method": "GetAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/goods-receipts/{receiptId}",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "IGoodsReceiptApiClient",
+      "method": "CreateDraftAsync",
+      "httpMethod": "POST",
+      "path": "/api/v1/goods-receipts",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "IGoodsReceiptApiClient",
+      "method": "UpdateDraftAsync",
+      "httpMethod": "PUT",
+      "path": "/api/v1/goods-receipts/{receiptId}/draft",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "IGoodsReceiptApiClient",
+      "method": "PostAsync",
+      "httpMethod": "POST",
+      "path": "/api/v1/goods-receipts/{receiptId}/post",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "IInventoryApiClient",
+      "method": "GetStockBalancesAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/inventory/balances",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "IInventoryApiClient",
+      "method": "GetStockCardAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/inventory/stock-card",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "IIdentityApiClient",
+      "method": "LoginAsync",
+      "httpMethod": "POST",
+      "path": "/api/v1/auth/login",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "IIdentityApiClient",
+      "method": "GetCurrentUserAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/auth/me",
+      "status": "BASELINE"
+    },
+    {
+      "interface": "IPermissionApiClient",
+      "method": "CheckAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/security/permissions/check",
+      "status": "NEW"
+    },
+    {
+      "interface": "IPermissionCatalogApiClient",
+      "method": "GetCatalogAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/security/permissions/catalog",
+      "status": "NEW"
+    },
+    {
+      "interface": "ISecurityAdministrationApiClient",
+      "method": "ListUsersAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/security/users",
+      "status": "NEW"
+    },
+    {
+      "interface": "ISecurityAdministrationApiClient",
+      "method": "ListRolesAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/security/roles",
+      "status": "NEW"
+    },
+    {
+      "interface": "ISecurityAdministrationApiClient",
+      "method": "MutateAsync",
+      "httpMethod": "POST",
+      "path": "/api/v1/security/mutations",
+      "status": "NEW"
+    },
+    {
+      "interface": "ISecurityAdministrationApiClient",
+      "method": "PreviewPermissionImportAsync",
+      "httpMethod": "POST",
+      "path": "/api/v1/security/import/preview",
+      "status": "NEW"
+    },
+    {
+      "interface": "ISecurityAdministrationApiClient",
+      "method": "ApplyPermissionImportAsync",
+      "httpMethod": "POST",
+      "path": "/api/v1/security/import/apply",
+      "status": "NEW"
+    },
+    {
+      "interface": "IFoundationApiClient",
+      "method": "GetStatusAsync",
+      "httpMethod": "GET",
+      "path": "/api/v1/foundation/status",
+      "status": "NEW"
+    }
+  ]
+}
