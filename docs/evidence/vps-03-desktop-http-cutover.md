@@ -1,6 +1,6 @@
 # VPS-03 — Desktop HTTP Cutover: implementation and independent gates
 
-**Status: IN PROGRESS; NOT production accepted.** Repo: `chung6a8m/MyDmsVn-Vps`. Base main: `f266c68958c7d3b512e1f5e036122ab6341bed5e`. Verified implementation commits: `c56d2750e95c4b33700dcad6414ae908b432cf3c` (HTTP tests), `8156d02d701b13a910b84b6daac2c48fe877b277` (published binary gate), 16 November 2026. The final documentation-only PR HEAD requires CI rerun. Results below are **specific to this repository and these SHAs**.
+**Status: IN PROGRESS; NOT production accepted.** Repo: `chung6a8m/MyDmsVn-Vps`. Base main: `f266c68958c7d3b512e1f5e036122ab6341bed5e`. Verified implementation commits: `c56d2750e95c4b33700dcad6414ae908b432cf3c` (HTTP tests), `8156d02d701b13a910b84b6daac2c48fe877b277` (published binary gate), `acb28d5925ba934ef2e0e0bfdae55152ee16a111` (WEB5 v2 admission and final executable changes), 16 November 2026. The final documentation-only PR HEAD requires CI rerun. Results below are **specific to this repository and these SHAs**.
 
 ## Code implemented — VPS-03A / VPS-03B
 
@@ -8,24 +8,24 @@
 - Fail-closed `MYDMSVN_DESKTOP_API_ORIGIN` (canonical HTTPS) and `MYDMSVN_DESKTOP_OPERATION_MODE` (`legacy-web11`, `web4`, `web5`); no automatic fallback or certificate-validation override. Host additive routes continue to require `MYDMSVN_WEB_DESKTOP_API=enabled`.
 - In-memory Bearer token and `HttpClientHandler` refresh cookie; same-origin `Origin` on unsafe requests; `X-Requested-With` for login/refresh/logout, single-flight refresh, generation fence, bounded synchronous logout, explicit cancellation/timeout errors and no automatic HTTP replay.
 - Strict Sales/Goods v1 wire projection (calendar dates, int64 strings, decimal strings, version), inventory receipt/line ID normalization without converting date strings, `JObject` reader with `DateParseHandling.None`.
-- WEB4/WEB5 epoch + GUIDv4 idempotency key + frozen WEB4 SHA256 for six Sales/Goods commands; ambiguous ACK retains one in-process pending intent; only a fully matching `COMMITTED` status can clear the fence. Cancellation during refresh invalidates local credentials instead of replaying refresh.
+- WEB4/WEB5 epoch + GUIDv4 idempotency key + frozen WEB4 SHA256 for six Sales/Goods commands; ambiguous ACK retains one in-process pending intent; only a fully matching `COMMITTED` status can clear the fence. Cancellation during refresh invalidates local credentials instead of replaying refresh. Exact WEB5 configuration also requires a valid authenticated WEB5 v2 context and `sameKeyResendEnabled=false`; WEB4-only deployments are rejected before mutation.
 - Vendored SourceGrid `net48` excludes its obsolete SQL command helper, `Microsoft.Data.SqlClient` and `Microsoft.Windows.Compatibility` package refs. The vendor `net8.0-windows` target is preserved. Windows .NET Framework references `System.Net.Http`, `System.Security`, and `System.Configuration` are explicit.
 
-## Verified CI — exact implementation SHA 8156d02
+## Verified CI — exact implementation SHA acb28d5
 
 | Evidence | Environment | Actual outcome |
 | --- | --- | --- |
-| [Foundation workflow #43901039358](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43901039358) | Ubuntu static checks + Windows Server 2022 SDK 8.0.400 / net48 locked restore and Release build | **8/8 jobs SUCCESS** |
-| [xUnit v3 discovery #43901039308](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43901039308) | Windows compile/discovery of eight non-smoke suites, Linux static topology | **9/9 jobs SUCCESS** (discovery is not test execution) |
+| [Foundation workflow #43903066275](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43903066275) | Ubuntu static checks + Windows Server 2022 SDK 8.0.400 / net48 locked restore and Release build | **8/8 jobs SUCCESS** |
+| [xUnit v3 discovery #43903065827](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43903065827) | Windows compile/discovery of eight non-smoke suites, Linux static topology | **9/9 jobs SUCCESS** (discovery is not test execution) |
 | Architecture smoke | Windows net48 SQL-free | **15/15 passed**, failed 0, skipped/not-executed 0 |
-| Desktop.Session (including new HTTP adapter tests) | Windows net48 SQL-free | **224/224 passed**, failed 0, skipped/not-executed 0 |
+| Desktop.Session (including new HTTP adapter tests) | Windows net48 SQL-free | **225/225 passed**, failed 0, skipped/not-executed 0 |
 | Server.Application smoke | Windows net48 SQL-free | **363/363 passed**, failed 0, skipped/not-executed 0 |
 | Legacy HttpHost regression | Windows net48 SQL-free | **683/683 passed**, failed 0, skipped/not-executed 0 |
-| **SQL-free smoke total** | Windows net48 | **1,285/1,285 passed**, failed 0, skipped/not-executed 0 |
-| [Desktop published artifact #43901039447](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43901039447) | Windows Server 2022 SDK 8.0.400, locked net48 x86 publish and package/output exclusion scan | **1/1 SUCCESS**: 23 package-lock dependencies, 35 published files, zero forbidden binaries/config markers |
-| **All three CI workflows** | Windows net48 plus Ubuntu static | **18/18 jobs passed** at 8156d02 |
+| **SQL-free smoke total** | Windows net48 | **1,286/1,286 passed**, failed 0, skipped/not-executed 0 |
+| [Desktop published artifact #43903065526](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43903065526) | Windows Server 2022 SDK 8.0.400, locked net48 x86 publish and package/output exclusion scan | **1/1 SUCCESS**: 23 package-lock dependencies, 35 published files, zero forbidden binaries/config markers |
+| **All three CI workflows** | Windows net48 plus Ubuntu static | **18/18 jobs passed** at acb28d5 |
 
-The new HTTP tests include fake transport login/Bearer and session-generation fencing, 401/403 handling, known failure vs unknown/lost ACK, no replay, security/feature DI, provider-free preview, six independent WEB4 corpus SHA256 vectors and exact inventory date/int64 rename. **These are mock transport tests, not HTTPS/SQL E2E.**
+The new HTTP tests include fake transport login/Bearer and session-generation fencing, 401/403 handling, known failure vs unknown/lost ACK, no replay, security/feature DI, provider-free preview, six independent WEB4 corpus SHA256 vectors, exact inventory date/int64 rename, and WEB5-to-WEB4 mode-mismatch refusal. **These are mock transport tests, not HTTPS/SQL E2E.**
 
 Source graph: `Desktop.App/packages.lock.json` resolves 23 net48 entries and contains no `SqlClient`, `MediatR`, `linq2db`, `Server.Application`, `Server.Infrastructure`, or `Infrastructure.Local`. On Windows, a real Desktop.App `net48` x86 `dotnet publish` produced 35 files; CI rejected forbidden SQL/Local/Server/migrator binary names, credential markers and SQL connection-string markers and found **zero violations**. This is a **published artifact static audit, not an attended Windows GUI loader/release rehearsal**.
 
