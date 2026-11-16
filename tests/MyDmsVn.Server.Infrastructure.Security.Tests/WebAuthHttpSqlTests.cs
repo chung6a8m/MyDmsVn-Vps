@@ -221,6 +221,7 @@ public sealed class WebAuthHttpSqlTests
         private TestServer? _server;
         private bool _web4Enabled;
         private bool _web5Enabled;
+        private bool _desktopApiEnabled;
         private Scenario(string connectionString) { Admin = new SqlConnection(connectionString); }
         internal static void LoadWithoutSql()
         {
@@ -229,16 +230,20 @@ public sealed class WebAuthHttpSqlTests
             scenario.RestartHost(new NoSqlFactory());
             Assert.Equal(ConnectionState.Closed, scenario.Admin.State);
         }
-        public static async Task<Scenario> Create(string connectionString, bool web4Enabled = false, bool web5Enabled = false)
+        public static async Task<Scenario> Create(string connectionString, bool web4Enabled = false,
+            bool web5Enabled = false, bool desktopApiEnabled = false)
         {
             var test = new Scenario(connectionString);
             test._web4Enabled = web4Enabled || web5Enabled;
             test._web5Enabled = web5Enabled;
+            test._desktopApiEnabled = desktopApiEnabled;
             try
             {
                 await test.Admin.OpenAsync();
                 await test.Admin.ExecuteAsync("CREATE USER WebHttpProbe WITHOUT LOGIN; CREATE USER WebHttpMigration WITHOUT LOGIN;");
                 await test.Admin.ExecuteAsync(ReadProvisioning().Replace("$(WebRuntimeUser)", "WebHttpProbe").Replace("$(MigrationUser)", "WebHttpMigration"));
+                if (desktopApiEnabled)
+                    await test.Admin.ExecuteAsync(ReadDesktopProvisioning().Replace("$(WebRuntimeUser)", "WebHttpProbe"));
                 var hash = new BcryptPasswordHasher().Hash(Password);
                 foreach (var name in new[] { "alice", "bob" })
                 {
@@ -247,7 +252,9 @@ public sealed class WebAuthHttpSqlTests
                 }
                 var factory = new RestrictedFactory(connectionString);
                 using (var runtime = (SqlConnection)await factory.OpenConnectionAsync(CancellationToken.None))
-                    await new SqlWebRuntimePrincipalValidator(requireJournal: test._web4Enabled, requireResolution: web5Enabled).ValidateConnectionAsync(runtime, CancellationToken.None);
+                    await new SqlWebRuntimePrincipalValidator(requireJournal: test._web4Enabled,
+                        requireResolution: web5Enabled, requireDesktopApi: desktopApiEnabled)
+                        .ValidateConnectionAsync(runtime, CancellationToken.None);
                 test.RestartHost();
                 return test;
             }
@@ -293,7 +300,9 @@ public sealed class WebAuthHttpSqlTests
             services.Replace(ServiceDescriptor.Singleton<IDbConnectionFactory>(noSql ?? new RestrictedFactory(Admin.ConnectionString)));
             services.Replace(ServiceDescriptor.Singleton<ISecurityAuditSink>(Audit));
             _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-            var options = new WebHostOptions(Origin, Origin, "http-sql-tests", "sql-test", new Dictionary<string, byte[]> { ["sql-test"] = Encoding.UTF8.GetBytes("test-only-key-for-real-sql-http-auth-boundary") }, web4Enabled: _web4Enabled, web5Enabled: _web5Enabled);
+            var options = new WebHostOptions(Origin, Origin, "http-sql-tests", "sql-test",
+                new Dictionary<string, byte[]> { ["sql-test"] = Encoding.UTF8.GetBytes("test-only-key-for-real-sql-http-auth-boundary") },
+                web4Enabled: _web4Enabled, web5Enabled: _web5Enabled, desktopApiEnabled: _desktopApiEnabled);
             _server = TestServer.Create(app => Web2Pipeline.Configure(app, options, _provider));
         }
         public void Dispose() { _server?.Dispose(); _provider?.Dispose(); Admin.Dispose(); }
@@ -310,6 +319,15 @@ public sealed class WebAuthHttpSqlTests
                 if (File.Exists(path)) return File.ReadAllText(path);
             }
             throw new FileNotFoundException("Provision-MyDmsVnWebPrincipals.sql");
+        }
+        private static string ReadDesktopProvisioning()
+        {
+            for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory != null; directory = directory.Parent)
+            {
+                var path = Path.Combine(directory.FullName, "deployment/sql/Provision-MyDmsVnDesktopApiGrants.sql");
+                if (File.Exists(path)) return File.ReadAllText(path);
+            }
+            throw new FileNotFoundException("Provision-MyDmsVnDesktopApiGrants.sql");
         }
     }
     internal sealed class Reply

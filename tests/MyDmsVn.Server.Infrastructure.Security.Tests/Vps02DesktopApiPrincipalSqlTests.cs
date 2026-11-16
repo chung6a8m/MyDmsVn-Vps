@@ -118,18 +118,18 @@ public sealed class Vps02DesktopApiPrincipalSqlTests
                 }
 
                 var id = await connection.QuerySingleAsync<int>(
-                    "INSERT dbo.Products(Code,Name,Unit,IsActive) OUTPUT INSERTED.Id " +
+                    "INSERT dbo.Products(Code,Name,Unit,IsActive) OUTPUT INSERTED.ProductId " +
                     "VALUES(N'VPS02-PROBE',N'VPS-02 Product',N'EA',1);");
                 Assert.True(id > 0);
-                await connection.ExecuteAsync("UPDATE dbo.Products SET Name=N'VPS-02 Updated' WHERE Id=@id;", new { id });
+                await connection.ExecuteAsync("UPDATE dbo.Products SET Name=N'VPS-02 Updated' WHERE ProductId=@id;", new { id });
                 Assert.Equal("VPS-02 Updated", await connection.QuerySingleAsync<string>(
-                    "SELECT Name FROM dbo.Products WHERE Id=@id;", new { id }));
+                    "SELECT Name FROM dbo.Products WHERE ProductId=@id;", new { id }));
 
                 foreach (var statement in new[]
                 {
                     "INSERT dbo.Roles(RoleName,NormalizedRoleName) VALUES(N'Bypass',N'BYPASS');",
                     "UPDATE dbo.Users SET IsActive=0;",
-                    "DELETE dbo.Products WHERE Id=-1;",
+                    "DELETE dbo.Products WHERE ProductId=-1;",
                     "SELECT TOP(1) * FROM dbo.SecurityAuditEvents;",
                     "UPDATE dbo.SchemaVersions SET Applied=SYSUTCDATETIME();",
                     "CREATE TABLE dbo.UnsafeVps02(Id int);"
@@ -180,6 +180,56 @@ public sealed class Vps02DesktopApiPrincipalSqlTests
             await connection.ExecuteAsync("EXECUTE AS USER=N'Vps02WebProbe';");
             try
             {
+                var ex = await Assert.ThrowsAsync<DesktopStartupException>(() =>
+                    new SqlWebRuntimePrincipalValidator(requireDesktopApi: true)
+                        .ValidateConnectionAsync(connection, CancellationToken.None));
+                Assert.Equal("Security.WebRuntimePrincipalUnderprivileged", ex.Code);
+            }
+            finally { await connection.ExecuteAsync("REVERT;"); }
+        }
+        finally { await db.DisposeAsync(); }
+    }
+
+    [SqlServerTheory(SqlTestCategory.SecurityProvisioning)]
+    [InlineData("INSERT")]
+    [InlineData("EXECUTE")]
+    public async Task Schema_scoped_DML_or_execute_is_rejected(string permission)
+    {
+        var db = await NewDatabaseAsync();
+        try
+        {
+            using var connection = new SqlConnection(db.ConnectionString);
+            await connection.OpenAsync();
+            await PrepareAsync(connection);
+            await connection.ExecuteAsync("CREATE SCHEMA Vps02Empty AUTHORIZATION dbo;");
+            await connection.ExecuteAsync("GRANT " + permission +
+                " ON SCHEMA::Vps02Empty TO [MyDmsVnDesktopApiRuntimeRole];");
+            await connection.ExecuteAsync("EXECUTE AS USER=N'Vps02WebProbe';");
+            try
+            {
+                var ex = await Assert.ThrowsAsync<DesktopStartupException>(() =>
+                    new SqlWebRuntimePrincipalValidator(requireDesktopApi: true)
+                        .ValidateConnectionAsync(connection, CancellationToken.None));
+                Assert.Equal("Security.WebRuntimePrincipalOverprivileged", ex.Code);
+            }
+            finally { await connection.ExecuteAsync("REVERT;"); }
+        }
+        finally { await db.DisposeAsync(); }
+    }
+
+    [SqlServerFact(SqlTestCategory.SecurityProvisioning)]
+    public async Task Revoking_optin_membership_restores_base_admission_and_rejects_desktop_admission()
+    {
+        var db = await NewDatabaseAsync();
+        try
+        {
+            using var connection = new SqlConnection(db.ConnectionString);
+            await connection.OpenAsync();
+            await PrepareAsync(connection);
+            await connection.ExecuteAsync("ALTER ROLE [MyDmsVnDesktopApiRuntimeRole] DROP MEMBER [Vps02WebProbe]; EXECUTE AS USER=N'Vps02WebProbe';");
+            try
+            {
+                await new SqlWebRuntimePrincipalValidator().ValidateConnectionAsync(connection, CancellationToken.None);
                 var ex = await Assert.ThrowsAsync<DesktopStartupException>(() =>
                     new SqlWebRuntimePrincipalValidator(requireDesktopApi: true)
                         .ValidateConnectionAsync(connection, CancellationToken.None));

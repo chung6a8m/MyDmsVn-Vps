@@ -37,6 +37,18 @@ public sealed partial class WebHostIisExpressTests
     [WebHostSqlFact, Trait("Category", "WebHostIntegration")]
     public Task Published_SystemWeb_host_warms_up_with_restricted_schema11_and_serves_safe_HTTP() => Run(false);
 
+    [WebHostSqlFact, Trait("Category", "Vps02DesktopApiHostIntegration")]
+    public async Task Published_SystemWeb_desktop_API_uses_restricted_SQL_on_exact11_12_and_13()
+    {
+        await Run(false, desktopApi: true);
+        await Run(false, recoveryPilot: true, desktopApi: true);
+        await Run(false, web5Pilot: true, desktopApi: true);
+    }
+
+    [WebHostSqlFact, Trait("Category", "Vps02DesktopApiHostIntegration")]
+    public Task Published_SystemWeb_disabled_desktop_API_rejects_new_routes_and_serves_legacy_SQL() =>
+        Run(false, verifyDesktopApiDisabled: true);
+
     [WebHostSqlFact, Trait("Category", "Web5OwnedPublishedHost")]
     public Task Published_WEB5_host_is_admitted_before_HTTP_and_absent_before_SQL_cleanup() =>
         Run(false, web5Pilot: true, admissionOnly: true);
@@ -78,7 +90,7 @@ public sealed partial class WebHostIisExpressTests
     private static async Task Run(bool browser, bool receiptPilot = false, bool integratedPilot = false, bool recoveryPilot = false,
         bool web5Pilot = false, bool attended = false, bool originalFirstPilot = false, bool admissionOnly = false,
         bool web6Candidate = false, bool web6Cutover = false, Web6CandidateCutoverPlan? cutoverPlan = null,
-        bool web6Workload = false)
+        bool web6Workload = false, bool desktopApi = false, bool verifyDesktopApiDisabled = false)
     {
         GuiTestSafety.ThrowIfPoisoned();
         Web6WorkloadTask4Receipt? workloadReceipt = null;
@@ -174,9 +186,16 @@ public sealed partial class WebHostIisExpressTests
                 await connection.ExecuteAsync(File.ReadAllText(currentBackend == null ? FindRootFile("deployment/sql/Provision-MyDmsVnWebPrincipals.sql") :
                     Path.Combine(currentBackend.Root, "deployment", "sql", "Provision-MyDmsVnWebPrincipals.sql"))
                     .Replace("$(WebRuntimeUser)", login.Name).Replace("$(MigrationUser)", "WebSmokeMigration"));
+                if (desktopApi)
+                    await connection.ExecuteAsync(File.ReadAllText(FindRootFile("deployment/sql/Provision-MyDmsVnDesktopApiGrants.sql"))
+                        .Replace("$(WebRuntimeUser)", login.Name));
+                var smokeHash = new BcryptPasswordHasher().Hash(attended ? "Unused!" + Guid.NewGuid().ToString("N") : "IisSmoke_test-only-password_2026!");
                 await connection.ExecuteAsync("INSERT dbo.Users(Username,NormalizedUsername,DisplayName,Source,PasswordHash,PasswordSalt,PasswordAlgorithm) VALUES(N'web.smoke',N'WEB.SMOKE',N'Web smoke',N'Local',@hash,N'',N'BCrypt'); " +
                     "INSERT dbo.SystemSecuritySettings(Id,SuperuserUserId,BoundNormalizedUsername) SELECT 1,UserId,N'WEB.SMOKE' FROM dbo.Users WHERE NormalizedUsername=N'WEB.SMOKE';",
-                    new { hash = new BcryptPasswordHasher().Hash(attended ? "Unused!" + Guid.NewGuid().ToString("N") : "IisSmoke_test-only-password_2026!") });
+                    new { hash = smokeHash });
+                if (desktopApi)
+                    await connection.ExecuteAsync("INSERT dbo.Users(Username,NormalizedUsername,DisplayName,Source,PasswordHash,PasswordSalt,PasswordAlgorithm) " +
+                        "VALUES(N'vps02.denied',N'VPS02.DENIED',N'VPS-02 denied',N'Local',@hash,N'',N'BCrypt');", new { hash = smokeHash });
                 customer = await connection.QuerySingleAsync<int>("INSERT dbo.Customers(Code,Name) OUTPUT INSERTED.CustomerId VALUES(N'PILOT-C',N'Pilot Customer');");
                 warehouse = await connection.QuerySingleAsync<int>("INSERT dbo.Warehouses(Code,Name) OUTPUT INSERTED.WarehouseId VALUES(N'PILOT-W',N'Pilot Warehouse');");
                 employee = await connection.QuerySingleAsync<int>("INSERT dbo.Employees(Code,Name) OUTPUT INSERTED.EmployeeId VALUES(N'PILOT-E',N'Pilot Employee');");
@@ -254,6 +273,7 @@ public sealed partial class WebHostIisExpressTests
             start.EnvironmentVariables["MYDMSVN_WEB_JWT_KEYS"] = "smoke:" + Convert.ToBase64String(key);
             start.EnvironmentVariables["MYDMSVN_WEB_SQL_CONNECTION_STRING"] = login.ConnectionString(database.DatabaseName);
             start.EnvironmentVariables["MYDMSVN_WEB_SUPERUSER_USERNAME"] = "web.smoke";
+            if (desktopApi) start.EnvironmentVariables["MYDMSVN_WEB_DESKTOP_API"] = "enabled";
             if (web6Candidate)
             {
                 var candidateRoot = Path.GetFullPath(Environment.GetEnvironmentVariable("MYDMSVN_WEB6_CANDIDATE_ROOT")!);
@@ -360,47 +380,52 @@ public sealed partial class WebHostIisExpressTests
                 Assert.Equal(200, signedIn.Status);
                 AssertRefreshCookie(signedIn, cleared: false);
                 var bearer = "Bearer " + (string)JObject.Parse(signedIn.Body)["data"]!["accessToken"]!;
+                if (desktopApi)
+                    await VerifyDesktopApiHost(database.ConnectionString, thumbprint!, bearer);
+                if (verifyDesktopApiDisabled)
+                    await VerifyDesktopApiDisabledHost(thumbprint!, bearer);
                 var me = await Request("https://localhost:44321/api/v1/auth/me", thumbprint!, bearer);
                 Assert.Equal(200, me.Status);
                 Assert.Equal("web.smoke", (string?)JObject.Parse(me.Body)["data"]!["username"]);
                 var lookup = await Request("https://localhost:44321/api/v1/catalog/products/lookup?limit=25", thumbprint!, bearer);
                 Assert.Equal(200, lookup.Status);
                 Assert.Contains(JObject.Parse(lookup.Body)["data"]!, row => (int)row["id"]! == product);
-                var saleBody = new JObject
+                if ((!recoveryPilot && !web5Pilot) || !desktopApi)
                 {
-                    ["saleDate"] = "2024-02-29", ["customerId"] = customer, ["warehouseId"] = warehouse, ["employeeId"] = employee,
-                    ["lines"] = new JArray(
-                        new JObject { ["saleLineId"] = "0", ["productId"] = product, ["qty"] = "3.0000", ["unitPrice"] = "25.0000", ["isGift"] = false },
-                        new JObject { ["saleLineId"] = "0", ["productId"] = product, ["qty"] = "2.0000", ["unitPrice"] = "25.0000", ["isGift"] = true }),
-                };
-                var created = await Request("https://localhost:44321/api/v1/sales-receipts", thumbprint!, bearer, "https://localhost:44321", "POST", saleBody.ToString(Formatting.None), csrf: true);
-                Assert.Equal(200, created.Status);
-                var sale = JObject.Parse(created.Body)["data"]!;
-                Assert.Equal(JTokenType.String, sale["saleId"]!.Type);
-                Assert.Equal(JTokenType.String, sale["lines"]![0]!["saleLineId"]!.Type);
-                Assert.Equal(JTokenType.String, sale["totalAmount"]!.Type);
-                var saleUrl = "https://localhost:44321/api/v1/sales-receipts/" + (string)sale["saleId"]!;
-                var fetched = await Request(saleUrl, thumbprint!, bearer);
-                Assert.Equal(200, fetched.Status);
-                Assert.True(JToken.DeepEquals(NormalizeDraftDecimals(sale), NormalizeDraftDecimals(JObject.Parse(fetched.Body)["data"]!)));
-                saleBody["expectedVersion"] = sale["version"]!.DeepClone();
-                saleBody["note"] = "System.Web smoke update";
-                for (var index = 0; index < 2; index++) saleBody["lines"]![index]!["saleLineId"] = sale["lines"]![index]!["saleLineId"]!.DeepClone();
-                var updated = await Request(saleUrl + "/draft", thumbprint!, bearer, "https://localhost:44321", "PUT", saleBody.ToString(Formatting.None), csrf: true);
-                Assert.True(updated.Status == 200, "Sales PUT failed: status=" + updated.Status + "; contentType=" + updated.ContentType + "; correlation=" + updated.Correlation + "; error=" + (updated.Status >= 400 ? updated.Body : "<omitted>"));
-                var posted = await Request(saleUrl + "/post", thumbprint!, bearer, "https://localhost:44321", "POST",
-                    new JObject { ["expectedVersion"] = JObject.Parse(updated.Body)["data"]!["version"]!.DeepClone() }.ToString(Formatting.None), csrf: true);
-                Assert.Equal(200, posted.Status);
-                var ack = JObject.Parse(posted.Body)["data"]!;
-                Assert.Equal("Posted", (string?)ack["status"]);
-                Assert.Null(ack["lines"]);
-                var postedDetail = await Request(saleUrl, thumbprint!, bearer);
-                Assert.Equal(200, postedDetail.Status);
-                var postedJson = JObject.Parse(postedDetail.Body)["data"]!;
-                Assert.Equal(JTokenType.String, postedJson["totalCost"]!.Type);
-                Assert.Equal(JTokenType.String, postedJson["lines"]![0]!["postedUnitCost"]!.Type);
-                using (var oracle = new SqlConnection(database.ConnectionString))
-                {
+                    var saleBody = new JObject
+                    {
+                        ["saleDate"] = "2024-02-29", ["customerId"] = customer, ["warehouseId"] = warehouse, ["employeeId"] = employee,
+                        ["lines"] = new JArray(
+                            new JObject { ["saleLineId"] = "0", ["productId"] = product, ["qty"] = "3.0000", ["unitPrice"] = "25.0000", ["isGift"] = false },
+                            new JObject { ["saleLineId"] = "0", ["productId"] = product, ["qty"] = "2.0000", ["unitPrice"] = "25.0000", ["isGift"] = true }),
+                    };
+                    var created = await Request("https://localhost:44321/api/v1/sales-receipts", thumbprint!, bearer, "https://localhost:44321", "POST", saleBody.ToString(Formatting.None), csrf: true);
+                    Assert.Equal(200, created.Status);
+                    var sale = JObject.Parse(created.Body)["data"]!;
+                    Assert.Equal(JTokenType.String, sale["saleId"]!.Type);
+                    Assert.Equal(JTokenType.String, sale["lines"]![0]!["saleLineId"]!.Type);
+                    Assert.Equal(JTokenType.String, sale["totalAmount"]!.Type);
+                    var saleUrl = "https://localhost:44321/api/v1/sales-receipts/" + (string)sale["saleId"]!;
+                    var fetched = await Request(saleUrl, thumbprint!, bearer);
+                    Assert.Equal(200, fetched.Status);
+                    Assert.True(JToken.DeepEquals(NormalizeDraftDecimals(sale), NormalizeDraftDecimals(JObject.Parse(fetched.Body)["data"]!)));
+                    saleBody["expectedVersion"] = sale["version"]!.DeepClone();
+                    saleBody["note"] = "System.Web smoke update";
+                    for (var index = 0; index < 2; index++) saleBody["lines"]![index]!["saleLineId"] = sale["lines"]![index]!["saleLineId"]!.DeepClone();
+                    var updated = await Request(saleUrl + "/draft", thumbprint!, bearer, "https://localhost:44321", "PUT", saleBody.ToString(Formatting.None), csrf: true);
+                    Assert.True(updated.Status == 200, "Sales PUT failed: status=" + updated.Status + "; contentType=" + updated.ContentType + "; correlation=" + updated.Correlation + "; error=" + (updated.Status >= 400 ? updated.Body : "<omitted>"));
+                    var posted = await Request(saleUrl + "/post", thumbprint!, bearer, "https://localhost:44321", "POST",
+                        new JObject { ["expectedVersion"] = JObject.Parse(updated.Body)["data"]!["version"]!.DeepClone() }.ToString(Formatting.None), csrf: true);
+                    Assert.Equal(200, posted.Status);
+                    var ack = JObject.Parse(posted.Body)["data"]!;
+                    Assert.Equal("Posted", (string?)ack["status"]);
+                    Assert.Null(ack["lines"]);
+                    var postedDetail = await Request(saleUrl, thumbprint!, bearer);
+                    Assert.Equal(200, postedDetail.Status);
+                    var postedJson = JObject.Parse(postedDetail.Body)["data"]!;
+                    Assert.Equal(JTokenType.String, postedJson["totalCost"]!.Type);
+                    Assert.Equal(JTokenType.String, postedJson["lines"]![0]!["postedUnitCost"]!.Type);
+                    using var oracle = new SqlConnection(database.ConnectionString);
                     await oracle.OpenAsync();
                     Assert.Equal(15m, await oracle.QuerySingleAsync<decimal>("SELECT Quantity FROM dbo.StockBalances;"));
                     Assert.Equal(225m, await oracle.QuerySingleAsync<decimal>("SELECT InventoryValue FROM dbo.StockBalances;"));
@@ -523,6 +548,145 @@ public sealed partial class WebHostIisExpressTests
         {
             Web6BootstrapSelectorEvidence.Complete(bootstrap, bootstrapResources, bootstrapSqlReceipt!, bootstrapProfiles);
         }
+    }
+
+    private static async Task VerifyDesktopApiHost(string connectionString, string thumbprint, string bearer)
+    {
+        const string origin = "https://localhost:44321";
+        using var sql = new SqlConnection(connectionString);
+        await sql.OpenAsync();
+        foreach (var catalog in new[]
+        {
+            new { Route = "products", Table = "Products", Key = "ProductId", Body = "{\"code\":\"VPS02-IP\",\"name\":\"IIS Product\",\"unit\":\"EA\"}" },
+            new { Route = "warehouses", Table = "Warehouses", Key = "WarehouseId", Body = "{\"code\":\"VPS02-IW\",\"name\":\"IIS Warehouse\",\"address\":null}" },
+            new { Route = "employees", Table = "Employees", Key = "EmployeeId", Body = "{\"code\":\"VPS02-IE\",\"name\":\"IIS Employee\",\"phone\":null,\"userId\":null}" },
+            new { Route = "customers", Table = "Customers", Key = "CustomerId", Body = "{\"code\":\"VPS02-IC\",\"name\":\"IIS Customer\",\"address\":null,\"phone\":null,\"taxCode\":null}" },
+        })
+        {
+            var otherBody = JObject.Parse(catalog.Body);
+            otherBody["code"] = "ZZZ-I" + catalog.Route.Substring(0, 1).ToUpperInvariant();
+            otherBody["name"] = "Other " + catalog.Route;
+            var created = await Request(origin + "/api/v1/catalog/" + catalog.Route, thumbprint, bearer, origin,
+                "POST", catalog.Body, csrf: true);
+            Assert.Equal(200, created.Status);
+            var id = (int)JObject.Parse(created.Body)["data"]!["id"]!;
+            Assert.Equal(200, (await Request(origin + "/api/v1/catalog/" + catalog.Route, thumbprint, bearer, origin,
+                "POST", otherBody.ToString(Formatting.None), csrf: true)).Status);
+            var fetched = await Request(origin + "/api/v1/catalog/" + catalog.Route + "/" + id, thumbprint, bearer);
+            Assert.Equal(id, (int)JObject.Parse(fetched.Body)["data"]!["id"]!);
+            Assert.StartsWith("IIS ", (string)JObject.Parse(fetched.Body)["data"]!["name"]!);
+            AssertHttpsPage(await Request(origin + "/api/v1/catalog/" + catalog.Route + "?search=VPS02&pageNumber=1&pageSize=25&includeInactive=false", thumbprint, bearer), 1, 25, 1, id);
+            var page2 = await Request(origin + "/api/v1/catalog/" + catalog.Route + "?pageNumber=2&pageSize=1&includeInactive=true", thumbprint, bearer);
+            AssertHttpsPage(page2, 2, 1, 3, id);
+            var lookup = await Request(origin + "/api/v1/catalog/" + catalog.Route + "/lookup?search=VPS02&limit=25", thumbprint, bearer);
+            Assert.Equal(id, (int)Assert.Single((JArray)JObject.Parse(lookup.Body)["data"]!)["id"]!);
+            var updated = await Request(origin + "/api/v1/catalog/" + catalog.Route + "/" + id, thumbprint, bearer, origin,
+                "PUT", catalog.Body.Replace("IIS ", "Updated "), csrf: true);
+            Assert.StartsWith("Updated ", (string)JObject.Parse(updated.Body)["data"]!["name"]!);
+            Assert.Equal(200, (await Request(origin + "/api/v1/catalog/" + catalog.Route + "/" + id + "/active", thumbprint, bearer, origin,
+                "PUT", "{\"isActive\":false}", csrf: true)).Status);
+            Assert.False(await sql.QuerySingleAsync<bool>("SELECT IsActive FROM dbo." + catalog.Table + " WHERE " + catalog.Key + "=@id;", new { id }));
+            AssertHttpsPage(await Request(origin + "/api/v1/catalog/" + catalog.Route + "?search=VPS02&pageNumber=1&pageSize=25&includeInactive=false", thumbprint, bearer), 1, 25, 0);
+            var inactive = await Request(origin + "/api/v1/catalog/" + catalog.Route + "?search=VPS02&pageNumber=1&pageSize=25&includeInactive=true", thumbprint, bearer);
+            AssertHttpsPage(inactive, 1, 25, 1, id);
+            Assert.False((bool)JObject.Parse(inactive.Body)["data"]!["items"]![0]!["isActive"]!);
+        }
+
+        var deniedLogin = await Request(origin + "/api/v1/auth/login", thumbprint, origin: origin, method: "POST",
+            body: JsonConvert.SerializeObject(new { username = "vps02.denied", password = "IisSmoke_test-only-password_2026!" }), csrf: true);
+        Assert.Equal(200, deniedLogin.Status);
+        var deniedBearer = "Bearer " + (string)JObject.Parse(deniedLogin.Body)["data"]!["accessToken"]!;
+        var allowedDecision = await Request(origin + "/api/v1/security/permissions/check?key=Security.Users.Manage", thumbprint, bearer);
+        var deniedDecision = await Request(origin + "/api/v1/security/permissions/check?key=Security.Users.Manage", thumbprint, deniedBearer);
+        Assert.True((bool)JObject.Parse(allowedDecision.Body)["data"]!["isAllowed"]!);
+        Assert.False((bool)JObject.Parse(deniedDecision.Body)["data"]!["isAllowed"]!);
+        var permissionCatalog = await Request(origin + "/api/v1/security/permissions/catalog", thumbprint, bearer);
+        Assert.Contains(JObject.Parse(permissionCatalog.Body)["data"]!["items"]!, item =>
+            (string?)item["key"] == "Security.Users.Manage" && (string?)item["status"] == "Active");
+        var users = await Request(origin + "/api/v1/security/users", thumbprint, bearer);
+        Assert.Contains(JObject.Parse(users.Body)["data"]!, user => (string?)user["username"] == "web.smoke");
+        Assert.Contains(JObject.Parse(users.Body)["data"]!, user => (string?)user["username"] == "vps02.denied");
+        Assert.Equal(403, (await Request(origin + "/api/v1/security/roles", thumbprint, deniedBearer)).Status);
+        var invalid = await Request(origin + "/api/v1/security/mutations", thumbprint, bearer, origin,
+            "POST", "{\"target\":1,\"operation\":0,\"name\":\"Invalid\",\"isActive\":\"true\"}", csrf: true);
+        Assert.Equal(400, invalid.Status);
+        var role = await Request(origin + "/api/v1/security/mutations", thumbprint, bearer, origin,
+            "POST", new JObject { ["target"] = 1, ["operation"] = 0, ["name"] = "VPS02 IIS Role" }.ToString(Formatting.None), csrf: true);
+        Assert.Equal(200, role.Status);
+        var roleId = await sql.QuerySingleAsync<int>("SELECT RoleId FROM dbo.Roles WHERE NormalizedRoleName=N'VPS02 IIS ROLE';");
+        var roleRevision = (long)JObject.Parse(role.Body)["data"]!["assignmentRevision"]!;
+        var roles = await Request(origin + "/api/v1/security/roles", thumbprint, bearer);
+        Assert.Contains(JObject.Parse(roles.Body)["data"]!, candidate => (int?)candidate["roleId"] == roleId &&
+            (string?)candidate["name"] == "VPS02 IIS Role" && (long?)candidate["assignmentRevision"] == roleRevision);
+        Assert.Equal(403, (await Request(origin + "/api/v1/security/mutations", thumbprint, deniedBearer, origin, "POST",
+            "{\"target\":1,\"operation\":0,\"name\":\"Denied IIS role\"}", csrf: true)).Status);
+        Assert.Equal(0, await sql.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.Roles WHERE NormalizedRoleName=N'DENIED IIS ROLE';"));
+        var stale = await Request(origin + "/api/v1/security/mutations", thumbprint, bearer, origin, "POST",
+            new JObject { ["target"] = 1, ["operation"] = 2, ["targetId"] = roleId,
+                ["isActive"] = false, ["expectedRevision"] = roleRevision + 1 }.ToString(Formatting.None), csrf: true);
+        Assert.Equal(409, stale.Status);
+
+        var importJson = new JObject { ["schemaVersion"] = 1, ["targetType"] = "Role", ["targetId"] = roleId,
+            ["entries"] = new JArray(new JObject { ["permissionKey"] = "Catalog.Products.Read", ["decision"] = "Allow" }) }.ToString(Formatting.None);
+        var preview = await Request(origin + "/api/v1/security/import/preview", thumbprint, bearer, origin, "POST",
+            new JObject { ["targetType"] = 1, ["targetId"] = roleId, ["json"] = importJson }.ToString(Formatting.None), csrf: true);
+        Assert.Equal(200, preview.Status);
+        var previewData = JObject.Parse(preview.Body)["data"]!;
+        var applyBody = new JObject { ["targetType"] = 1, ["targetId"] = roleId, ["json"] = importJson,
+            ["expectedTargetRevision"] = previewData["targetRevision"]!.DeepClone(),
+            ["expectedCatalogDigest"] = previewData["catalogDigest"]!.DeepClone() }.ToString(Formatting.None);
+        Assert.Equal(403, (await Request(origin + "/api/v1/security/import/preview", thumbprint, deniedBearer, origin, "POST",
+            new JObject { ["targetType"] = 1, ["targetId"] = roleId, ["json"] = importJson }.ToString(Formatting.None), csrf: true)).Status);
+        Assert.Equal(403, (await Request(origin + "/api/v1/security/import/apply", thumbprint, deniedBearer, origin, "POST", applyBody, csrf: true)).Status);
+        var concurrent = await Task.WhenAll(
+            Request(origin + "/api/v1/security/import/apply", thumbprint, bearer, origin, "POST", applyBody, csrf: true),
+            Request(origin + "/api/v1/security/import/apply", thumbprint, bearer, origin, "POST", applyBody, csrf: true));
+        Assert.Single(concurrent, reply => reply.Status == 200);
+        Assert.Single(concurrent, reply => reply.Status == 409);
+        Assert.Equal(403, (await Request(origin + "/api/v1/catalog/products", thumbprint, deniedBearer)).Status);
+        Assert.Equal(1, await sql.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.RolePermissions WHERE RoleId=@roleId;", new { roleId }));
+        Assert.Equal(1, await sql.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'Role' AND TargetId=@roleId AND Operation=N'PermissionImport';", new { roleId }));
+
+        var rollbackRole = await sql.QuerySingleAsync<int>(
+            "INSERT dbo.Roles(RoleName,NormalizedRoleName) OUTPUT INSERTED.RoleId VALUES(N'IIS rollback role',N'IIS ROLLBACK ROLE');");
+        var rollbackJson = new JObject { ["schemaVersion"] = 1, ["targetType"] = "Role", ["targetId"] = rollbackRole,
+            ["entries"] = new JArray(new JObject { ["permissionKey"] = "Catalog.Products.Read", ["decision"] = "Allow" }) }.ToString(Formatting.None);
+        var rollbackPreview = await Request(origin + "/api/v1/security/import/preview", thumbprint, bearer, origin, "POST",
+            new JObject { ["targetType"] = 1, ["targetId"] = rollbackRole, ["json"] = rollbackJson }.ToString(Formatting.None), csrf: true);
+        var rollbackData = JObject.Parse(rollbackPreview.Body)["data"]!;
+        var revisionBefore = await sql.QuerySingleAsync<long>("SELECT AssignmentRevision FROM dbo.Roles WHERE RoleId=@rollbackRole;", new { rollbackRole });
+        await sql.ExecuteAsync("CREATE TRIGGER dbo.Vps02IisRejectAudit ON dbo.SecurityAuditEvents AFTER INSERT AS THROW 51998,'Injected VPS-02 IIS audit failure.',1;");
+        try
+        {
+            var rollback = await Request(origin + "/api/v1/security/import/apply", thumbprint, bearer, origin, "POST",
+                new JObject { ["targetType"] = 1, ["targetId"] = rollbackRole, ["json"] = rollbackJson,
+                    ["expectedTargetRevision"] = rollbackData["targetRevision"]!.DeepClone(),
+                    ["expectedCatalogDigest"] = rollbackData["catalogDigest"]!.DeepClone() }.ToString(Formatting.None), csrf: true);
+            Assert.Equal(500, rollback.Status);
+            Assert.DoesNotContain("Injected VPS-02 IIS audit failure", rollback.Body);
+        }
+        finally { await sql.ExecuteAsync("DROP TRIGGER IF EXISTS dbo.Vps02IisRejectAudit;"); }
+        Assert.Equal(0, await sql.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.RolePermissions WHERE RoleId=@rollbackRole;", new { rollbackRole }));
+        Assert.Equal(revisionBefore, await sql.QuerySingleAsync<long>("SELECT AssignmentRevision FROM dbo.Roles WHERE RoleId=@rollbackRole;", new { rollbackRole }));
+        Assert.Equal(0, await sql.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'Role' AND TargetId=@rollbackRole;", new { rollbackRole }));
+    }
+
+    private static void AssertHttpsPage(Reply reply, int pageNumber, int pageSize, long totalCount, params int[] ids)
+    {
+        Assert.Equal(200, reply.Status);
+        var data = JObject.Parse(reply.Body)["data"]!;
+        Assert.Equal(pageNumber, (int)data["pageNumber"]!);
+        Assert.Equal(pageSize, (int)data["pageSize"]!);
+        Assert.Equal(totalCount, (long)data["totalCount"]!);
+        Assert.Equal(ids, data["items"]!.Select(item => (int)item["id"]!).ToArray());
+    }
+
+    private static async Task VerifyDesktopApiDisabledHost(string thumbprint, string bearer)
+    {
+        const string origin = "https://localhost:44321/api/v1/";
+        Assert.Equal(404, (await Request(origin + "catalog/products", thumbprint, bearer)).Status);
+        Assert.Equal(404, (await Request(origin + "security/roles", thumbprint, bearer)).Status);
+        Assert.Equal(200, (await Request(origin + "catalog/products/lookup?limit=25", thumbprint, bearer)).Status);
     }
 
     private static string FindRootFile(string relative)
