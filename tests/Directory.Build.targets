@@ -1,0 +1,10 @@
+<Project>
+  <!-- VPS-01: legacy test-only analyzer compatibility; production analyzers remain strict. -->
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
+    <!-- Existing tests intentionally supply independent cancellation tokens to exercise
+         timeout/rollback behavior. Retrofitting all tests during a runner upgrade
+         would alter the business regression oracles. xUnit3003 is source-info
+         metadata for legacy Fact/Theory subclasses, not discovery suppression. -->
+    <NoWarn>$(NoWarn);xUnit1051;xUnit3003</NoWarn>
+  </PropertyGroup>
+</Project>

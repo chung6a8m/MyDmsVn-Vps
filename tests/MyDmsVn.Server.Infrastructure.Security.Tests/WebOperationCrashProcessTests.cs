@@ -50,8 +50,8 @@ public sealed class WebOperationCrashProcessTests
         }
         Assert.IsType<InvalidDataException>(protocol);
         Assert.Contains("Unexpected CrashHost protocol event", protocol!.Message);
-        Assert.DoesNotContain("secret-test-marker-never-log", error.ToString());
-        Assert.DoesNotContain("WEB5-no-SQL-may-open", error.ToString());
+        Assert.DoesNotContain("secret-test-marker-never-log", error!.ToString());
+        Assert.DoesNotContain("WEB5-no-SQL-may-open", error!.ToString());
         Assert.False(WebOperationCrashProcess.IsPoisoned);
     }
 
