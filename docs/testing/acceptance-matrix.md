@@ -8,8 +8,8 @@ Legend: `PASS` = verified evidence at recorded SHA/environment; `NOT RUN` = no e
 | Local ProjectReferences, no submodules | PASS at `72ceef5` (run #3) (static) | Every future PR | `scripts/verify-vps-foundation.py` report and GitHub Actions log |
 | Windows Desktop net48 build | PASS at `72ceef5` (run #3) | VPS-03 Windows E2E | Locked restore, release build, Windows runner and SHA |
 | Windows legacy HttpHost + DbMigrator build | PASS at `72ceef5` (run #3) | VPS-04/07 replaced | Target-specific locked restore/build and SHA |
-| Existing SQL-free xUnit v2 smoke | PASS: 1,228/1,228 at `72ceef5` (run #3) | VPS-01 v3 migration | TRX with non-zero discovered/executed counts |
-| SQL integration/concurrency | NOT RUN | VPS-07/09 | Real isolated SQL instance, outcomes + rollback data |
+| Existing SQL-free xUnit v2 smoke | PASS (VPS-00B baseline at prior SHA only) | VPS-01 v3 smoke: four strict TRX floors 13/212/363/640 | Final-HEAD Windows 2022 run, count per test assembly, zero skipped/failed |
+| VPS-01 v3 discovery in all 12 suites | OPEN — code committed, Windows CI pending | VPS-01 | Four executed SQL-free suites and eight build/discover-only suites; nonempty floor per assembly |\n| VPS-01 source HTTP route inventory | OPEN — 29 signatures pinned, runtime not yet attested | VPS-01 (source) / VPS-02 (runtime) | Reflection route signatures, immutable 178 fixture corpus, status/JSON envelope snapshots |\n| SQL integration/concurrency | NOT RUN | VPS-07/09 | Real isolated SQL instance, outcomes + rollback data |
 | GUI attended Windows | NOT RUN | VPS-03/09 | Attended UI interaction evidence on Windows |
 | API and error/permission parity | NOT RUN | VPS-02 | Endpoint-to-client inventory and actual HTTP runs |
 | Desktop HTTP cutover | NOT RUN | VPS-03 | No Server/SQL edges, end-to-end live flow |

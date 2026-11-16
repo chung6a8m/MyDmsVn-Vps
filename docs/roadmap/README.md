@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | VPS-00A — One-time Source Import | COMPLETE (static integrity only) | [2,282/2,282 source parity](../import/README.md), import verification SHA in import report |
 | VPS-00B — Documentation & Build Foundation | COMPLETE UPON PR #1 MERGE, subject to passing CI on the final review-fix HEAD | [evidence ledger](../evidence/vps-00b-baseline.md): pre-review run #3, 8/8 jobs and 1,228/1,228 tests at `72ceef5`; final post-review SHA/CI and merge evidence in [PR #1](https://github.com/chung6a8m/MyDmsVn-Vps/pull/1) |
-| VPS-01 — Test & Contract Foundation | NOT STARTED | xUnit v3, zero-test prevention, contract fixtures |
+| VPS-01 — Test & Contract Foundation | IN PROGRESS — [PR #2](https://github.com/chung6a8m/MyDmsVn-Vps/pull/2) | [VPS-01 evidence](../evidence/vps-01-foundation.md): 12 net48 test projects migrated to xunit.v3; 29 frozen source routes; final-head Windows discovery/CI remain acceptance gates |
 | VPS-02 — HTTP API Parity | NOT STARTED | API parity matrix and real endpoint validation |
 | VPS-03 — Desktop HTTP Cutover | NOT STARTED | Remove production Local/SQL/Server dependencies |
 | VPS-04 — .NET 10 Server Replatform | NOT STARTED | ASP.NET Core 10 on actual Linux, SDK 10.0.404 |
