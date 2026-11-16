@@ -14,7 +14,7 @@
     },
     {
       "httpMethod": "GET",
-      "path": "/api/v1/catalog/products/{id}",
+      "path": "/api/v1/catalog/products/{id:int}",
       "controller": "ProductsController",
       "action": "Get",
       "feature": "Catalog.products",
@@ -32,7 +32,7 @@
     },
     {
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/products/{id}",
+      "path": "/api/v1/catalog/products/{id:int}",
       "controller": "ProductsController",
       "action": "Update",
       "feature": "Catalog.products",
@@ -41,7 +41,7 @@
     },
     {
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/products/{id}/active",
+      "path": "/api/v1/catalog/products/{id:int}/active",
       "controller": "ProductsController",
       "action": "SetActive",
       "feature": "Catalog.products",
@@ -59,7 +59,7 @@
     },
     {
       "httpMethod": "GET",
-      "path": "/api/v1/catalog/warehouses/{id}",
+      "path": "/api/v1/catalog/warehouses/{id:int}",
       "controller": "WarehousesController",
       "action": "Get",
       "feature": "Catalog.warehouses",
@@ -77,7 +77,7 @@
     },
     {
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/warehouses/{id}",
+      "path": "/api/v1/catalog/warehouses/{id:int}",
       "controller": "WarehousesController",
       "action": "Update",
       "feature": "Catalog.warehouses",
@@ -86,7 +86,7 @@
     },
     {
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/warehouses/{id}/active",
+      "path": "/api/v1/catalog/warehouses/{id:int}/active",
       "controller": "WarehousesController",
       "action": "SetActive",
       "feature": "Catalog.warehouses",
@@ -104,7 +104,7 @@
     },
     {
       "httpMethod": "GET",
-      "path": "/api/v1/catalog/employees/{id}",
+      "path": "/api/v1/catalog/employees/{id:int}",
       "controller": "EmployeesController",
       "action": "Get",
       "feature": "Catalog.employees",
@@ -122,7 +122,7 @@
     },
     {
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/employees/{id}",
+      "path": "/api/v1/catalog/employees/{id:int}",
       "controller": "EmployeesController",
       "action": "Update",
       "feature": "Catalog.employees",
@@ -131,7 +131,7 @@
     },
     {
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/employees/{id}/active",
+      "path": "/api/v1/catalog/employees/{id:int}/active",
       "controller": "EmployeesController",
       "action": "SetActive",
       "feature": "Catalog.employees",
@@ -149,7 +149,7 @@
     },
     {
       "httpMethod": "GET",
-      "path": "/api/v1/catalog/customers/{id}",
+      "path": "/api/v1/catalog/customers/{id:int}",
       "controller": "CustomersController",
       "action": "Get",
       "feature": "Catalog.customers",
@@ -167,7 +167,7 @@
     },
     {
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/customers/{id}",
+      "path": "/api/v1/catalog/customers/{id:int}",
       "controller": "CustomersController",
       "action": "Update",
       "feature": "Catalog.customers",
@@ -176,7 +176,7 @@
     },
     {
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/customers/{id}/active",
+      "path": "/api/v1/catalog/customers/{id:int}/active",
       "controller": "CustomersController",
       "action": "SetActive",
       "feature": "Catalog.customers",

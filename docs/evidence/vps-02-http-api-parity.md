@@ -33,3 +33,5 @@ passes after a review-fix commit.
 
 **No accepted exception.** VPS-02 cannot be COMPLETE until applicable acceptance
 gates have executed successfully and final-head evidence is recorded. PR remains draft.
+
+Review finding (PR #3 first CI): 14 legacy Catalog lookup tests failed due to ambiguous /{id} matching /lookup. The new {id:int} route constraint fixes the declaration conflict without altering the 29 legacy signatures. CI must rerun on the new HEAD; the first failed run is not passing evidence. The three ForSession methods are local-only; remote mapping remains 46.

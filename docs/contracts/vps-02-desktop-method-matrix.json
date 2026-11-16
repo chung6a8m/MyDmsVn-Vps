@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sourceBaseline": "767f352183bed6c66af5c677977232c9907bd23d",
-  "description": "Explicit Desktop interface-to-endpoint map; NEW source implementation is not runtime acceptance. Session refresh/logout are baseline auth routes, transport integration is VPS-03.",
+  "description": "46 remote HTTP calls; three ForSession methods are local session-binding operations and intentionally have no server route. Route placeholders with :int reflect Web API 2 route constraints.",
   "methods": [
     {
       "interface": "IProductApiClient",
@@ -14,7 +14,7 @@
       "interface": "IProductApiClient",
       "method": "GetAsync",
       "httpMethod": "GET",
-      "path": "/api/v1/catalog/products/{id}",
+      "path": "/api/v1/catalog/products/{id:int}",
       "status": "NEW"
     },
     {
@@ -28,14 +28,14 @@
       "interface": "IProductApiClient",
       "method": "UpdateAsync",
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/products/{id}",
+      "path": "/api/v1/catalog/products/{id:int}",
       "status": "NEW"
     },
     {
       "interface": "IProductApiClient",
       "method": "SetActiveAsync",
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/products/{id}/active",
+      "path": "/api/v1/catalog/products/{id:int}/active",
       "status": "NEW"
     },
     {
@@ -56,7 +56,7 @@
       "interface": "IWarehouseApiClient",
       "method": "GetAsync",
       "httpMethod": "GET",
-      "path": "/api/v1/catalog/warehouses/{id}",
+      "path": "/api/v1/catalog/warehouses/{id:int}",
       "status": "NEW"
     },
     {
@@ -70,14 +70,14 @@
       "interface": "IWarehouseApiClient",
       "method": "UpdateAsync",
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/warehouses/{id}",
+      "path": "/api/v1/catalog/warehouses/{id:int}",
       "status": "NEW"
     },
     {
       "interface": "IWarehouseApiClient",
       "method": "SetActiveAsync",
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/warehouses/{id}/active",
+      "path": "/api/v1/catalog/warehouses/{id:int}/active",
       "status": "NEW"
     },
     {
@@ -98,7 +98,7 @@
       "interface": "IEmployeeApiClient",
       "method": "GetAsync",
       "httpMethod": "GET",
-      "path": "/api/v1/catalog/employees/{id}",
+      "path": "/api/v1/catalog/employees/{id:int}",
       "status": "NEW"
     },
     {
@@ -112,14 +112,14 @@
       "interface": "IEmployeeApiClient",
       "method": "UpdateAsync",
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/employees/{id}",
+      "path": "/api/v1/catalog/employees/{id:int}",
       "status": "NEW"
     },
     {
       "interface": "IEmployeeApiClient",
       "method": "SetActiveAsync",
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/employees/{id}/active",
+      "path": "/api/v1/catalog/employees/{id:int}/active",
       "status": "NEW"
     },
     {
@@ -140,7 +140,7 @@
       "interface": "ICustomerApiClient",
       "method": "GetAsync",
       "httpMethod": "GET",
-      "path": "/api/v1/catalog/customers/{id}",
+      "path": "/api/v1/catalog/customers/{id:int}",
       "status": "NEW"
     },
     {
@@ -154,14 +154,14 @@
       "interface": "ICustomerApiClient",
       "method": "UpdateAsync",
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/customers/{id}",
+      "path": "/api/v1/catalog/customers/{id:int}",
       "status": "NEW"
     },
     {
       "interface": "ICustomerApiClient",
       "method": "SetActiveAsync",
       "httpMethod": "PUT",
-      "path": "/api/v1/catalog/customers/{id}/active",
+      "path": "/api/v1/catalog/customers/{id:int}/active",
       "status": "NEW"
     },
     {

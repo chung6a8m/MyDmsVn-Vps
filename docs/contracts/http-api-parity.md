@@ -85,3 +85,5 @@ Never auto-retry an ambiguous non-idempotent write.
 Catalog and Security transactions/rollback/permissions under the restricted role,
 SQL schema mode admission and Desktop-to-HTTP-to-SQL E2E (the latter belongs to VPS-03).
 Code or route presence alone cannot mark VPS-02 COMPLETE.
+
+The Desktop interfaces also expose three local ForSession(...) binders (SalesReceipt, PermissionCatalog and SecurityAdministration). They are **not remote HTTP calls**: 49 declared methods consist of 46 server operations and three client-side session-binding helpers, which VPS-03 implements in the adapter. Web API 2 constrains numeric Catalog route parameters with {id:int} so frozen /lookup literal routes remain unambiguous.

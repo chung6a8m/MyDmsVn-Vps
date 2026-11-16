@@ -21,7 +21,7 @@ internal static class DesktopParityWireInput
     public static string QueryValue(HttpRequestMessage request, string name, int maximum)
     {
         var query = SalesWireInput.Query(request, new[] { name });
-        if (!query.TryGetValue(name, out var value) || value.Length == 0 || value.Length > maximum ||
+        if (!query.TryGetValue(name, out var value) || string.IsNullOrWhiteSpace(value) || value.Length > maximum ||
             value.IndexOf('\0') >= 0)
             throw new WireInputException(name);
         return value;

@@ -59,13 +59,13 @@ public sealed class ProductsController : CatalogCrudControllerBase
     public ProductsController(IMediator mediator, IRequestCorrelationAccessor correlation) : base(mediator, correlation) { }
     [HttpGet, Route("")]
     public Task<HttpResponseMessage> List(CancellationToken token) => List<ProductDto>(request => new ListProductsQuery(request), token);
-    [HttpGet, Route("{id}")]
+    [HttpGet, Route("{id:int}")]
     public Task<HttpResponseMessage> Get(string id, CancellationToken token) => Get<ProductDto>(id, key => new GetProductByIdQuery(key), token);
     [HttpPost, Route("")]
     public Task<HttpResponseMessage> Create(CancellationToken token) => Create<ProductDto, SaveProductRequest>(CatalogWireInput.Product, request => new CreateProductCommand(request), token);
-    [HttpPut, Route("{id}")]
+    [HttpPut, Route("{id:int}")]
     public Task<HttpResponseMessage> Update(string id, CancellationToken token) => Update<ProductDto, SaveProductRequest>(id, CatalogWireInput.Product, (key, request) => new UpdateProductCommand(key, request), token);
-    [HttpPut, Route("{id}/active")]
+    [HttpPut, Route("{id:int}/active")]
     public Task<HttpResponseMessage> SetActive(string id, CancellationToken token) => Active(id, (key, active) => new SetProductActiveCommand(key, active), token);
 }
 
@@ -75,13 +75,13 @@ public sealed class WarehousesController : CatalogCrudControllerBase
     public WarehousesController(IMediator mediator, IRequestCorrelationAccessor correlation) : base(mediator, correlation) { }
     [HttpGet, Route("")]
     public Task<HttpResponseMessage> List(CancellationToken token) => List<WarehouseDto>(request => new ListWarehousesQuery(request), token);
-    [HttpGet, Route("{id}")]
+    [HttpGet, Route("{id:int}")]
     public Task<HttpResponseMessage> Get(string id, CancellationToken token) => Get<WarehouseDto>(id, key => new GetWarehouseByIdQuery(key), token);
     [HttpPost, Route("")]
     public Task<HttpResponseMessage> Create(CancellationToken token) => Create<WarehouseDto, SaveWarehouseRequest>(CatalogWireInput.Warehouse, request => new CreateWarehouseCommand(request), token);
-    [HttpPut, Route("{id}")]
+    [HttpPut, Route("{id:int}")]
     public Task<HttpResponseMessage> Update(string id, CancellationToken token) => Update<WarehouseDto, SaveWarehouseRequest>(id, CatalogWireInput.Warehouse, (key, request) => new UpdateWarehouseCommand(key, request), token);
-    [HttpPut, Route("{id}/active")]
+    [HttpPut, Route("{id:int}/active")]
     public Task<HttpResponseMessage> SetActive(string id, CancellationToken token) => Active(id, (key, active) => new SetWarehouseActiveCommand(key, active), token);
 }
 
@@ -91,13 +91,13 @@ public sealed class EmployeesController : CatalogCrudControllerBase
     public EmployeesController(IMediator mediator, IRequestCorrelationAccessor correlation) : base(mediator, correlation) { }
     [HttpGet, Route("")]
     public Task<HttpResponseMessage> List(CancellationToken token) => List<EmployeeDto>(request => new ListEmployeesQuery(request), token);
-    [HttpGet, Route("{id}")]
+    [HttpGet, Route("{id:int}")]
     public Task<HttpResponseMessage> Get(string id, CancellationToken token) => Get<EmployeeDto>(id, key => new GetEmployeeByIdQuery(key), token);
     [HttpPost, Route("")]
     public Task<HttpResponseMessage> Create(CancellationToken token) => Create<EmployeeDto, SaveEmployeeRequest>(CatalogWireInput.Employee, request => new CreateEmployeeCommand(request), token);
-    [HttpPut, Route("{id}")]
+    [HttpPut, Route("{id:int}")]
     public Task<HttpResponseMessage> Update(string id, CancellationToken token) => Update<EmployeeDto, SaveEmployeeRequest>(id, CatalogWireInput.Employee, (key, request) => new UpdateEmployeeCommand(key, request), token);
-    [HttpPut, Route("{id}/active")]
+    [HttpPut, Route("{id:int}/active")]
     public Task<HttpResponseMessage> SetActive(string id, CancellationToken token) => Active(id, (key, active) => new SetEmployeeActiveCommand(key, active), token);
 }
 
@@ -107,12 +107,12 @@ public sealed class CustomersController : CatalogCrudControllerBase
     public CustomersController(IMediator mediator, IRequestCorrelationAccessor correlation) : base(mediator, correlation) { }
     [HttpGet, Route("")]
     public Task<HttpResponseMessage> List(CancellationToken token) => List<CustomerDto>(request => new ListCustomersQuery(request), token);
-    [HttpGet, Route("{id}")]
+    [HttpGet, Route("{id:int}")]
     public Task<HttpResponseMessage> Get(string id, CancellationToken token) => Get<CustomerDto>(id, key => new GetCustomerByIdQuery(key), token);
     [HttpPost, Route("")]
     public Task<HttpResponseMessage> Create(CancellationToken token) => Create<CustomerDto, SaveCustomerRequest>(CatalogWireInput.Customer, request => new CreateCustomerCommand(request), token);
-    [HttpPut, Route("{id}")]
+    [HttpPut, Route("{id:int}")]
     public Task<HttpResponseMessage> Update(string id, CancellationToken token) => Update<CustomerDto, SaveCustomerRequest>(id, CatalogWireInput.Customer, (key, request) => new UpdateCustomerCommand(key, request), token);
-    [HttpPut, Route("{id}/active")]
+    [HttpPut, Route("{id:int}/active")]
     public Task<HttpResponseMessage> SetActive(string id, CancellationToken token) => Active(id, (key, active) => new SetCustomerActiveCommand(key, active), token);
 }

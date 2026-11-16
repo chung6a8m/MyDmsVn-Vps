@@ -98,6 +98,7 @@ public sealed class Vps02ParityEndpointTests
     [InlineData("/catalog/products?pageNumber=1&pageNumber=2")]
     [InlineData("/catalog/products/01")]
     [InlineData("/security/permissions/check?key=")]
+    [InlineData("/security/permissions/check?key=%20")]
     [InlineData("/security/permissions/check?key=Catalog.Read&unknown=1")]
     [InlineData("/foundation/status?clientName=")]
     public async Task Invalid_path_or_query_does_not_dispatch(string path)
