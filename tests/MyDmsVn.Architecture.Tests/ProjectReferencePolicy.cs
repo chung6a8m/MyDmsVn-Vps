@@ -19,6 +19,7 @@ namespace MyDmsVn.Architecture.Tests
                 ["MyDmsVn.Server.DbMigrator"] = Set("MyDmsVn.Server.Infrastructure"),
                 ["MyDmsVn.Server.HttpHost"] = Set("MyDmsVn.Contracts", "MyDmsVn.Server.Application", "MyDmsVn.Server.Infrastructure"),
                 ["MyDmsVn.Desktop.Application"] = Set("MyDmsVn.Contracts"),
+                ["MyDmsVn.Desktop.Infrastructure.Http"] = Set("MyDmsVn.Desktop.Application"),
                 ["MyDmsVn.Desktop.Infrastructure.Local"] = Set(
                     "MyDmsVn.Desktop.Application",
                     "MyDmsVn.Server.Application"),
@@ -26,9 +27,8 @@ namespace MyDmsVn.Architecture.Tests
                     "MyDmsVn.Desktop.Application",
                     "MyDmsVn.BootstrapSourceGrid"),
                 ["MyDmsVn.Desktop.App"] = Set(
-                    "MyDmsVn.Desktop.Infrastructure.Local",
-                    "MyDmsVn.Desktop.WinForms",
-                    "MyDmsVn.Server.Infrastructure"),
+                    "MyDmsVn.Desktop.Infrastructure.Http",
+                    "MyDmsVn.Desktop.WinForms"),
             };
 
         private static readonly IReadOnlyDictionary<string, string[]> ForbiddenPackageTokens =
@@ -39,6 +39,7 @@ namespace MyDmsVn.Architecture.Tests
                 ["MyDmsVn.Server.Domain"] = new[] { "RepoDb", "Dapper", "linq2db", "SqlClient", "AspNetCore", "Windows.Forms" },
                 ["MyDmsVn.Server.Application"] = new[] { "RepoDb", "Dapper", "linq2db", "SqlClient", "AspNetCore", "Windows.Forms" },
                 ["MyDmsVn.Desktop.Application"] = new[] { "ErrorOr", "MediatR", "RepoDb", "Dapper", "linq2db", "SqlClient", "AspNetCore", "Windows.Forms" },
+                ["MyDmsVn.Desktop.Infrastructure.Http"] = new[] { "ErrorOr", "MediatR", "RepoDb", "Dapper", "linq2db", "SqlClient", "AspNetCore", "Windows.Forms" },
                 ["MyDmsVn.Desktop.WinForms"] = new[] { "RepoDb", "Dapper", "linq2db", "SqlClient", "AspNetCore" },
             };
 

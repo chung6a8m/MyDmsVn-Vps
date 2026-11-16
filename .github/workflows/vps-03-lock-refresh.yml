@@ -1,0 +1,38 @@
+name: VPS-03 temporary lockfile regeneration
+
+on:
+  push:
+    branches:
+      - codex/vps-03-desktop-http-cutover
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-locks:
+    if: startsWith(github.event.head_commit.message, 'chore(vps-03-locks): trigger')
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.400'
+      - name: Regenerate NuGet lock files from the actual dependency graph
+        shell: pwsh
+        run: |
+          dotnet restore MyDmsVn.sln --force-evaluate -v minimal
+          if ($LASTEXITCODE -ne 0) { throw 'VPS-03 NuGet restore failed' }
+      - name: Commit only regenerated lock files
+        shell: pwsh
+        run: |
+          git add -A -- ':(glob)**/packages.lock.json'
+          if ($LASTEXITCODE -ne 0) { throw 'git add lock files failed' }
+          $changed = @(git diff --cached --name-only)
+          if ($changed.Count -eq 0) { Write-Host 'Lock files already current'; exit 0 }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(vps-03): regenerate net48 dependency lock files'
+          if ($LASTEXITCODE -ne 0) { throw 'git commit failed' }
+          git push origin HEAD:codex/vps-03-desktop-http-cutover
+          if ($LASTEXITCODE -ne 0) { throw 'git push failed' }

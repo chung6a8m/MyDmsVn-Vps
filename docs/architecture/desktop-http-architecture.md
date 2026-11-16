@@ -1,16 +1,13 @@
-# Desktop HTTP architecture — planned contract
+# Desktop HTTP architecture — VPS-03
 
-**Stage:** PROPOSED for VPS-02/VPS-03; no such parity is claimed by VPS-00B.
+**Stage: IN PROGRESS**; see [VPS-03 evidence](../evidence/vps-03-desktop-http-cutover.md).
 
-Desktop net48 will use a typed HTTPS client with a replaceable transport layer. Features: Catalog/Product/Warehouse/Employee/Customer, Sales, Goods Receipt/Inventory, Security Administration, login/session and permission-aware lookups.
+Desktop.App (Windows net48) references Desktop.WinForms and Desktop.Infrastructure.Http. The HTTP adapter uses Desktop.Application and Contracts, calls HttpHost over HTTPS /api/v1/*, with SQL Server behind HttpHost. The legacy Local adapter remains only for test compatibility. The Server net10/Linux transition occurs in VPS-04, not VPS-03.
 
-## Transport ownership
+Required variables: MYDMSVN_DESKTOP_API_ORIGIN=https://api.example.com and MYDMSVN_DESKTOP_OPERATION_MODE=web5, web4, or legacy-web11, matching the actual server mode. No SQL connection string, insecure TLS or implicit mode fallback is accepted in the Desktop.
 
-- One base URL and TLS policy per client configuration; no SQL connection string or local fallback in production after cutover.
-- Bearer access token, refresh-token rotation, explicit logout, expired-session handling; never log credentials or tokens.
-- Central mapping for non-2xx HTTP, validation, concurrency conflict, permission denied and timeouts; preserve desktop interaction semantics.
-- Cancellation tokens and per-operation retry **only when proven safe/idempotent**. Never automatically retry transactional Post/ledger commands.
-- DTO/wire adapters isolate Desktop Newtonsoft.Json from later Server System.Text.Json, including decimal, int64, date/time, null and optional fields.
-- Transition matrix enumerates every Desktop API interface/operation and maps it to endpoint + scenario + test/evidence owner (see [parity register](../contracts/http-api-parity.md)).
+The adapter retains Bearer in memory, refresh cookie in CookieContainer, serializes refresh, fences stale session generations, adds Origin to unsafe calls and X-Requested-With to cookie auth, and disables redirect/automatic retries.
 
-VPS-03 acceptance requires Desktop -> HTTPS -> Host -> real SQL E2E on Windows client, not simply successful compilation or localhost-mocked responses. Keep Local adapter available solely during transition; remove from production composition after approval.
+Six Sales/Goods writes use explicit strict wire projections and WEB4-v1 SHA256 with epoch/idempotency key in WEB4/5. Unknown responses keep a pending fence; only authoritative COMMITTED status can resolve. Pending recovery is currently in-memory only and cannot be considered accepted across restarts.
+
+See [VPS-02 API parity matrix](../contracts/http-api-parity.md) and [evidence](../evidence/vps-03-desktop-http-cutover.md); E2E SQL, binary audit and final-HEAD CI remain mandatory.

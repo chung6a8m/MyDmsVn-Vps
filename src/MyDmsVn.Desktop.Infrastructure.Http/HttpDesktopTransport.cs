@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -106,7 +107,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
         public async Task<ApiResponse<T>> SendAsync<T>(
             HttpMethod method, string route, object? body, CancellationToken cancellationToken,
-            long? expectedSessionVersion = null)
+            long? expectedSessionVersion = null,
+            IReadOnlyDictionary<string, string>? additionalHeaders = null)
         {
             if (method == null) throw new ArgumentNullException(nameof(method));
             cancellationToken.ThrowIfCancellationRequested();
@@ -123,7 +125,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             }
 
             var response = await RequestAsync<T>(method, route, body, token,
-                cookieEndpoint: false, cancellationToken).ConfigureAwait(false);
+                cookieEndpoint: false, cancellationToken, additionalHeaders).ConfigureAwait(false);
 
             // A 401 means the authoritative host has rejected this session.
             // Never retry a mutation with new credentials or assume rollback.
@@ -199,7 +201,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
         private async Task<ApiResponse<T>> RequestAsync<T>(
             HttpMethod method, string route, object? body, string? accessToken,
-            bool cookieEndpoint, CancellationToken cancellationToken)
+            bool cookieEndpoint, CancellationToken cancellationToken,
+            IReadOnlyDictionary<string, string>? additionalHeaders = null)
         {
             if (string.IsNullOrEmpty(route) || !route.StartsWith("/api/v1/", StringComparison.Ordinal) ||
                 route.StartsWith("//", StringComparison.Ordinal) ||
@@ -220,6 +223,18 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     request.Headers.TryAddWithoutValidation("X-Requested-With", "XMLHttpRequest");
                 if (accessToken != null)
                     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                if (additionalHeaders != null)
+                {
+                    foreach (var header in additionalHeaders)
+                    {
+                        if (header.Key != "Idempotency-Key" &&
+                            header.Key != "X-MyDmsVn-Deployment-Epoch" &&
+                            header.Key != "X-MyDmsVn-Operation-Fingerprint")
+                            throw new InvalidOperationException("Unsupported operation header.");
+                        if (!request.Headers.TryAddWithoutValidation(header.Key, header.Value))
+                            throw new InvalidOperationException("Invalid operation header.");
+                    }
+                }
                 if (body != null)
                 {
                     request.Content = new StringContent(JsonConvert.SerializeObject(
@@ -240,7 +255,18 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                         ApiResponse<T> decoded;
                         try
                         {
-                            decoded = ApiJson.DeserializeResponse<T>(json, status);
+                            json = HttpDesktopWire.NormalizeResponse<T>(json);
+                            if (typeof(T) == typeof(UnitResponse))
+                            {
+                                var unit = ApiJson.DeserializeResponse<Newtonsoft.Json.Linq.JObject>(json, status);
+                                if (unit.IsSuccess && unit.Data!.Count != 0)
+                                    return InvalidResponse<T>();
+                                decoded = unit.IsSuccess
+                                    ? (ApiResponse<T>)(object)ApiResponse<UnitResponse>.Success(UnitResponse.Value)
+                                    : ApiResponse<T>.Failure(unit.Error!);
+                            }
+                            else
+                                decoded = ApiJson.DeserializeResponse<T>(json, status);
                         }
                         catch (Exception error) when (error is JsonException ||
                             error is ArgumentException || error is FormatException ||

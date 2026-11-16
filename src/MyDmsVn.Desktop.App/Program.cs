@@ -1,13 +1,9 @@
-﻿using System;
+using System;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using MyDmsVn.Desktop.Application;
-using MyDmsVn.Desktop.Infrastructure.Local;
+using MyDmsVn.Desktop.Infrastructure.Http;
 using MyDmsVn.Desktop.WinForms;
-using MyDmsVn.Server.Application;
-using MyDmsVn.Server.Infrastructure;
-using MyDmsVn.Server.Infrastructure.Operations;
-using MyDmsVn.Server.Infrastructure.Diagnostics;
 
 namespace MyDmsVn.Desktop.App
 {
@@ -19,32 +15,23 @@ namespace MyDmsVn.Desktop.App
             System.Windows.Forms.Application.EnableVisualStyles();
             System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
             var smokeTest = IsSmokeTest(args);
-            string superuserUsername;
-            SqlConnectionConfiguration databaseConfiguration;
+            HttpDesktopOptions options;
+            HttpDesktopOperationSettings operations;
             try
             {
-                superuserUsername = new SuperuserConfigurationLoader().Load();
-                databaseConfiguration = new DesktopDatabaseStartupCoordinator()
-                    .PrepareAsync(superuserUsername, CancellationToken.None)
-                    .GetAwaiter()
-                    .GetResult();
+                options = HttpDesktopOptions.FromEnvironment();
+                operations = HttpDesktopOperationSettings.FromEnvironment();
             }
-            catch (OperationalConfigurationException exception)
+            catch (InvalidOperationException error)
             {
-                return ReportStartupFailure(exception.Code, exception.SafeMessage, smokeTest);
-            }
-            catch (DesktopStartupException exception)
-            {
-                return ReportStartupFailure(exception.Code, exception.SafeMessage, smokeTest);
+                return ReportStartupFailure(error.Message,
+                    "Configure the authorized HTTPS API origin and operation mode.", smokeTest);
             }
 
             var uiContext = SynchronizationContext.Current ??
                 new System.Windows.Forms.WindowsFormsSynchronizationContext();
             SynchronizationContext.SetSynchronizationContext(uiContext);
-            using (var provider = CreateServiceProvider(
-                uiContext,
-                databaseConfiguration.ConnectionString,
-                superuserUsername))
+            using (var provider = CreateServiceProvider(uiContext, options, operations))
             {
                 return DesktopHostRunner.Run(
                     provider.GetRequiredService<IServiceScopeFactory>(),
@@ -55,46 +42,31 @@ namespace MyDmsVn.Desktop.App
 
         private static bool IsSmokeTest(string[] args)
         {
-            return Array.Exists(
-                args ?? Array.Empty<string>(),
+            return Array.Exists(args ?? Array.Empty<string>(),
                 argument => string.Equals(argument, "--smoke-test", StringComparison.Ordinal));
         }
 
         private static ServiceProvider CreateServiceProvider(
             SynchronizationContext uiContext,
-            string connectionString,
-            string superuserUsername)
+            HttpDesktopOptions options,
+            HttpDesktopOperationSettings operations)
         {
             var services = new ServiceCollection();
-            services.AddServerApplication(superuserUsername);
-            services.AddServerInfrastructure();
-            services.AddSqlPersistence(connectionString);
-            services.AddLocalDesktopAdapter();
-            services.AddDesktopProductionDiagnostics(
-                DesktopDiagnosticsOptions.CreateDefault("MyDmsVn.Desktop.App"));
+            services.AddHttpDesktopAdapter(options, operations);
             services.AddMyDmsVnDesktopWinForms(uiContext);
             return services.BuildServiceProvider();
         }
 
         private static int ReportStartupFailure(
-            string code,
-            string safeMessage,
-            bool smokeTest)
+            string code, string safeMessage, bool smokeTest)
         {
             var message = code + Environment.NewLine + safeMessage;
             if (smokeTest)
-            {
                 Console.Error.WriteLine(message);
-            }
             else
-            {
-                System.Windows.Forms.MessageBox.Show(
-                    message,
-                    "MyDmsVn",
+                System.Windows.Forms.MessageBox.Show(message, "MyDmsVn",
                     System.Windows.Forms.MessageBoxButtons.OK,
                     System.Windows.Forms.MessageBoxIcon.Error);
-            }
-
             return 2;
         }
     }

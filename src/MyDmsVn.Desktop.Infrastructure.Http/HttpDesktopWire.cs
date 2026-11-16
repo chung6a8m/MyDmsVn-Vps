@@ -22,7 +22,9 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 if (item.Value is bool boolean)
                     value = boolean ? "true" : "false";
                 else if (item.Value is DateTime date)
-                    value = date.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'", CultureInfo.InvariantCulture);
+                    value = (date.Kind == DateTimeKind.Local ? date.ToUniversalTime() :
+                        DateTime.SpecifyKind(date, DateTimeKind.Utc))
+                        .ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'", CultureInfo.InvariantCulture);
                 else if (item.Value is IFormattable formattable)
                     value = formattable.ToString(null, CultureInfo.InvariantCulture);
                 else

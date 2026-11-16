@@ -113,8 +113,11 @@
     <Compile Remove="SourceGrid\Controllers\SelectionDrop.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.SqlClient" />
-    <PackageReference Include="Microsoft.Windows.Compatibility" />
+    <!-- VPS-03: Desktop net48 has no SQL provider or compatibility metapackage.
+         Preserve legacy SQL helper for vendor net8 sample compatibility only. -->
+    <Compile Remove="DevAgeSourcePack4\Data\SqlClient\SqlCommandBuilder.cs" Condition="'$(TargetFramework)' == 'net48'" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Condition="'$(TargetFramework)' == 'net8.0-windows'" />
+    <PackageReference Include="Microsoft.Windows.Compatibility" Condition="'$(TargetFramework)' == 'net8.0-windows'" />
     <PackageReference Include="System.Text.Json" />
     <PackageReference Include="System.Resources.Extensions" Condition="'$(TargetFramework)' == 'net48'" />
   </ItemGroup>

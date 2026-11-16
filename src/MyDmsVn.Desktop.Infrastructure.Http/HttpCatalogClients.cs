@@ -9,7 +9,7 @@ using MyDmsVn.Desktop.Application;
 
 namespace MyDmsVn.Desktop.Infrastructure.Http
 {
-    internal abstract class HttpCatalogClientBase<TDto, TSave>
+    public abstract class HttpCatalogClientBase<TDto, TSave>
     {
         private readonly HttpDesktopTransport _transport;
         private readonly string _route;
