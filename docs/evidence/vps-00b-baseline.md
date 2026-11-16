@@ -8,6 +8,17 @@
 - Source on base has 44 C# project files (11 src, 13 tests including crash host, 4 samples, 3 tools, 13 vendor); 13 original migration SQL scripts.
 - Base production `src/` is entirely `net48`. Desktop references Server Infrastructure; no CI workflow is present. Those are *inventory findings*, not a test failure.
 
+## First CI observation — Run #1, HEAD e8ecfc0
+
+[GitHub Actions run #1](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43839674651), first PR HEAD §e8ecfc0f781c4515aa87a9443418b59955012a17§:
+
+- Linux static foundation: **PASS**.
+- Windows Release net48 locked builds: **Desktop.App PASS; legacy HttpHost PASS; DbMigrator PASS**.
+- Windows SQL-free smoke: Application PASS, Desktop.Session PASS.
+- Architecture: **FAIL** (11 passed, 2 failed, total 13); one missing allowed-reference policy for existing HttpHost, and one expected but absent independent Security Administration runbook.
+- HttpHost: **FAIL** (324 passed, 211 failed, total 535); tests expect canonical WEB2–WEB6 JSON corpora under §docs/contracts/§ omitted by one-time import. This was a fixture availability failure, not evidence of product API regression.
+- Failures are not waived or relabeled. VPS-00B repairs the test harness/document fixture boundary, then requires rerun on a **new final HEAD**.
+
 ## VPS-00B verification checklist
 
 | Gate | Initial state | Evidence required before completing VPS-00B |

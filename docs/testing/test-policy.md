@@ -37,6 +37,10 @@ Review the resulting TRX `Counters.total` and `Counters.executed`; both must be 
 
 The only approved test connection variable in the imported harness is `MYDMSVN_TEST_SQLSERVER_CONNECTION_STRING`. Tests may create/drop uniquely owned databases on an **operator-designated non-production** SQL Server. Use a reviewed `master` initial catalog and required privileges. Never point tests at production; never default to localdb, print secrets, or invent a SQL URL. If absent, `SqlServerFact` may skip: record **NOT RUN**, not PASS. Execute SQL integration sequentially where tests share instance resources.
 
+## Frozen fixture corpus
+
+The first CI run exposed missing imported WEB2–WEB6 fixture assets. VPS-00B recovers them as **local, immutable** technical files under §docs/contracts/§, with an independent provenance register. Existing HttpHost tests read those paths; never fetch them from upstream at test time. Preserve their exact input/output JSON until a separately accepted contract migration.
+
 ## Contract, concurrency and E2E later
 
 VPS-01 freezes HTTP JSON fixtures; VPS-02/03 compare endpoint and Desktop behavior. VPS-05 requires serializer/fingerprint parity; VPS-06 requires permission/pipeline/transaction parity; VPS-07 uses real SQL migration oracle with interrupted/concurrent/unknown-state cases; VPS-09 requires complete Desktop+Linux+SQL scenarios. Always rerun focused tests and final-head CI after changes. Exceptions need dated Owner approval with explicit scope; do not disguise a failure as skipped or a successful job.

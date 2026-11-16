@@ -20,14 +20,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Verify Python checker compiles
         run: python3 -m py_compile scripts/verify-vps-foundation.py
       - name: Check in-repository projects, links and provenance
         run: python3 scripts/verify-vps-foundation.py --report foundation-report.json
       - name: Upload static report, including on failure
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: vps-static-foundation
           path: foundation-report.json
@@ -48,8 +48,8 @@ jobs:
           - id: legacy-db-migrator
             project: src/MyDmsVn.Server.DbMigrator/MyDmsVn.Server.DbMigrator.csproj
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.400'
       - name: Verify Windows Framework and SDK
@@ -87,8 +87,8 @@ jobs:
           - id: legacy-http-host
             project: tests/MyDmsVn.Server.HttpHost.Tests/MyDmsVn.Server.HttpHost.Tests.csproj
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.400'
       - name: Locked restore and SQL-free smoke with TRX
@@ -112,7 +112,7 @@ jobs:
           Write-Host "Test counts: total=$($counts.total), executed=$($counts.executed), failed=$($counts.failed), notExecuted=$($counts.notExecuted)"
       - name: Preserve test evidence even on failure
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: vps-smoke-${{ matrix.id }}
           path: ${{ runner.temp }}/trx/*.trx

@@ -29,6 +29,7 @@ REQUIRED_DOCS = (
     "docs/contracts/json-wire-compatibility.md",
     "docs/migration/dbup-to-fluentmigrator.md",
     "docs/evidence/vps-00b-baseline.md",
+    "docs/contracts/README.md", "docs/SECURITY_ADMINISTRATION_RUNBOOK.md",
     "tests/README.md", ".github/workflows/vps-foundation.yml",
     "vendor/MyDmsVn.WinFormsKit/THIRD_PARTY_NOTICES.md",
     "vendor/MyDmsVn.WinFormsKit/vendor/sourcegrid/SourceGrid/SourceGrid.csproj",
@@ -167,6 +168,19 @@ def main() -> int:
     solutions = sorted(p for p in tracked if p.endswith(".sln"))
     solution_count = sum(validate_solution(p, errors) for p in solutions)
 
+    fixture_dirs = {
+        "web2-v1": 34,
+        "web3-v1": 38,
+        "web4-v1": 48,
+        "web5-resolution-v1": 41,
+        "web6-resend-eligibility-v1": 17,
+    }
+    for corpus, expected in fixture_dirs.items():
+        prefix = "docs/contracts/" + corpus + "/"
+        actual = sum(1 for p in tracked if p.startswith(prefix))
+        if actual != expected:
+            errors.append(f"Fixture corpus {corpus}: expected {expected} files, got {actual}")
+
     sql_scripts = sorted(p for p in tracked if SQL_PATTERN.match(p))
     if len(sql_scripts) != 13:
         errors.append(f"Historical SQL script count: expected 13; got {len(sql_scripts)}")
@@ -180,7 +194,7 @@ def main() -> int:
     # Only newly authored governance docs are checked for links. Imported
     # vendor/source docs can have historical attribution and missing old anchors.
     governance = sorted(p for p in tracked if p.startswith("docs/")
-                        and p.endswith(".md") and not p.startswith("docs/import/"))
+                        and p.endswith(".md") and not p.startswith(("docs/import/", "docs/contracts/web")))
     governance += ["README.md", "AGENTS.md", "tests/README.md"]
     checked_links = 0
     for p in governance:

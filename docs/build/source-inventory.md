@@ -24,6 +24,10 @@ The *primary* `src/` and test projects still target net48. Some vendored/sample 
 
 **Transitional debt, not VPS-00B defects:** Desktop to Server refs; net48 HttpHost; DbUp/MediatR/Newtonsoft; shared contract serializer coupling; mixed test dependencies. Governed by [target boundaries](../architecture/dependency-boundaries.md) and [roadmap](../roadmap/vps-00-vps-09.md).
 
+## Test fixture recovery in VPS-00B
+
+The first Windows HttpHost smoke revealed 211 failures due to absent canonical JSON corpora under §docs/contracts/§ (these were excluded along with source governance during import). VPS-00B restores the **178 immutable contract fixture files only**, with an [independent register](../contracts/README.md). These assets are now local; no cross-repository fetch is needed at build or test time.
+
 ## Import isolation already verified
 
 VPS-00A compared 2,282/2,282 file contents/modes from three pinned sources, recorded a new independent history, and removed submodules, AppCore and inherited active docs/workflows. The new static checker additionally verifies **current checkout** references and mandatory docs on every CI run. It does not attest to runtime behavior or re-compare upstream history.
