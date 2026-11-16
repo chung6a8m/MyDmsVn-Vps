@@ -1,61 +1,117 @@
-# VPS-02 — HTTP API parity evidence (working, not accepted)
+# VPS-02 — HTTP API parity acceptance evidence
 
 **Date:** 2026-11-16. **Repository:** chung6a8m/MyDmsVn-Vps.
-**PR:** [draft #3](https://github.com/chung6a8m/MyDmsVn-Vps/pull/3).
-**Base SHA:** 767f352183bed6c66af5c677977232c9907bd23d.
-Use the PR to determine final head SHA; this file must not claim that an older CI run
-passes after a review-fix commit.
+**Implementation PR:** [#3](https://github.com/chung6a8m/MyDmsVn-Vps/pull/3).
+**SQL acceptance PR:** [#5](https://github.com/chung6a8m/MyDmsVn-Vps/pull/5).
+**Acceptance base SHA:** `8f1fa89d519afd1ba11ce43adf4ecd4a3545e85d`.
+**SQL test implementation SHA:** `53fe6fad8b9b87078f764d544d2f4eecc52aa800`.
 
-## Source-level implementation
+The final PR head SHA and CI run URL belong to PR #5 after all review fixes; an
+older local or CI run does not pass a later head.
+
+## Accepted implementation scope
 
 - VPS-02A: Catalog four resources × five CRUD/list/get/active routes = 20.
 - VPS-02B: permission check/catalog, Security users/roles, mutation, import
   preview/apply = 7; Foundation status = 1.
-- Source inventory: 29 preserved + 28 added = 57 routes; 46/46 Desktop API
-  interface methods assigned to a route (documented JSON matrices).
-- New routes are opt-in, require a valid Bearer SQL-backed session and reuse
-  existing Application authorization, validation, business errors and audit.
-- SQL role grants only four Catalog INSERT/UPDATE and three Security SP EXECUTE;
-  no direct Security DML. New SQL role/config mismatches fail at startup.
+- Source inventory: 29 preserved + 28 added = 57 routes; all 46 remote Desktop API
+  methods have an assigned route.
+- New routes remain opt-in, require a valid Bearer SQL-backed session and reuse
+  existing Application authorization, validation, business errors, transactions and
+  audit.
+- The opt-in SQL role grants only four Catalog INSERT/UPDATE pairs and three Security
+  stored-procedure EXECUTEs. It has no direct Security DML. Role/config mismatch
+  refuses startup.
 
-## Test gates — never infer PASS
+## Gate result
 
-| Gate | State | Evidence needed |
+| Gate | State | Evidence |
 | --- | --- | --- |
-| Locked restore/net48 Release build, Windows 2022 | PENDING | PR #3 final-head Actions logs |
-| xUnit v3 HttpHost OWIN hosted tests | PENDING | Windows TRX counts, no skip/failure |
-| 29 frozen routes, 178 WEB fixtures and 28 new route signatures | PENDING | Reflection and Linux topology jobs |
-| New error/JSON/permission/concurrency boundary tests | PENDING | Hosted OWIN tests on final HEAD |
-| Exact SQL principal admitted/rejected, schema11/12/13 | NOT RUN | Operator-approved isolated SQL instance |
-| Catalog CRUD and Security Administration SQL writes/rollback/revision | NOT RUN | Restricted runtime-user SQL oracle |
-| Desktop net48 -> HTTP -> SQL E2E | NOT RUN (VPS-03) | Live Windows client |
-| Linux ASP.NET Core net10 | NOT RUN (VPS-04) | Linux runtime deployment |
+| Locked restore/net48 Release build, Windows | PASS locally; final-head CI pending | Commands and environment below; PR #5 final-head Actions |
+| xUnit v3 HttpHost hosted tests | PASS — 683/683, zero skipped | `vps02-httphost-regression.trx` |
+| 29 frozen routes, 178 WEB fixtures and 28 new signatures | PASS locally | Static verifier plus 683-test HttpHost regression |
+| Error/JSON/permission/concurrency boundaries | PASS — 7/7 SQL HTTP cases | `vps02-http-sql-matrix-green.trx` |
+| Exact SQL principal admitted/rejected | PASS — 4/4, zero skipped | `vps02-principal-after-fix.trx` |
+| Catalog and Security SQL writes/rollback/revision | PASS on exact11/12/13 | Restricted OWIN SQL matrix and packaged HTTPS host |
+| Packaged net48 HttpHost over real HTTPS | PASS on exact11/12/13 | `vps02-iis-https-green2.trx` |
+| Desktop net48 -> HTTP -> SQL E2E | NOT RUN (VPS-03) | Live Windows Desktop cutover gate |
+| Linux ASP.NET Core net10 | NOT RUN (VPS-04) | Linux runtime gate |
 
-**No accepted exception.** VPS-02 cannot be COMPLETE until applicable acceptance
-gates have executed successfully and final-head evidence is recorded. PR remains draft.
+**No accepted exception.** VPS-02 becomes COMPLETE when PR #5 is independently
+reviewed, final-head CI passes and the PR merges. The local SQL and HTTPS gates below
+contain no skipped, failed or empty selection.
 
-Review finding (PR #3 first CI): 14 legacy Catalog lookup tests failed due to ambiguous /{id} matching /lookup. The new {id:int} route constraint fixes the declaration conflict without altering the 29 legacy signatures. CI must rerun on the new HEAD; the first failed run is not passing evidence. The three ForSession methods are local-only; remote mapping remains 46.
+## SQL-backed acceptance execution
 
+### Environment and safety
 
-## Independent PR #3 review and SQL acceptance handoff (2026-11-16)
+- Windows `Microsoft Windows NT 10.0.26300.0`; .NET SDK `8.0.428` selected by
+  repository `global.json` (`8.0.400`, `latestFeature`); net48 VSTest 17.11.2 x64.
+- Operator-provided `MYDMSVN_TEST_SQLSERVER_CONNECTION_STRING` was present with
+  `Initial Catalog=master` and Windows integrated authentication. No connection
+  string, server name, token, password or certificate thumbprint was logged.
+- SQL Server Developer Edition 64-bit, product version `14.0.2150.2`, engine edition
+  3. Every test created and dropped a uniquely owned nonproduction database.
+- IIS Express used the existing `localhost:44321` HTTPS binding and certificate. The
+  test changed no machine TLS/IIS configuration and pinned the bound certificate for
+  the owned child process.
 
-The reviewer checked all 22 changed files, protected WEB2–WEB6 frozen 29 routes,
-the 46-remote-method interface mapping, SQL least-privilege startup checks, and
-new OWIN/SQL oracle source. Two implementation findings were addressed:
+### Commands and observed counts
 
-1. **SQL provisioner boundary:** new Desktop grants previously checked only
-   USER_ID existence. It now requires the selected principal to be a member of
-   the already-provisioned MyDmsVnWebRuntimeRole before it can receive any
-   opt-in grants (SQL 51113), with a dedicated SQL refusal oracle. This prevents
-   using a missing/maintenance/unprovisioned principal in the grant step.
-2. **SQL allowlist drift:** the Desktop additions to the runtime elevated-permission
-   query used unchecked string replacements; now each source marker must appear
-   **exactly once** or startup refuses. SQL-free regression tests inspect the actual
-   expanded allowlist and its retained negative checks.
+The SQL selections ran sequentially from repository root.
 
-[Issue #4](https://github.com/chung6a8m/MyDmsVn-Vps/issues/4) owns actual
-isolated SQL Catalog/Security mutation, permission, revision, rollback and
-hosted HTTPS acceptance. The new SQL tests remain **NOT RUN** until an
-operator-approved nonproduction SQL instance exists. Code integration into main,
-if performed at the Owner's request, is **not** an acceptance exception and
-must not convert the roadmap status to COMPLETE.
+```powershell
+dotnet restore tests/MyDmsVn.Server.Infrastructure.Security.Tests/MyDmsVn.Server.Infrastructure.Security.Tests.csproj --locked-mode
+dotnet test tests/MyDmsVn.Server.Infrastructure.Security.Tests/MyDmsVn.Server.Infrastructure.Security.Tests.csproj -c Release -f net48 --no-restore --filter 'FullyQualifiedName~Vps02DesktopApiPrincipalSqlTests' --logger 'trx;LogFileName=vps02-principal-after-fix.trx'
+dotnet test tests/MyDmsVn.Server.Infrastructure.Security.Tests/MyDmsVn.Server.Infrastructure.Security.Tests.csproj -c Release -f net48 --no-restore --filter 'FullyQualifiedName~Vps02DesktopApiHttpSqlTests' --logger 'trx;LogFileName=vps02-http-sql-matrix-green.trx'
+./src/MyDmsVn.Server.HttpHost/Publish-Web2Host.ps1 -OutputPath <owned-empty-test-directory>
+dotnet test tests/MyDmsVn.Server.Infrastructure.Security.Tests/MyDmsVn.Server.Infrastructure.Security.Tests.csproj -c Release -f net48 --no-restore --filter 'FullyQualifiedName~Published_SystemWeb_desktop_API' --logger 'trx;LogFileName=vps02-iis-https-green2.trx'
+dotnet restore tests/MyDmsVn.Server.HttpHost.Tests/MyDmsVn.Server.HttpHost.Tests.csproj --locked-mode
+dotnet test tests/MyDmsVn.Server.HttpHost.Tests/MyDmsVn.Server.HttpHost.Tests.csproj -c Release -f net48 --no-restore --logger 'trx;LogFileName=vps02-httphost-regression.trx'
+python scripts/verify-vps-01.py
+```
+
+| Selection | Discovered | Executed | Passed | Failed | Skipped / not executed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `Vps02DesktopApiPrincipalSqlTests` | 4 | 4 | 4 | 0 | 0 |
+| `Vps02DesktopApiHttpSqlTests` (exact11/12/13 plus disabled mode) | 7 | 7 | 7 | 0 | 0 |
+| Packaged IIS Express HTTPS exact11/12/13 | 1 | 1 | 1 | 0 | 0 |
+| Full `MyDmsVn.Server.HttpHost.Tests` regression | 683 | 683 | 683 | 0 | 0 |
+
+The SQL HTTP matrix exercises all four Catalog resources through create/update,
+get/list/lookup/active; allowed and forbidden principals; strict invalid-body
+rejection; Security permission check/catalog, users, roles, mutation, import
+preview/apply; stale revision; concurrent apply; audit failure rollback; and audit
+persistence. It runs the production OWIN pipeline with every runtime connection
+impersonating the provisioned restricted Web principal.
+
+The packaged-host case repeats the critical Catalog/Security, denial,
+stale/concurrent and SQL-oracle checks through the published net48 System.Web host on
+real HTTPS for exact11, exact12 and exact13. Disabled mode returns 404 for new routes
+while the original SQL-backed Catalog lookup remains 200.
+
+`scripts/verify-vps-01.py` reported 12 executable xUnit v3 projects, the original 29
+routes, all 178 frozen fixtures, all 28 additive routes and all 46 Desktop method
+mappings. The full HttpHost run independently executed 683 tests with zero skip.
+
+### Findings fixed before acceptance
+
+1. The first real principal run executed 4 tests: 3 passed and 1 failed because the
+   new oracle used nonexistent `Products.Id`. The production schema uses
+   `ProductId`; the corrected oracle then passed 4/4.
+2. The first seven-case SQL HTTP matrix executed all 7: 4 passed and 3 failed because
+   the audit-trigger rollback oracle expected HTTP 409. The pipeline correctly hides
+   the injected SQL exception as 500; the final assertion checks 500, no SQL-message
+   disclosure and physical rollback. The rerun passed 7/7.
+3. Initial packaged-host attempts exposed that unrelated legacy Sales smoke lacks
+   WEB4/WEB5 idempotency/epoch headers. VPS-02 exact12/13 omit only that unrelated
+   legacy mutation while retaining auth, TLS, Desktop API and SQL oracles; dedicated
+   WEB4/WEB5 gates remain unchanged. The final exact11/12/13 HTTPS run passed 1/1.
+
+## Prior implementation review
+
+PR #3 independently reviewed all 22 implementation files and fixed two findings
+before merge: the Desktop grant now requires prior membership in
+`MyDmsVnWebRuntimeRole` (SQL 51113), and the SQL allowlist expansion now refuses
+missing or duplicate source markers. Issue #4 owns the separate real-SQL closeout
+recorded above.

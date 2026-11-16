@@ -13,7 +13,7 @@ Legend: `PASS` = verified evidence at recorded SHA/environment; `NOT RUN` = no e
 | VPS-01 source HTTP route inventory | CONDITIONAL — frozen 29 signatures subject to PR #2 final-HEAD CI; live runtime NOT RUN | VPS-01 (source) / VPS-02 (runtime) | Reflection route signatures, immutable 178 fixture corpus, status/JSON envelope snapshots |
 | SQL integration/concurrency | NOT RUN | VPS-07/09 | Real isolated SQL instance, outcomes + rollback data |
 | GUI attended Windows | NOT RUN | VPS-03/09 | Attended UI interaction evidence on Windows |
-| API and error/permission parity | IN PROGRESS — 46/46 source mapping, 28 added routes and new OWIN hosted test source; final-head CI and real SQL NOT YET VERIFIED | VPS-02 | [PR #3](https://github.com/chung6a8m/MyDmsVn-Vps/pull/3), [evidence](../evidence/vps-02-http-api-parity.md) and restricted SQL mutation verification |
+| API and error/permission parity | PASS locally on restricted SQL and packaged HTTPS exact11/12/13; 4/4 principal, 7/7 SQL HTTP, 1/1 IIS HTTPS and 683/683 HttpHost regression, zero skipped; COMPLETE upon PR #5 review/final-head CI/merge | VPS-02 | [PR #3](https://github.com/chung6a8m/MyDmsVn-Vps/pull/3), [PR #5](https://github.com/chung6a8m/MyDmsVn-Vps/pull/5) and [SQL acceptance evidence](../evidence/vps-02-http-api-parity.md) |
 | Desktop HTTP cutover | NOT RUN | VPS-03 | No Server/SQL edges, end-to-end live flow |
 | Server ASP.NET Core net10 on Linux | NOT RUN | VPS-04 | Linux publish/runtime, auth, health and audit |
 | Newtonsoft to System.Text.Json | NOT RUN | VPS-05 | Frozen wire and fingerprint oracles |
