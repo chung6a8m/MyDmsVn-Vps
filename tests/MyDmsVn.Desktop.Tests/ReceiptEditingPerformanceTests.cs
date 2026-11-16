@@ -5,7 +5,6 @@ using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MyDmsVn.Desktop.Tests;
 

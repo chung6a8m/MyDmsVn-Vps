@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using MyDmsVn.Testing.Sql;
 using Microsoft.Data.SqlClient;
 using Xunit;
-using Xunit.Abstractions;
+using Xunit.v3;
 using Xunit.Sdk;
 
 namespace MyDmsVn.Server.Infrastructure.IntegrationTests;
@@ -58,8 +58,8 @@ public sealed class ApplicationSqlCollectionFixture : IAsyncLifetime
     }
 
     internal ReusableSqlFixture Fixture => _fixture.Value;
-    public Task InitializeAsync() => Task.CompletedTask;
-    public async Task DisposeAsync()
+    public ValueTask InitializeAsync() => default;
+    public async ValueTask DisposeAsync()
     {
         if (!_fixture.IsValueCreated) { return; }
         try { await Fixture.DisposeAsync(); }

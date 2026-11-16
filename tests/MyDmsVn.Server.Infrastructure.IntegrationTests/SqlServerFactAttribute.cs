@@ -1,17 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Xunit.Abstractions;
-using Xunit.Sdk;
 using Xunit;
 
 namespace MyDmsVn.Server.Infrastructure.IntegrationTests;
 
-[TraitDiscoverer(
-    "MyDmsVn.Server.Infrastructure.IntegrationTests.SqlTestCategoryDiscoverer",
-    "MyDmsVn.Server.Infrastructure.IntegrationTests")]
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
-public sealed class SqlServerFactAttribute : FactAttribute, ITraitAttribute
+public sealed class SqlServerFactAttribute : FactAttribute, Xunit.v3.ITraitAttribute
 {
     public SqlServerFactAttribute(params string[] categories)
     {
@@ -28,6 +23,9 @@ public sealed class SqlServerFactAttribute : FactAttribute, ITraitAttribute
     }
 
     public IReadOnlyList<string> Categories { get; }
+
+    public IReadOnlyCollection<KeyValuePair<string, string>> GetTraits() =>
+        Categories.Select(category => new KeyValuePair<string, string>("Category", category)).ToArray();
 }
 
 internal static class SqlTestCategory
@@ -36,22 +34,4 @@ internal static class SqlTestCategory
     public const string MigrationSchema = "MigrationSchema";
     public const string SecurityProvisioning = "SecurityProvisioning";
     public const string SqlConcurrency = "SqlConcurrency";
-}
-
-public sealed class SqlTestCategoryDiscoverer : ITraitDiscoverer
-{
-    public IEnumerable<KeyValuePair<string, string>> GetTraits(IAttributeInfo traitAttribute)
-    {
-        var arguments = traitAttribute.GetConstructorArguments().ToArray();
-        var categories = arguments.Length == 0
-            ? Array.Empty<string>()
-            : arguments[0] as string[] ?? Array.Empty<string>();
-        if (categories.Length == 0)
-        {
-            categories = new[] { SqlTestCategory.FastSql };
-        }
-
-        return categories.Select(category =>
-            new KeyValuePair<string, string>("Category", category));
-    }
 }

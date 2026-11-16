@@ -1,0 +1,297 @@
+{
+  "schemaVersion": 1,
+  "description": "VPS-01 source-derived frozen Web API 2 attribute-route inventory. NOT a live HTTP or Desktop parity attestation.",
+  "sourceBaseline": "4503ae39989bcbf45fb883e5d0fbab610d043408",
+  "endpoints": [
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/health",
+      "controller": "HealthController",
+      "action": "Get",
+      "area": "Health",
+      "authentication": "anonymous",
+      "fixtureCorpus": null,
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/auth/login",
+      "controller": "AuthController",
+      "action": "Login",
+      "area": "Auth",
+      "authentication": "cookie-endpoint",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/auth/refresh",
+      "controller": "AuthController",
+      "action": "Refresh",
+      "area": "Auth",
+      "authentication": "cookie-endpoint",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/auth/logout",
+      "controller": "AuthController",
+      "action": "Logout",
+      "area": "Auth",
+      "authentication": "cookie-endpoint",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/auth/me",
+      "controller": "AuthController",
+      "action": "Me",
+      "area": "Auth",
+      "authentication": "bearer",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/auth/capabilities",
+      "controller": "AuthController",
+      "action": "Capabilities",
+      "area": "Auth",
+      "authentication": "bearer",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/sales-receipts",
+      "controller": "SalesReceiptsController",
+      "action": "List",
+      "area": "Sales",
+      "authentication": "bearer",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/sales-receipts/{saleId}",
+      "controller": "SalesReceiptsController",
+      "action": "Get",
+      "area": "Sales",
+      "authentication": "bearer",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/sales-receipts",
+      "controller": "SalesReceiptsController",
+      "action": "Create",
+      "area": "Sales",
+      "authentication": "bearer",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "PUT",
+      "path": "/api/v1/sales-receipts/{saleId}/draft",
+      "controller": "SalesReceiptsController",
+      "action": "Update",
+      "area": "Sales",
+      "authentication": "bearer",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/sales-receipts/{saleId}/post",
+      "controller": "SalesReceiptsController",
+      "action": "Post",
+      "area": "Sales",
+      "authentication": "bearer",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/products/lookup",
+      "controller": "CatalogLookupController",
+      "action": "Products",
+      "area": "Catalog",
+      "authentication": "bearer",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/customers/lookup",
+      "controller": "CatalogLookupController",
+      "action": "Customers",
+      "area": "Catalog",
+      "authentication": "bearer",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/warehouses/lookup",
+      "controller": "CatalogLookupController",
+      "action": "Warehouses",
+      "area": "Catalog",
+      "authentication": "bearer",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/employees/lookup",
+      "controller": "CatalogLookupController",
+      "action": "Employees",
+      "area": "Catalog",
+      "authentication": "bearer",
+      "fixtureCorpus": "web2-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/goods-receipts",
+      "controller": "GoodsReceiptsController",
+      "action": "List",
+      "area": "GoodsReceipt",
+      "authentication": "bearer",
+      "fixtureCorpus": "web3-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/goods-receipts/{receiptId}",
+      "controller": "GoodsReceiptsController",
+      "action": "Get",
+      "area": "GoodsReceipt",
+      "authentication": "bearer",
+      "fixtureCorpus": "web3-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/goods-receipts",
+      "controller": "GoodsReceiptsController",
+      "action": "Create",
+      "area": "GoodsReceipt",
+      "authentication": "bearer",
+      "fixtureCorpus": "web3-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "PUT",
+      "path": "/api/v1/goods-receipts/{receiptId}/draft",
+      "controller": "GoodsReceiptsController",
+      "action": "Update",
+      "area": "GoodsReceipt",
+      "authentication": "bearer",
+      "fixtureCorpus": "web3-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "POST",
+      "path": "/api/v1/goods-receipts/{receiptId}/post",
+      "controller": "GoodsReceiptsController",
+      "action": "Post",
+      "area": "GoodsReceipt",
+      "authentication": "bearer",
+      "fixtureCorpus": "web3-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/inventory/balances",
+      "controller": "InventoryController",
+      "action": "Balances",
+      "area": "Inventory",
+      "authentication": "bearer",
+      "fixtureCorpus": "web3-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/inventory/stock-card",
+      "controller": "InventoryController",
+      "action": "StockCard",
+      "area": "Inventory",
+      "authentication": "bearer",
+      "fixtureCorpus": "web3-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/operations/context",
+      "controller": "OperationsController",
+      "action": "Context",
+      "area": "Operations",
+      "authentication": "bearer",
+      "fixtureCorpus": "web4-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v1/operations/{operationId}",
+      "controller": "OperationsController",
+      "action": "Status",
+      "area": "Operations",
+      "authentication": "bearer",
+      "fixtureCorpus": "web4-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v2/operations/context",
+      "controller": "OperationResolutionController",
+      "action": "Context",
+      "area": "Operations v2",
+      "authentication": "bearer",
+      "fixtureCorpus": "web5-resolution-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v2/operations/{operationId}/resolution",
+      "controller": "OperationResolutionController",
+      "action": "Resolution",
+      "area": "Operations v2",
+      "authentication": "bearer",
+      "fixtureCorpus": "web5-resolution-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v3/operations/resend-context",
+      "controller": "Web6ResendEligibilityController",
+      "action": "Context",
+      "area": "Operations v3",
+      "authentication": "bearer",
+      "fixtureCorpus": "web6-resend-eligibility-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v3/operations/{operationId}/resend-receipt",
+      "controller": "Web6ResendEligibilityController",
+      "action": "Receipt",
+      "area": "Operations v3",
+      "authentication": "bearer",
+      "fixtureCorpus": "web6-resend-eligibility-v1",
+      "verification": "route-source-only"
+    },
+    {
+      "httpMethod": "GET",
+      "path": "/api/v3/operations/{operationId}/resend-eligibility",
+      "controller": "Web6ResendEligibilityController",
+      "action": "Eligibility",
+      "area": "Operations v3",
+      "authentication": "bearer",
+      "fixtureCorpus": "web6-resend-eligibility-v1",
+      "verification": "route-source-only"
+    }
+  ]
+}

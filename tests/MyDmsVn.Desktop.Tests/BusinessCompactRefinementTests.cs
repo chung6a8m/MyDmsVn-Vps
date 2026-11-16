@@ -15,7 +15,6 @@ using MyDmsVn.Contracts;
 using MyDmsVn.Desktop.Application;
 using MyDmsVn.Desktop.WinForms;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MyDmsVn.Desktop.Tests;
 

@@ -12,7 +12,6 @@ using MyDmsVn.Server.Application.Security;
 using MyDmsVn.Server.DbMigrator;
 using MyDmsVn.Server.Infrastructure.Identity;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MyDmsVn.Server.Infrastructure.IntegrationTests
 {

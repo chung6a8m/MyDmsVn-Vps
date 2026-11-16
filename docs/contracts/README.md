@@ -18,3 +18,7 @@ The in-corpus READMEs and scripts belong to the original fixture format and may 
 **Integrity pin:** [corpus-blobs.sha1](corpus-blobs.sha1) lists Git blob SHA-1 values for all 178 files. The CI static guard rejects an altered, missing or unlisted corpus file. Any intentionally approved contract revision must change both the fixture and manifest in an explicitly reviewed diff; the manifest is local, not fetched from upstream.
 
 **Change control:** keep these files immutable until an explicit contract-change increment documents a compatibility diff, test oracle and owner acceptance. Do not silently regenerate or rewrite snapshots. The root `docs/roadmap/README.md` remains the only live task-status authority.
+
+## VPS-01 frozen source route inventory
+
+[Route inventory](vps-01-route-inventory.json) maps the 29 **declared** legacy Web API 2 HTTP routes to one of the existing frozen WEB2–WEB6 corpora (health has none). The source map is checked against controller reflection in `Vps01ContractFreezeTests` and does not assert live HTTP/SQL success. The five historical corpora remain immutable, checksum-pinned and unchanged. See [HTTP parity worklist](http-api-parity.md) for remaining Desktop interface coverage.

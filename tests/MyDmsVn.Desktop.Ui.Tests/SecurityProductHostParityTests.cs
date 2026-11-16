@@ -19,7 +19,6 @@ using MyDmsVn.Desktop.UiLab.Scenarios;
 using MyDmsVn.Desktop.WinForms;
 using MyDmsVn.Desktop.WinForms.Features.Security;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MyDmsVn.Desktop.Ui.Tests;
 

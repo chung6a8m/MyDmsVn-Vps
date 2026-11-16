@@ -12,7 +12,6 @@ using MyDmsVn.Server.Application.Inventory;
 using MyDmsVn.Server.DbMigrator;
 using MyDmsVn.Server.Infrastructure.Persistence;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MyDmsVn.Server.Infrastructure.IntegrationTests;
 

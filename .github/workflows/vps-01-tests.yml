@@ -1,0 +1,92 @@
+name: VPS-01 — xUnit v3 discovery and contract guard
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps-01-test-contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  topology:
+    name: xUnit v3 executable topology and route inventory (static only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify test project topology and local contracts
+        run: python3 scripts/verify-vps-01.py
+
+  windows-test-discovery:
+    name: Windows xUnit v3 compile/discovery — ${{ matrix.id }}
+    runs-on: windows-2022
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: desktop
+            minimum_tests: 813
+            project: tests/MyDmsVn.Desktop.Tests/MyDmsVn.Desktop.Tests.csproj
+          - id: desktop-ui
+            minimum_tests: 382
+            project: tests/MyDmsVn.Desktop.Ui.Tests/MyDmsVn.Desktop.Ui.Tests.csproj
+          - id: sql-catalog
+            minimum_tests: 17
+            project: tests/MyDmsVn.Server.Infrastructure.Catalog.Tests/MyDmsVn.Server.Infrastructure.Catalog.Tests.csproj
+          - id: sql-foundation
+            minimum_tests: 66
+            project: tests/MyDmsVn.Server.Infrastructure.Foundation.Tests/MyDmsVn.Server.Infrastructure.Foundation.Tests.csproj
+          - id: sql-harness
+            minimum_tests: 59
+            project: tests/MyDmsVn.Server.Infrastructure.IntegrationTests/MyDmsVn.Server.Infrastructure.IntegrationTests.csproj
+          - id: sql-inventory
+            minimum_tests: 127
+            project: tests/MyDmsVn.Server.Infrastructure.Inventory.Tests/MyDmsVn.Server.Infrastructure.Inventory.Tests.csproj
+          - id: sql-migrations
+            minimum_tests: 107
+            project: tests/MyDmsVn.Server.Infrastructure.Migrations.Tests/MyDmsVn.Server.Infrastructure.Migrations.Tests.csproj
+          - id: sql-security
+            minimum_tests: 1684
+            project: tests/MyDmsVn.Server.Infrastructure.Security.Tests/MyDmsVn.Server.Infrastructure.Security.Tests.csproj
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.400'
+      - name: Locked restore and Release compile
+        shell: pwsh
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: |
+          dotnet restore $env:PROJECT --locked-mode -v minimal
+          if ($LASTEXITCODE -ne 0) { throw "Locked restore failed: $env:PROJECT" }
+          dotnet build $env:PROJECT --no-restore -c Release -f net48 -v minimal
+          if ($LASTEXITCODE -ne 0) { throw "Build failed: $env:PROJECT" }
+      - name: Verify nonempty VSTest discovery; do not run SQL or GUI scenarios
+        shell: pwsh
+        env:
+          PROJECT: ${{ matrix.project }}
+          MINIMUM_TESTS: ${{ matrix.minimum_tests }}
+        run: |
+          $output = @(dotnet test $env:PROJECT -c Release -f net48 --no-build --no-restore --list-tests -v normal 2>&1)
+          $output | ForEach-Object { Write-Host $_ }
+          if ($LASTEXITCODE -ne 0) { throw "Discovery failed: $env:PROJECT" }
+          if (@($output | Where-Object { "$_" -match 'The following Tests are available:' }).Count -lt 1) {
+            throw "VSTest listed no test cases: $env:PROJECT"
+          }
+          if (($output -join "`n") -match 'No test is available|No tests found') {
+            throw "Empty VSTest discovery: $env:PROJECT"
+          }
+          # Indented fully-qualified test cases, excluding [xUnit.net] diagnostics.
+          $cases = @($output | Where-Object { "$_" -match '^\s{4,}MyDmsVn\.' })
+          if ($cases.Count -lt [int]$env:MINIMUM_TESTS) {
+            throw "Discovered $($cases.Count) tests, below VPS-01 floor $env:MINIMUM_TESTS for $env:PROJECT"
+          }
+          Write-Host "Discovered test cases=$($cases.Count); minimum=$env:MINIMUM_TESTS (NOT an SQL/GUI execution PASS)"

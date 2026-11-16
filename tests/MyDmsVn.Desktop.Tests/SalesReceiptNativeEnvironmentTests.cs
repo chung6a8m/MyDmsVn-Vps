@@ -6,7 +6,6 @@ using System.Threading;
 using MyDmsVn.Desktop.WinForms;
 using MyDmsVn.Contracts;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MyDmsVn.Desktop.Tests;
 

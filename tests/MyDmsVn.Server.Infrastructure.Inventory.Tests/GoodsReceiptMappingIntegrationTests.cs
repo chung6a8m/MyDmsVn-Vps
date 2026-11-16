@@ -11,7 +11,6 @@ using MyDmsVn.Server.Infrastructure.Persistence;
 using LinqToDB;
 using LinqToDB.Async;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MyDmsVn.Server.Infrastructure.IntegrationTests;
 

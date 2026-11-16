@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 using MyDmsVn.Testing.Sql;
 using Microsoft.Data.SqlClient;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MyDmsVn.Server.Infrastructure.IntegrationTests;
 

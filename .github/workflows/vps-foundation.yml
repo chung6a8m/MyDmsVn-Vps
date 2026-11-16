@@ -25,6 +25,8 @@ jobs:
         run: python3 -m py_compile scripts/verify-vps-foundation.py
       - name: Check in-repository projects, links and provenance
         run: python3 scripts/verify-vps-foundation.py --report foundation-report.json
+      - name: Check VPS-01 test topology and contract routes
+        run: python3 scripts/verify-vps-01.py
       - name: Upload static report, including on failure
         if: always()
         uses: actions/upload-artifact@v6
@@ -79,12 +81,16 @@ jobs:
       matrix:
         include:
           - id: application
+            minimum_tests: 363
             project: tests/MyDmsVn.Server.Application.Tests/MyDmsVn.Server.Application.Tests.csproj
           - id: architecture
+            minimum_tests: 13
             project: tests/MyDmsVn.Architecture.Tests/MyDmsVn.Architecture.Tests.csproj
           - id: desktop-session
+            minimum_tests: 212
             project: tests/MyDmsVn.Desktop.Session.Tests/MyDmsVn.Desktop.Session.Tests.csproj
           - id: legacy-http-host
+            minimum_tests: 640
             project: tests/MyDmsVn.Server.HttpHost.Tests/MyDmsVn.Server.HttpHost.Tests.csproj
     steps:
       - uses: actions/checkout@v5
@@ -96,6 +102,7 @@ jobs:
         env:
           TEST_PROJECT: ${{ matrix.project }}
           TEST_ID: ${{ matrix.id }}
+          MINIMUM_TESTS: ${{ matrix.minimum_tests }}
         run: |
           dotnet restore $env:TEST_PROJECT --locked-mode -v minimal
           if ($LASTEXITCODE -ne 0) { throw "Locked restore failed: $env:TEST_PROJECT" }
@@ -106,6 +113,9 @@ jobs:
           if ($reports.Count -ne 1) { throw "Expected one TRX file; found $($reports.Count)" }
           [xml]$trx = Get-Content -LiteralPath $reports[0].FullName -Raw
           $counts = $trx.TestRun.ResultSummary.Counters
+          if ([int]$counts.total -lt [int]$env:MINIMUM_TESTS -or [int]$counts.executed -lt [int]$env:MINIMUM_TESTS) {
+            throw "xUnit v3 discovery regression: expected at least $env:MINIMUM_TESTS, total=$($counts.total), executed=$($counts.executed)"
+          }
           if ([int]$counts.total -le 0 -or [int]$counts.executed -le 0) {
             throw "Zero-test execution is not PASS: $env:TEST_PROJECT"
           }

@@ -44,3 +44,19 @@ The first CI run exposed missing imported WEB2–WEB6 fixture assets. VPS-00B re
 ## Contract, concurrency and E2E later
 
 VPS-01 freezes HTTP JSON fixtures; VPS-02/03 compare endpoint and Desktop behavior. VPS-05 requires serializer/fingerprint parity; VPS-06 requires permission/pipeline/transaction parity; VPS-07 uses real SQL migration oracle with interrupted/concurrent/unknown-state cases; VPS-09 requires complete Desktop+Linux+SQL scenarios. Always rerun focused tests and final-head CI after changes. Exceptions need dated Owner approval with explicit scope; do not disguise a failure as skipped or a successful job.
+
+## VPS-01 — xUnit v3 migration and discovery contract
+
+All **12** net48 xUnit test projects build as executable test projects using `xunit.v3 3.2.2`, `xunit.runner.visualstudio 3.1.5` and `Microsoft.NET.Test.Sdk 17.14.1` (VSTest; not Microsoft.Testing.Platform). The remaining `MyDmsVn.WebOperation.CrashHost` is a helper executable, not an xUnit suite. Tests continue to use the pinned SDK **8.0.400**; SDK 10.0.404 is reserved for VPS-04.
+
+The Windows smoke workflow executes **four** SQL-free suites and checks their actual TRX totals against the independent VPS-00B floors: Architecture >=13, Desktop.Session >=212, Server.Application >=363, HttpHost >=640. A missing TRX, empty selection, skipped smoke case or fewer discovered/executed cases **fails** the gate. The VPS-01 workflow builds and **discovers without running** eight other suites on Windows, including Desktop GUI and SQL owner suites. Discovery only is never reported as SQL/GUI test PASS. The Linux topology gate verifies all twelve projects and the route/fixture inventory; it does not execute net48 assemblies.
+
+xUnit v3 custom SQL Fact/Theory category traits use `Xunit.v3.ITraitAttribute.GetTraits()`; the missing-SQL skip behavior is preserved. Test-only `tests/Directory.Build.targets` suppresses exactly two newly introduced analyzer diagnostics: `xUnit1051` (legacy tests intentionally choose cancellation tokens as the test oracle) and `xUnit3003` (custom legacy Fact/Theory subclasses omit optional source-file metadata). These are documented **static analyzer migration debts**, not waivers for failing tests or SQL integration. Production `src/` analyzers and warnings-as-errors remain active. Review these suppressions separately in future test modernization; do not broaden them.
+
+New contract gates compare the 29 source-declared controller route signatures against `docs/contracts/vps-01-route-inventory.json`, verify 178 local frozen WEB2-WEB6 fixture names and pin representative Newtonsoft success/error envelopes including decimal/int64 lexical forms and HTTP 401. The 29-row inventory is a **source map**, not evidence of live endpoint parity. Route coverage, Desktop HTTP parity, permission and SQL-backed effects remain VPS-02/03 gates.
+
+See [VPS-01 evidence](../evidence/vps-01-foundation.md) and [route inventory](../contracts/vps-01-route-inventory.json).
+
+### Eight additional Windows discovery floors (VPS-01)
+
+Run `dotnet test --list-tests` on each `net48` executable and count only indented `MyDmsVn.*` fully qualified test-case lines (not VSTest diagnostics). Windows-2022 VPS-01 reference run [#43850012712](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43850012712) discovered: Desktop **813**, Desktop.Ui **382**, SQL Catalog **17**, SQL Foundation **66**, SQL Harness **59**, SQL Inventory **127**, SQL Migrations **107**, SQL Security **1,684** — **3,255** listed cases total. The CI matrix fails if any suite drops below its floor; intentional changes require a reviewed inventory update. **These cases are discovered-only, not executed tests.**

@@ -4,7 +4,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MyDmsVn.Desktop.Tests
 {

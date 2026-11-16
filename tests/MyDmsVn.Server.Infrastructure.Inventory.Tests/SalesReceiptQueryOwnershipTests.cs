@@ -19,7 +19,6 @@ using MyDmsVn.Server.Infrastructure.Persistence;
 using MyDmsVn.Server.Infrastructure.Sales;
 using MyDmsVn.Testing.Sql;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MyDmsVn.Server.Infrastructure.IntegrationTests;
 
