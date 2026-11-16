@@ -44,7 +44,7 @@ public abstract class WireApiController : ApiController
         var options = Request.GetOwinContext().Get<WebHostOptions>(AuthController.OptionsKey);
         return options.DesktopApiEnabled
             ? Execute(operation, map)
-            : Task.FromResult(HttpJson.Error(404, "NotFound", "The resource was not found.", Correlation.CorrelationId));
+            : Task.FromResult(HttpJson.Error(404, "NotFound", "The resource was not found.", Correlation.CorrelationId!));
     }
 
     protected async Task<HttpResponseMessage> Execute<T>(Func<Task<ErrorOr<T>>> operation, Func<T, object> map)
