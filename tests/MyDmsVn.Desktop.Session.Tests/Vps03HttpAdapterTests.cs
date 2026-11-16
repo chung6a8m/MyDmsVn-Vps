@@ -188,10 +188,11 @@ namespace MyDmsVn.Desktop.Session.Tests
             {
                 if (request.RequestUri!.AbsolutePath.EndsWith("/login", StringComparison.Ordinal))
                     return Json(HttpStatusCode.OK, LoginJson);
-                if (request.RequestUri.AbsolutePath == "/api/v1/operations/context")
+                if (request.RequestUri.AbsolutePath == "/api/v2/operations/context")
                     return Json(HttpStatusCode.OK,
                         "{\"data\":{\"deploymentEpoch\":\"11111111-2222-4333-8444-555555555555\","
-                        + "\"actorUserId\":7,\"contractVersion\":\"web4-v1\"}}");
+                        + "\"actorUserId\":7,\"contractVersion\":\"web5-resolution-v1\","
+                        + "\"sameKeyResendEnabled\":false}}");
                 writes++;
                 throw new HttpRequestException("simulated lost ACK");
             }))
@@ -236,6 +237,38 @@ namespace MyDmsVn.Desktop.Session.Tests
             Assert.Equal(0.4444m, preview.SumAmounts(new[] { 0.2222m, 0.2222m }));
         }
 
+
+
+        [Fact]
+        public async Task Web5_mode_fails_closed_if_server_does_not_support_v2_context()
+        {
+            var writes = 0;
+            using (var fixture = Create(request =>
+            {
+                if (request.RequestUri!.AbsolutePath.EndsWith("/login", StringComparison.Ordinal))
+                    return Json(HttpStatusCode.OK, LoginJson);
+                if (request.RequestUri.AbsolutePath == "/api/v2/operations/context")
+                    return Json(HttpStatusCode.NotFound,
+                        "{\"error\":{\"code\":\"NotFound\",\"message\":\"Missing\",\"details\":[]}}");
+                writes++;
+                throw new InvalidOperationException("No write is allowed against a WEB4-only host.");
+            }))
+            {
+                Assert.True((await fixture.Transport.LoginAsync(
+                    new LoginRequest("operator", "secret"), CancellationToken.None)).IsSuccess);
+                var ops = new HttpDesktopOperations(fixture.Transport, fixture.Session,
+                    new HttpDesktopOperationSettings(HttpDesktopOperationMode.Web5));
+                var response = await ops.SendAsync<JObject>(
+                    "Sales.Post", 1, HttpMethod.Post, "/api/v1/sales-receipts/1/post",
+                    JObject.Parse("{\"expectedVersion\":\"AAAAAAAAAAE=\"}"),
+                    null, CancellationToken.None);
+
+                Assert.False(response.IsSuccess);
+                Assert.Equal(ApiStatusCode.NotFound, response.Error!.Status);
+                Assert.Null(ops.PendingOperationId);
+                Assert.Equal(0, writes);
+            }
+        }
 
         [Fact]
         public void Frozen_web4_all_six_command_fingerprints_match_independent_corpus()

@@ -208,7 +208,9 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             bool cookieEndpoint, CancellationToken cancellationToken,
             IReadOnlyDictionary<string, string>? additionalHeaders = null)
         {
-            if (string.IsNullOrEmpty(route) || !route.StartsWith("/api/v1/", StringComparison.Ordinal) ||
+            var exactWeb5Context = route == "/api/v2/operations/context";
+            if (string.IsNullOrEmpty(route) ||
+                (!route.StartsWith("/api/v1/", StringComparison.Ordinal) && !exactWeb5Context) ||
                 route.StartsWith("//", StringComparison.Ordinal) ||
                 route.IndexOf('#') >= 0)
                 throw new ArgumentException("An in-origin API v1 route is required.", nameof(route));

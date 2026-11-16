@@ -52,9 +52,12 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 string operationId = Guid.NewGuid().ToString("D");
                 if (keyed)
                 {
+                    // WEB5 must have the v2 contract, not merely a WEB4-compatible
+                    // v1 endpoint. A mode mismatch is a hard admission failure.
+                    var web5 = _settings.Mode == HttpDesktopOperationMode.Web5;
                     var context = await _transport.SendAsync<JObject>(HttpMethod.Get,
-                        "/api/v1/operations/context", null, cancellationToken,
-                        generation).ConfigureAwait(false);
+                        web5 ? "/api/v2/operations/context" : "/api/v1/operations/context",
+                        null, cancellationToken, generation).ConfigureAwait(false);
                     if (!context.IsSuccess)
                         return ApiResponse<T>.Failure(context.Error!);
                     epoch = (string?)context.Data!["deploymentEpoch"];
@@ -62,7 +65,10 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     var actorId = (int?)context.Data["actorUserId"];
                     if (!Guid.TryParseExact(epoch, "D", out var parsedEpoch) ||
                         epoch != parsedEpoch.ToString("D") ||
-                        contract != "web4-v1" ||
+                        (web5
+                            ? contract != "web5-resolution-v1" ||
+                              (bool?)context.Data["sameKeyResendEnabled"] != false
+                            : contract != "web4-v1") ||
                         actorId != _session.CurrentUser?.UserId)
                         return Fail<T>("Operation.InvalidContext",
                             "The server operation contract is not compatible.");
