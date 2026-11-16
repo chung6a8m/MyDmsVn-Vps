@@ -1,0 +1,49 @@
+name: VPS-00A one-time source import
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vps-00a-bootstrap.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vps-00a-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: github.repository == 'chung6a8m/MyDmsVn-Vps'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout independent destination
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Prepare and validate one-time source copy
+        shell: bash
+        run: bash .github/scripts/vps-00a-import.sh
+      - name: Commit validated import, remove bootstrap and push
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f .github/workflows/vps-00a-bootstrap.yml .github/scripts/vps-00a-import.sh
+          git add --all --force
+          if git ls-files -s | grep -q '^160000 '; then
+            echo 'Refusing Git submodules in independent destination' >&2
+            exit 1
+          fi
+          if git remote -v | grep -E '(github.com[:/]chung6a8m/MyDmsVn(\.git)?[[:space:]]|github.com[:/]chung6a8m/MyDmsVn.WinFormsKit)' ; then
+            echo 'Unexpected source remote' >&2
+            exit 1
+          fi
+          test -f docs/import/sql-checksums.sha256
+          git diff --cached --quiet && { echo 'No source changes to commit' >&2; exit 1; }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(vps-00a): import pinned independent source baseline'
+          git push origin HEAD:main
