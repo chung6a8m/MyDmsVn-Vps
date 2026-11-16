@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   refresh-locks:
-    if: startsWith(github.event.head_commit.message, 'chore(vps-03-locks): trigger')
+    if: "startsWith(github.event.head_commit.message, 'chore(vps-03-locks): trigger')"
     runs-on: windows-2022
     timeout-minutes: 35
     steps:
