@@ -18,7 +18,6 @@ using MyDmsVn.Server.Application.Security;
 using MyDmsVn.Server.Infrastructure;
 using MyDmsVn.Testing.Sql;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MyDmsVn.Server.Infrastructure.IntegrationTests;
 

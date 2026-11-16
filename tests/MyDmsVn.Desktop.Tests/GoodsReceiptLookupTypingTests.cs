@@ -4,7 +4,6 @@ using System.Runtime.ExceptionServices;
 using System.Windows.Forms;
 using MyDmsVn.Desktop.Application;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MyDmsVn.Desktop.Tests;
 

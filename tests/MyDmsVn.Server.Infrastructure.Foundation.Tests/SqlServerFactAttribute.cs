@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-using Xunit.Abstractions;
 using Xunit.Sdk;
 
 namespace MyDmsVn.Server.Infrastructure.IntegrationTests;

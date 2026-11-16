@@ -12,7 +12,6 @@ using MyDmsVn.Server.Application.Catalog;
 using MyDmsVn.Server.Application.Identity;
 using MyDmsVn.Server.Application.Security;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace MyDmsVn.Server.Infrastructure.IntegrationTests;
 

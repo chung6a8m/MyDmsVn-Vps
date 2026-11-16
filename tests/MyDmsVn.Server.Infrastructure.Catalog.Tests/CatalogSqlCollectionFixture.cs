@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using MyDmsVn.Testing.Sql;
 using Microsoft.Data.SqlClient;
 using Xunit;
-using Xunit.Abstractions;
 using Xunit.Sdk;
 
 namespace MyDmsVn.Server.Infrastructure.IntegrationTests;
@@ -42,7 +41,7 @@ public sealed class CatalogSqlCollectionFixture : IAsyncLifetime
 
     internal ReusableSqlFixture Fixture { get; }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         // SqlServerFact/Theory mark absent configuration NOT RUN; never allocate for skipped cases.
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(SqlTestDatabase.ConnectionStringEnvironmentVariable))) { return; }
@@ -54,7 +53,7 @@ public sealed class CatalogSqlCollectionFixture : IAsyncLifetime
         finally { Report(message => _diagnostics.OnMessage(new DiagnosticMessage(message))); }
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         try { await Fixture.DisposeAsync(); }
         finally { Report(message => _diagnostics.OnMessage(new DiagnosticMessage(message))); }
