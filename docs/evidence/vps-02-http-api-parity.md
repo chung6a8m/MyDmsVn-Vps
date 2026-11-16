@@ -35,3 +35,27 @@ passes after a review-fix commit.
 gates have executed successfully and final-head evidence is recorded. PR remains draft.
 
 Review finding (PR #3 first CI): 14 legacy Catalog lookup tests failed due to ambiguous /{id} matching /lookup. The new {id:int} route constraint fixes the declaration conflict without altering the 29 legacy signatures. CI must rerun on the new HEAD; the first failed run is not passing evidence. The three ForSession methods are local-only; remote mapping remains 46.
+
+
+## Independent PR #3 review and SQL acceptance handoff (2026-11-16)
+
+The reviewer checked all 22 changed files, protected WEB2–WEB6 frozen 29 routes,
+the 46-remote-method interface mapping, SQL least-privilege startup checks, and
+new OWIN/SQL oracle source. Two implementation findings were addressed:
+
+1. **SQL provisioner boundary:** new Desktop grants previously checked only
+   USER_ID existence. It now requires the selected principal to be a member of
+   the already-provisioned MyDmsVnWebRuntimeRole before it can receive any
+   opt-in grants (SQL 51113), with a dedicated SQL refusal oracle. This prevents
+   using a missing/maintenance/unprovisioned principal in the grant step.
+2. **SQL allowlist drift:** the Desktop additions to the runtime elevated-permission
+   query used unchecked string replacements; now each source marker must appear
+   **exactly once** or startup refuses. SQL-free regression tests inspect the actual
+   expanded allowlist and its retained negative checks.
+
+[Issue #4](https://github.com/chung6a8m/MyDmsVn-Vps/issues/4) owns actual
+isolated SQL Catalog/Security mutation, permission, revision, rollback and
+hosted HTTPS acceptance. The new SQL tests remain **NOT RUN** until an
+operator-approved nonproduction SQL instance exists. Code integration into main,
+if performed at the Owner's request, is **not** an acceptance exception and
+must not convert the roadmap status to COMPLETE.

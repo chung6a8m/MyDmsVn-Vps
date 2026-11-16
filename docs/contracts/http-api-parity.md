@@ -87,3 +87,10 @@ SQL schema mode admission and Desktop-to-HTTP-to-SQL E2E (the latter belongs to 
 Code or route presence alone cannot mark VPS-02 COMPLETE.
 
 The Desktop interfaces also expose three local ForSession(...) binders (SalesReceipt, PermissionCatalog and SecurityAdministration). They are **not remote HTTP calls**: 49 declared methods consist of 46 server operations and three client-side session-binding helpers, which VPS-03 implements in the adapter. Web API 2 constrains numeric Catalog route parameters with {id:int} so frozen /lookup literal routes remain unambiguous.
+
+
+Review handoff: the opt-in role provisioning script requires membership in
+MyDmsVnWebRuntimeRole **before granting any Desktop object or procedure rights**.
+The elevated-permission SQL extension now rejects exact-fragment drift instead
+of silently changing the security allowlist. Real SQL execution and live HTTPS
+positive/negative cases remain mandatory under [Issue #4](https://github.com/chung6a8m/MyDmsVn-Vps/issues/4).
