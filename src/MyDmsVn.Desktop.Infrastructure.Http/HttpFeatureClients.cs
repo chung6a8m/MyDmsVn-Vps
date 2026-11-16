@@ -67,10 +67,13 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
     public sealed class HttpSecurityAdministrationApiClient : ISecurityAdministrationApiClient
     {
         private readonly HttpDesktopTransport _transport;
+        private readonly HttpDesktopOperations _operations;
         private readonly long? _expectedVersion;
-        public HttpSecurityAdministrationApiClient(HttpDesktopTransport transport) : this(transport, null) { }
-        private HttpSecurityAdministrationApiClient(HttpDesktopTransport transport, long? expectedVersion)
-        { _transport = transport; _expectedVersion = expectedVersion; }
+        public HttpSecurityAdministrationApiClient(HttpDesktopTransport transport, HttpDesktopOperations operations)
+            : this(transport, operations, null) { }
+        private HttpSecurityAdministrationApiClient(HttpDesktopTransport transport,
+            HttpDesktopOperations operations, long? expectedVersion)
+        { _transport = transport; _operations = operations; _expectedVersion = expectedVersion; }
 
         public ISecurityAdministrationApiClient ForSession(long expectedSessionVersion)
         {
@@ -80,7 +83,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     throw new InvalidOperationException("A security client cannot be rebound.");
                 return this;
             }
-            return new HttpSecurityAdministrationApiClient(_transport, expectedSessionVersion);
+            return new HttpSecurityAdministrationApiClient(_transport, _operations, expectedSessionVersion);
         }
 
         public Task<ApiResponse<IReadOnlyList<SecurityUserDto>>> ListUsersAsync(CancellationToken token) =>
@@ -93,8 +96,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
         public Task<ApiResponse<SecurityAdministrationResultDto>> MutateAsync(
             SecurityAdministrationMutationRequest request, CancellationToken token) =>
-            _transport.SendAsync<SecurityAdministrationResultDto>(HttpMethod.Post,
-                "/api/v1/security/mutations", request, token, _expectedVersion);
+            _operations.SendUnjournaledAsync<SecurityAdministrationResultDto>("Security.Mutate", null,
+                HttpMethod.Post, "/api/v1/security/mutations", request, _expectedVersion, token);
 
         public Task<ApiResponse<PermissionAssignmentImportPreviewDto>> PreviewPermissionImportAsync(
             PermissionImportTargetTypeDto targetType, int targetId, string json, CancellationToken token) =>
@@ -105,11 +108,11 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         public Task<ApiResponse<PermissionAssignmentImportResultDto>> ApplyPermissionImportAsync(
             PermissionImportTargetTypeDto targetType, int targetId,
             PermissionAssignmentImportRequest request, CancellationToken token) =>
-            _transport.SendAsync<PermissionAssignmentImportResultDto>(HttpMethod.Post,
-                "/api/v1/security/import/apply",
+            _operations.SendUnjournaledAsync<PermissionAssignmentImportResultDto>("Security.ApplyImport", targetId,
+                HttpMethod.Post, "/api/v1/security/import/apply",
                 new { targetType = (int)targetType, targetId, json = request.Json,
                     expectedTargetRevision = request.ExpectedTargetRevision,
-                    expectedCatalogDigest = request.ExpectedCatalogDigest }, token, _expectedVersion);
+                    expectedCatalogDigest = request.ExpectedCatalogDigest }, _expectedVersion, token);
     }
 
     public sealed class HttpSalesReceiptApiClient : ISalesReceiptApiClient

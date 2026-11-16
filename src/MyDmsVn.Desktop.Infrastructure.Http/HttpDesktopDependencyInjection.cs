@@ -31,7 +31,10 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             services.TryAddSingleton<IDesktopSessionActivity>(provider =>
                 provider.GetRequiredService<HttpDesktopSession>());
             services.TryAddSingleton<HttpDesktopTransport>();
+            services.TryAddSingleton<IHttpPendingWriteStore, WindowsHttpPendingWriteStore>();
             services.TryAddSingleton<HttpDesktopOperations>();
+            services.TryAddSingleton<IDesktopWriteRecovery>(provider =>
+                provider.GetRequiredService<HttpDesktopOperations>());
 
             services.AddTransient<IFoundationApiClient, HttpFoundationApiClient>();
             services.AddTransient<IIdentityApiClient, HttpIdentityApiClient>();

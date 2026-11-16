@@ -209,8 +209,21 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             IReadOnlyDictionary<string, string>? additionalHeaders = null)
         {
             var exactWeb5Context = route == "/api/v2/operations/context";
+            const string v2Prefix = "/api/v2/operations/";
+            const string v2Suffix = "/resolution";
+            var exactWeb5Resolution = false;
+            if (route != null && route.StartsWith(v2Prefix, StringComparison.Ordinal) &&
+                route.EndsWith(v2Suffix, StringComparison.Ordinal))
+            {
+                var idText = route.Substring(v2Prefix.Length,
+                    route.Length - v2Prefix.Length - v2Suffix.Length);
+                exactWeb5Resolution = Guid.TryParseExact(idText, "D", out var statusId) &&
+                    idText == statusId.ToString("D") && idText[14] == '4' &&
+                    "89ab".IndexOf(idText[19]) >= 0;
+            }
             if (string.IsNullOrEmpty(route) ||
-                (!route.StartsWith("/api/v1/", StringComparison.Ordinal) && !exactWeb5Context) ||
+                (!route.StartsWith("/api/v1/", StringComparison.Ordinal) &&
+                 !exactWeb5Context && !exactWeb5Resolution) ||
                 route.StartsWith("//", StringComparison.Ordinal) ||
                 route.IndexOf('#') >= 0)
                 throw new ArgumentException("An in-origin API v1 route is required.", nameof(route));

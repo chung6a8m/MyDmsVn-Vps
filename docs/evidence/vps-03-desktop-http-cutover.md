@@ -39,3 +39,9 @@ Source graph: `Desktop.App/packages.lock.json` resolves 23 net48 entries and con
 6. **P2 — No independent PR review / final-HEAD validation after the last documentation edits.** Re-run both workflows on the precise final SHA, review all findings, then determine whether code is ready to merge as a gated increment. **Do not mark VPS-03 COMPLETE before P0/P1 gates are proved or explicitly accepted by Owner.**
 
 No hidden SQL skip or production readiness is inferred. Current task status authority: [roadmap](../roadmap/README.md).
+
+## Issue #7 candidate — durable UNKNOWN write recovery (pending CI/independent acceptance)
+
+A follow-up on draft PR #6 adds a Windows-owner-scoped, DPAPI-encrypted, ACL-restricted, bounded pending intent journal with a write-through temp file and atomic no-overwrite move before HTTP dispatch; on restart a matching exact intent is loaded and all writes are fenced until independently verified. It adds WEB5 v2 resolution requests, current actor + envelope checks, attended shell recovery modal and an explicitly confirmed WEB5 negative audit certificate path. Unjournalled Catalog/Security writes receive the same intent fence, authorized advisory readback and **no automatic release**. No request body, password, JWT or refresh cookie is persisted. See [operator runbook](../runbooks/issue-7-unknown-write-recovery.md).
+
+**Evidence status at code authoring: NOT YET RUN.** GitHub Actions, native Windows DPAPI/ACL tests, crash interruption, isolated SQL journal races, physical stock/ledger/COGS single-post oracle and attended GUI have not yet been validated on this candidate. Existing 18/18 CI and 1,286/1,286 tests relate to prior PR #6 head, **not** to this follow-up patch. Add final commit SHA, workflow URLs and exact discovered/executed/skipped counts after the follow-up HEAD has actually been verified. Keep Issue #7 and VPS-03 OPEN; do not infer an Owner exception or release.

@@ -168,14 +168,14 @@ namespace MyDmsVn.Desktop.Session.Tests
                 Assert.True((await fixture.Transport.LoginAsync(
                     new LoginRequest("operator", "secret"), CancellationToken.None)).IsSuccess);
                 var operation = new HttpDesktopOperations(fixture.Transport, fixture.Session,
-                    new HttpDesktopOperationSettings(HttpDesktopOperationMode.Web4));
+                    new HttpDesktopOperationSettings(HttpDesktopOperationMode.Web4), new TestPendingWriteStore());
                 var body = JObject.Parse("{\"expectedVersion\":\"AAAAAAAAAAE=\"}");
                 var response = await operation.SendAsync<JObject>(
                     "Sales.Post", 1, HttpMethod.Post, "/api/v1/sales-receipts/1/post",
                     body, fixture.Session.Version, CancellationToken.None);
                 Assert.False(response.IsSuccess);
-                Assert.Equal("Auth.Forbidden", response.Error!.Code);
-                Assert.Null(operation.PendingOperationId);
+                Assert.Equal("Operation.OutcomeUnknown", response.Error!.Code);
+                Assert.NotNull(operation.PendingOperationId); // 403 is not a commit/rollback certificate.
                 Assert.Equal(1, writes);
             }
         }
@@ -200,7 +200,7 @@ namespace MyDmsVn.Desktop.Session.Tests
                 Assert.True((await fixture.Transport.LoginAsync(
                     new LoginRequest("operator", "secret"), CancellationToken.None)).IsSuccess);
                 var operation = new HttpDesktopOperations(fixture.Transport, fixture.Session,
-                    new HttpDesktopOperationSettings(HttpDesktopOperationMode.Web5));
+                    new HttpDesktopOperationSettings(HttpDesktopOperationMode.Web5), new TestPendingWriteStore());
                 var body = JObject.Parse("{\"expectedVersion\":\"AAAAAAAAAAE=\"}");
                 var first = await operation.SendAsync<JObject>(
                     "Sales.Post", 1, HttpMethod.Post, "/api/v1/sales-receipts/1/post",
@@ -257,7 +257,7 @@ namespace MyDmsVn.Desktop.Session.Tests
                 Assert.True((await fixture.Transport.LoginAsync(
                     new LoginRequest("operator", "secret"), CancellationToken.None)).IsSuccess);
                 var ops = new HttpDesktopOperations(fixture.Transport, fixture.Session,
-                    new HttpDesktopOperationSettings(HttpDesktopOperationMode.Web5));
+                    new HttpDesktopOperationSettings(HttpDesktopOperationMode.Web5), new TestPendingWriteStore());
                 var response = await ops.SendAsync<JObject>(
                     "Sales.Post", 1, HttpMethod.Post, "/api/v1/sales-receipts/1/post",
                     JObject.Parse("{\"expectedVersion\":\"AAAAAAAAAAE=\"}"),
@@ -332,6 +332,23 @@ namespace MyDmsVn.Desktop.Session.Tests
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json"),
             };
+
+        private sealed class TestPendingWriteStore : IHttpPendingWriteStore
+        {
+            private HttpPendingWriteRecord? _record;
+            public HttpPendingWriteRecord? Load() => _record;
+            public void Save(HttpPendingWriteRecord record)
+            {
+                if (_record != null) throw new InvalidOperationException("Pending already exists");
+                _record = record;
+            }
+            public void Clear(HttpPendingWriteRecord expected)
+            {
+                if (_record?.OperationId != expected.OperationId)
+                    throw new InvalidOperationException("Pending changed");
+                _record = null;
+            }
+        }
 
         private sealed class Fixture : IDisposable
         {

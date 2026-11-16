@@ -21,6 +21,8 @@ namespace MyDmsVn.Desktop.WinForms
         private readonly ToolStripProgressBar _busyIndicator;
         private readonly IDesktopSession? _session;
         private readonly IDesktopNotificationService? _notifications;
+        private readonly IDesktopWriteRecovery? _writeRecovery;
+        private readonly ToolStripStatusLabel _recoveryIndicator;
         private readonly ICatalogControlFactory? _catalogControlFactory;
         private readonly IGoodsReceiptControlFactory? _goodsReceiptControlFactory;
         private readonly IInventoryControlFactory? _inventoryControlFactory;
@@ -138,6 +140,19 @@ namespace MyDmsVn.Desktop.WinForms
                 securityAdministrationControlFactory)
         { _salesReceiptControlFactory = salesReceiptControlFactory ?? throw new ArgumentNullException(nameof(salesReceiptControlFactory)); }
 
+        public FoundationShellForm(FoundationViewModel viewModel, IDesktopSession session,
+            IDesktopNotificationService notifications, ICatalogControlFactory catalogControlFactory,
+            IGoodsReceiptControlFactory goodsReceiptControlFactory, IInventoryControlFactory inventoryControlFactory,
+            ISecurityAdministrationControlFactory securityAdministrationControlFactory,
+            ISalesReceiptControlFactory salesReceiptControlFactory, IDesktopWriteRecovery writeRecovery)
+            : this(viewModel, session, notifications, catalogControlFactory, goodsReceiptControlFactory,
+                inventoryControlFactory, securityAdministrationControlFactory, salesReceiptControlFactory)
+        {
+            _writeRecovery = writeRecovery ?? throw new ArgumentNullException(nameof(writeRecovery));
+            _writeRecovery.PendingChanged += OnPendingWriteChanged;
+            UpdateRecoveryIndicator();
+        }
+
         private FoundationShellForm(
             FoundationViewModel viewModel,
             IDesktopSession? session,
@@ -203,7 +218,15 @@ namespace MyDmsVn.Desktop.WinForms
             statusBar.Items.Add(_statusLabel);
             statusBar.Items.Add(_busyIndicator);
             statusBar.Items.Add(_currentUserLabel);
-            statusBar.Items.Add(new ToolStripStatusLabel("Local mode"));
+            _recoveryIndicator = new ToolStripStatusLabel("UNKNOWN write — review")
+            {
+                Name = "PendingWriteRecovery",
+                Visible = false, IsLink = true,
+                ToolTipText = "Show exact operation ID and safely check the server; never resend"
+            };
+            _recoveryIndicator.Click += (_, _) => ShowWriteRecovery();
+            statusBar.Items.Add(_recoveryIndicator);
+            statusBar.Items.Add(new ToolStripStatusLabel("Local / HTTPS"));
 
             Controls.Add(Workspace);
             Controls.Add(Navigation);
@@ -474,6 +497,31 @@ namespace MyDmsVn.Desktop.WinForms
                 "Your session has expired. Please sign in again.");
         }
 
+        protected override void OnShown(EventArgs eventArgs)
+        {
+            base.OnShown(eventArgs);
+            if (_writeRecovery?.Pending != null)
+                BeginInvoke((Action)(() => { if (!IsDisposed) ShowWriteRecovery(); }));
+        }
+
+        private void OnPendingWriteChanged(object? sender, EventArgs eventArgs) =>
+            DispatchToUi(UpdateRecoveryIndicator);
+
+        private void UpdateRecoveryIndicator()
+        {
+            if (_writeRecovery == null) return;
+            _recoveryIndicator.Visible = _writeRecovery.Pending != null;
+            _recoveryIndicator.Text = _recoveryIndicator.Visible ? "UNKNOWN write — review" : "";
+        }
+
+        private void ShowWriteRecovery()
+        {
+            if (_writeRecovery == null || IsDisposed || Disposing) return;
+            using (var dialog = new DesktopWriteRecoveryDialog(_writeRecovery))
+                dialog.ShowDialog(this);
+            UpdateRecoveryIndicator();
+        }
+
         protected override void OnHandleCreated(EventArgs eventArgs)
         {
             base.OnHandleCreated(eventArgs);
@@ -496,6 +544,8 @@ namespace MyDmsVn.Desktop.WinForms
             if (disposing && !_disposedResources)
             {
                 _disposedResources = true;
+                if (_writeRecovery != null)
+                    _writeRecovery.PendingChanged -= OnPendingWriteChanged;
                 _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
                 BootstrapThemeManager.ThemeChanged -= OnThemeChanged;
                 Navigation.SelectedItemChanged -= OnNavigationSelectedItemChanged;

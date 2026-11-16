@@ -31,7 +31,22 @@ namespace MyDmsVn.Desktop.App
             var uiContext = SynchronizationContext.Current ??
                 new System.Windows.Forms.WindowsFormsSynchronizationContext();
             SynchronizationContext.SetSynchronizationContext(uiContext);
-            using (var provider = CreateServiceProvider(uiContext, options, operations))
+            ServiceProvider provider;
+            try
+            {
+                provider = CreateServiceProvider(uiContext, options, operations);
+                // Eagerly inspect the owner-protected file BEFORE any login, UI, or write.
+                // Corrupted/unauthorized records fail closed rather than silently resetting.
+                provider.GetRequiredService<IHttpPendingWriteStore>().Load();
+            }
+            catch (Exception error) when (error is InvalidOperationException ||
+                error is System.IO.IOException || error is UnauthorizedAccessException)
+            {
+                return ReportStartupFailure("Desktop.PendingRecoveryUnavailable",
+                    "Protected pending-write state is unavailable. No writes are allowed; contact the operator.",
+                    smokeTest);
+            }
+            using (provider)
             {
                 return DesktopHostRunner.Run(
                     provider.GetRequiredService<IServiceScopeFactory>(),

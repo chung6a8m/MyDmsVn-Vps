@@ -12,12 +12,17 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
     public abstract class HttpCatalogClientBase<TDto, TSave>
     {
         private readonly HttpDesktopTransport _transport;
+        private readonly HttpDesktopOperations _operations;
         private readonly string _route;
+        private readonly string _kind;
 
-        protected HttpCatalogClientBase(HttpDesktopTransport transport, string plural)
+        protected HttpCatalogClientBase(HttpDesktopTransport transport,
+            HttpDesktopOperations operations, string plural)
         {
             _transport = transport ?? throw new ArgumentNullException(nameof(transport));
+            _operations = operations ?? throw new ArgumentNullException(nameof(operations));
             _route = "/api/v1/catalog/" + plural;
+            _kind = "Catalog." + plural;
         }
 
         protected Task<ApiResponse<PagedResult<TDto>>> List(CatalogListRequest request, CancellationToken token) =>
@@ -29,16 +34,18 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 id.ToString(CultureInfo.InvariantCulture), null, token);
 
         protected Task<ApiResponse<TDto>> Create(TSave request, CancellationToken token) =>
-            _transport.SendAsync<TDto>(HttpMethod.Post, _route, request, token);
+            _operations.SendUnjournaledAsync<TDto>(_kind + ".Create", null,
+                HttpMethod.Post, _route, request!, null, token);
 
         protected Task<ApiResponse<TDto>> Update(int id, TSave request, CancellationToken token) =>
-            _transport.SendAsync<TDto>(HttpMethod.Put, _route + "/" +
-                id.ToString(CultureInfo.InvariantCulture), request, token);
+            _operations.SendUnjournaledAsync<TDto>(_kind + ".Update", id,
+                HttpMethod.Put, _route + "/" + id.ToString(CultureInfo.InvariantCulture),
+                request!, null, token);
 
         protected Task<ApiResponse<UnitResponse>> SetActive(int id, bool isActive, CancellationToken token) =>
-            _transport.SendAsync<UnitResponse>(HttpMethod.Put, _route + "/" +
-                id.ToString(CultureInfo.InvariantCulture) + "/active",
-                new { isActive }, token);
+            _operations.SendUnjournaledAsync<UnitResponse>(_kind + ".SetActive", id,
+                HttpMethod.Put, _route + "/" + id.ToString(CultureInfo.InvariantCulture) + "/active",
+                new { isActive }, null, token);
 
         protected Task<ApiResponse<IReadOnlyList<CatalogLookupDto>>> Lookup(CatalogLookupRequest request, CancellationToken token) =>
             _transport.SendAsync<IReadOnlyList<CatalogLookupDto>>(HttpMethod.Get,
@@ -47,7 +54,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
     public sealed class HttpProductApiClient : HttpCatalogClientBase<ProductDto, SaveProductRequest>, IProductApiClient
     {
-        public HttpProductApiClient(HttpDesktopTransport transport) : base(transport, "products") { }
+        public HttpProductApiClient(HttpDesktopTransport transport, HttpDesktopOperations operations)
+            : base(transport, operations, "products") { }
         public Task<ApiResponse<PagedResult<ProductDto>>> ListAsync(CatalogListRequest request, CancellationToken token) => List(request, token);
         public Task<ApiResponse<ProductDto>> GetAsync(int id, CancellationToken token) => Get(id, token);
         public Task<ApiResponse<ProductDto>> CreateAsync(SaveProductRequest request, CancellationToken token) => Create(request, token);
@@ -58,7 +66,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
     public sealed class HttpWarehouseApiClient : HttpCatalogClientBase<WarehouseDto, SaveWarehouseRequest>, IWarehouseApiClient
     {
-        public HttpWarehouseApiClient(HttpDesktopTransport transport) : base(transport, "warehouses") { }
+        public HttpWarehouseApiClient(HttpDesktopTransport transport, HttpDesktopOperations operations)
+            : base(transport, operations, "warehouses") { }
         public Task<ApiResponse<PagedResult<WarehouseDto>>> ListAsync(CatalogListRequest request, CancellationToken token) => List(request, token);
         public Task<ApiResponse<WarehouseDto>> GetAsync(int id, CancellationToken token) => Get(id, token);
         public Task<ApiResponse<WarehouseDto>> CreateAsync(SaveWarehouseRequest request, CancellationToken token) => Create(request, token);
@@ -69,7 +78,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
     public sealed class HttpEmployeeApiClient : HttpCatalogClientBase<EmployeeDto, SaveEmployeeRequest>, IEmployeeApiClient
     {
-        public HttpEmployeeApiClient(HttpDesktopTransport transport) : base(transport, "employees") { }
+        public HttpEmployeeApiClient(HttpDesktopTransport transport, HttpDesktopOperations operations)
+            : base(transport, operations, "employees") { }
         public Task<ApiResponse<PagedResult<EmployeeDto>>> ListAsync(CatalogListRequest request, CancellationToken token) => List(request, token);
         public Task<ApiResponse<EmployeeDto>> GetAsync(int id, CancellationToken token) => Get(id, token);
         public Task<ApiResponse<EmployeeDto>> CreateAsync(SaveEmployeeRequest request, CancellationToken token) => Create(request, token);
@@ -80,7 +90,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
     public sealed class HttpCustomerApiClient : HttpCatalogClientBase<CustomerDto, SaveCustomerRequest>, ICustomerApiClient
     {
-        public HttpCustomerApiClient(HttpDesktopTransport transport) : base(transport, "customers") { }
+        public HttpCustomerApiClient(HttpDesktopTransport transport, HttpDesktopOperations operations)
+            : base(transport, operations, "customers") { }
         public Task<ApiResponse<PagedResult<CustomerDto>>> ListAsync(CatalogListRequest request, CancellationToken token) => List(request, token);
         public Task<ApiResponse<CustomerDto>> GetAsync(int id, CancellationToken token) => Get(id, token);
         public Task<ApiResponse<CustomerDto>> CreateAsync(SaveCustomerRequest request, CancellationToken token) => Create(request, token);
