@@ -112,7 +112,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 output.Append(']');
             }
             else if (token.Type == JTokenType.String)
-                JsonString((string)token, output);
+                JsonString((string?)token ?? throw new ArgumentException("Invalid canonical string.", nameof(token)), output);
             else if (token.Type == JTokenType.Null)
                 output.Append("null");
             else if (token.Type == JTokenType.Boolean)

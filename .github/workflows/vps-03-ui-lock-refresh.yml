@@ -1,0 +1,42 @@
+name: VPS-03 temporary UI lock regeneration
+
+on:
+  push:
+    branches:
+      - codex/vps-03-desktop-http-cutover
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-ui-locks:
+    if: "startsWith(github.event.head_commit.message, 'chore(vps03-refresh):')"
+    permissions:
+      contents: write
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.400'
+      - name: Regenerate independent UI solution and test lock graphs
+        shell: pwsh
+        run: |
+          dotnet restore MyDmsVn.UiLab.sln --force-evaluate -v minimal
+          if ($LASTEXITCODE -ne 0) { throw 'UiLab restore failed' }
+          dotnet restore tests/MyDmsVn.Desktop.Ui.Tests/MyDmsVn.Desktop.Ui.Tests.csproj --force-evaluate -v minimal
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop.Ui tests restore failed' }
+      - name: Commit new lock files
+        shell: pwsh
+        run: |
+          git add -A -- ':(glob)**/packages.lock.json'
+          if ($LASTEXITCODE -ne 0) { throw 'git add failed' }
+          $changed = @(git diff --cached --name-only)
+          if ($changed.Count -eq 0) { Write-Host 'No changes to locks'; exit 0 }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(vps03): regenerate UI locked restore graphs'
+          if ($LASTEXITCODE -ne 0) { throw 'git commit failed' }
+          git push origin HEAD:codex/vps-03-desktop-http-cutover
+          if ($LASTEXITCODE -ne 0) { throw 'git push failed' }
