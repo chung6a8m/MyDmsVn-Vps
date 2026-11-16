@@ -45,6 +45,10 @@ public sealed partial class WebHostIisExpressTests
         await Run(false, web5Pilot: true, desktopApi: true);
     }
 
+    [WebHostSqlFact, Trait("Category", "Vps02DesktopApiHostIntegration")]
+    public Task Published_SystemWeb_disabled_desktop_API_rejects_new_routes_and_serves_legacy_SQL() =>
+        Run(false, verifyDesktopApiDisabled: true);
+
     [WebHostSqlFact, Trait("Category", "Web5OwnedPublishedHost")]
     public Task Published_WEB5_host_is_admitted_before_HTTP_and_absent_before_SQL_cleanup() =>
         Run(false, web5Pilot: true, admissionOnly: true);
@@ -86,7 +90,7 @@ public sealed partial class WebHostIisExpressTests
     private static async Task Run(bool browser, bool receiptPilot = false, bool integratedPilot = false, bool recoveryPilot = false,
         bool web5Pilot = false, bool attended = false, bool originalFirstPilot = false, bool admissionOnly = false,
         bool web6Candidate = false, bool web6Cutover = false, Web6CandidateCutoverPlan? cutoverPlan = null,
-        bool web6Workload = false, bool desktopApi = false)
+        bool web6Workload = false, bool desktopApi = false, bool verifyDesktopApiDisabled = false)
     {
         GuiTestSafety.ThrowIfPoisoned();
         Web6WorkloadTask4Receipt? workloadReceipt = null;
@@ -378,6 +382,8 @@ public sealed partial class WebHostIisExpressTests
                 var bearer = "Bearer " + (string)JObject.Parse(signedIn.Body)["data"]!["accessToken"]!;
                 if (desktopApi)
                     await VerifyDesktopApiHost(database.ConnectionString, thumbprint!, bearer);
+                if (verifyDesktopApiDisabled)
+                    await VerifyDesktopApiDisabledHost(thumbprint!, bearer);
                 var me = await Request("https://localhost:44321/api/v1/auth/me", thumbprint!, bearer);
                 Assert.Equal(200, me.Status);
                 Assert.Equal("web.smoke", (string?)JObject.Parse(me.Body)["data"]!["username"]);
@@ -547,32 +553,74 @@ public sealed partial class WebHostIisExpressTests
     private static async Task VerifyDesktopApiHost(string connectionString, string thumbprint, string bearer)
     {
         const string origin = "https://localhost:44321";
-        var productBody = "{\"code\":\"VPS02-IIS\",\"name\":\"IIS Product\",\"unit\":\"EA\"}";
-        var created = await Request(origin + "/api/v1/catalog/products", thumbprint, bearer, origin,
-            "POST", productBody, csrf: true);
-        Assert.Equal(200, created.Status);
-        var productId = (int)JObject.Parse(created.Body)["data"]!["id"]!;
-        Assert.Equal(200, (await Request(origin + "/api/v1/catalog/products/" + productId, thumbprint, bearer)).Status);
-        Assert.Equal(200, (await Request(origin + "/api/v1/catalog/products?search=VPS02&pageNumber=1&pageSize=25&includeInactive=false", thumbprint, bearer)).Status);
-        Assert.Equal(200, (await Request(origin + "/api/v1/catalog/products/lookup?search=VPS02&limit=25", thumbprint, bearer)).Status);
-        Assert.Equal(200, (await Request(origin + "/api/v1/catalog/products/" + productId, thumbprint, bearer, origin,
-            "PUT", productBody.Replace("IIS Product", "IIS Product Updated"), csrf: true)).Status);
-        Assert.Equal(200, (await Request(origin + "/api/v1/catalog/products/" + productId + "/active", thumbprint, bearer, origin,
-            "PUT", "{\"isActive\":false}", csrf: true)).Status);
+        using var sql = new SqlConnection(connectionString);
+        await sql.OpenAsync();
+        foreach (var catalog in new[]
+        {
+            new { Route = "products", Table = "Products", Key = "ProductId", Body = "{\"code\":\"VPS02-IP\",\"name\":\"IIS Product\",\"unit\":\"EA\"}" },
+            new { Route = "warehouses", Table = "Warehouses", Key = "WarehouseId", Body = "{\"code\":\"VPS02-IW\",\"name\":\"IIS Warehouse\",\"address\":null}" },
+            new { Route = "employees", Table = "Employees", Key = "EmployeeId", Body = "{\"code\":\"VPS02-IE\",\"name\":\"IIS Employee\",\"phone\":null,\"userId\":null}" },
+            new { Route = "customers", Table = "Customers", Key = "CustomerId", Body = "{\"code\":\"VPS02-IC\",\"name\":\"IIS Customer\",\"address\":null,\"phone\":null,\"taxCode\":null}" },
+        })
+        {
+            var otherBody = JObject.Parse(catalog.Body);
+            otherBody["code"] = "ZZZ-I" + catalog.Route.Substring(0, 1).ToUpperInvariant();
+            otherBody["name"] = "Other " + catalog.Route;
+            var created = await Request(origin + "/api/v1/catalog/" + catalog.Route, thumbprint, bearer, origin,
+                "POST", catalog.Body, csrf: true);
+            Assert.Equal(200, created.Status);
+            var id = (int)JObject.Parse(created.Body)["data"]!["id"]!;
+            Assert.Equal(200, (await Request(origin + "/api/v1/catalog/" + catalog.Route, thumbprint, bearer, origin,
+                "POST", otherBody.ToString(Formatting.None), csrf: true)).Status);
+            var fetched = await Request(origin + "/api/v1/catalog/" + catalog.Route + "/" + id, thumbprint, bearer);
+            Assert.Equal(id, (int)JObject.Parse(fetched.Body)["data"]!["id"]!);
+            Assert.StartsWith("IIS ", (string)JObject.Parse(fetched.Body)["data"]!["name"]!);
+            AssertHttpsPage(await Request(origin + "/api/v1/catalog/" + catalog.Route + "?search=VPS02&pageNumber=1&pageSize=25&includeInactive=false", thumbprint, bearer), 1, 25, 1, id);
+            var page2 = await Request(origin + "/api/v1/catalog/" + catalog.Route + "?pageNumber=2&pageSize=1&includeInactive=true", thumbprint, bearer);
+            AssertHttpsPage(page2, 2, 1, 3, id);
+            var lookup = await Request(origin + "/api/v1/catalog/" + catalog.Route + "/lookup?search=VPS02&limit=25", thumbprint, bearer);
+            Assert.Equal(id, (int)Assert.Single((JArray)JObject.Parse(lookup.Body)["data"]!)["id"]!);
+            var updated = await Request(origin + "/api/v1/catalog/" + catalog.Route + "/" + id, thumbprint, bearer, origin,
+                "PUT", catalog.Body.Replace("IIS ", "Updated "), csrf: true);
+            Assert.StartsWith("Updated ", (string)JObject.Parse(updated.Body)["data"]!["name"]!);
+            Assert.Equal(200, (await Request(origin + "/api/v1/catalog/" + catalog.Route + "/" + id + "/active", thumbprint, bearer, origin,
+                "PUT", "{\"isActive\":false}", csrf: true)).Status);
+            Assert.False(await sql.QuerySingleAsync<bool>("SELECT IsActive FROM dbo." + catalog.Table + " WHERE " + catalog.Key + "=@id;", new { id }));
+            AssertHttpsPage(await Request(origin + "/api/v1/catalog/" + catalog.Route + "?search=VPS02&pageNumber=1&pageSize=25&includeInactive=false", thumbprint, bearer), 1, 25, 0);
+            var inactive = await Request(origin + "/api/v1/catalog/" + catalog.Route + "?search=VPS02&pageNumber=1&pageSize=25&includeInactive=true", thumbprint, bearer);
+            AssertHttpsPage(inactive, 1, 25, 1, id);
+            Assert.False((bool)JObject.Parse(inactive.Body)["data"]!["items"]![0]!["isActive"]!);
+        }
 
-        foreach (var path in new[] { "security/permissions/check?key=Security.Users.Manage", "security/permissions/catalog", "security/users", "security/roles" })
-            Assert.Equal(200, (await Request(origin + "/api/v1/" + path, thumbprint, bearer)).Status);
+        var deniedLogin = await Request(origin + "/api/v1/auth/login", thumbprint, origin: origin, method: "POST",
+            body: JsonConvert.SerializeObject(new { username = "vps02.denied", password = "IisSmoke_test-only-password_2026!" }), csrf: true);
+        Assert.Equal(200, deniedLogin.Status);
+        var deniedBearer = "Bearer " + (string)JObject.Parse(deniedLogin.Body)["data"]!["accessToken"]!;
+        var allowedDecision = await Request(origin + "/api/v1/security/permissions/check?key=Security.Users.Manage", thumbprint, bearer);
+        var deniedDecision = await Request(origin + "/api/v1/security/permissions/check?key=Security.Users.Manage", thumbprint, deniedBearer);
+        Assert.True((bool)JObject.Parse(allowedDecision.Body)["data"]!["isAllowed"]!);
+        Assert.False((bool)JObject.Parse(deniedDecision.Body)["data"]!["isAllowed"]!);
+        var permissionCatalog = await Request(origin + "/api/v1/security/permissions/catalog", thumbprint, bearer);
+        Assert.Contains(JObject.Parse(permissionCatalog.Body)["data"]!["items"]!, item =>
+            (string?)item["key"] == "Security.Users.Manage" && (string?)item["status"] == "Active");
+        var users = await Request(origin + "/api/v1/security/users", thumbprint, bearer);
+        Assert.Contains(JObject.Parse(users.Body)["data"]!, user => (string?)user["username"] == "web.smoke");
+        Assert.Contains(JObject.Parse(users.Body)["data"]!, user => (string?)user["username"] == "vps02.denied");
+        Assert.Equal(403, (await Request(origin + "/api/v1/security/roles", thumbprint, deniedBearer)).Status);
         var invalid = await Request(origin + "/api/v1/security/mutations", thumbprint, bearer, origin,
             "POST", "{\"target\":1,\"operation\":0,\"name\":\"Invalid\",\"isActive\":\"true\"}", csrf: true);
         Assert.Equal(400, invalid.Status);
         var role = await Request(origin + "/api/v1/security/mutations", thumbprint, bearer, origin,
             "POST", new JObject { ["target"] = 1, ["operation"] = 0, ["name"] = "VPS02 IIS Role" }.ToString(Formatting.None), csrf: true);
         Assert.Equal(200, role.Status);
-
-        using var sql = new SqlConnection(connectionString);
-        await sql.OpenAsync();
         var roleId = await sql.QuerySingleAsync<int>("SELECT RoleId FROM dbo.Roles WHERE NormalizedRoleName=N'VPS02 IIS ROLE';");
         var roleRevision = (long)JObject.Parse(role.Body)["data"]!["assignmentRevision"]!;
+        var roles = await Request(origin + "/api/v1/security/roles", thumbprint, bearer);
+        Assert.Contains(JObject.Parse(roles.Body)["data"]!, candidate => (int?)candidate["roleId"] == roleId &&
+            (string?)candidate["name"] == "VPS02 IIS Role" && (long?)candidate["assignmentRevision"] == roleRevision);
+        Assert.Equal(403, (await Request(origin + "/api/v1/security/mutations", thumbprint, deniedBearer, origin, "POST",
+            "{\"target\":1,\"operation\":0,\"name\":\"Denied IIS role\"}", csrf: true)).Status);
+        Assert.Equal(0, await sql.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.Roles WHERE NormalizedRoleName=N'DENIED IIS ROLE';"));
         var stale = await Request(origin + "/api/v1/security/mutations", thumbprint, bearer, origin, "POST",
             new JObject { ["target"] = 1, ["operation"] = 2, ["targetId"] = roleId,
                 ["isActive"] = false, ["expectedRevision"] = roleRevision + 1 }.ToString(Formatting.None), csrf: true);
@@ -587,20 +635,58 @@ public sealed partial class WebHostIisExpressTests
         var applyBody = new JObject { ["targetType"] = 1, ["targetId"] = roleId, ["json"] = importJson,
             ["expectedTargetRevision"] = previewData["targetRevision"]!.DeepClone(),
             ["expectedCatalogDigest"] = previewData["catalogDigest"]!.DeepClone() }.ToString(Formatting.None);
+        Assert.Equal(403, (await Request(origin + "/api/v1/security/import/preview", thumbprint, deniedBearer, origin, "POST",
+            new JObject { ["targetType"] = 1, ["targetId"] = roleId, ["json"] = importJson }.ToString(Formatting.None), csrf: true)).Status);
+        Assert.Equal(403, (await Request(origin + "/api/v1/security/import/apply", thumbprint, deniedBearer, origin, "POST", applyBody, csrf: true)).Status);
         var concurrent = await Task.WhenAll(
             Request(origin + "/api/v1/security/import/apply", thumbprint, bearer, origin, "POST", applyBody, csrf: true),
             Request(origin + "/api/v1/security/import/apply", thumbprint, bearer, origin, "POST", applyBody, csrf: true));
         Assert.Single(concurrent, reply => reply.Status == 200);
         Assert.Single(concurrent, reply => reply.Status == 409);
-
-        var deniedLogin = await Request(origin + "/api/v1/auth/login", thumbprint, origin: origin, method: "POST",
-            body: JsonConvert.SerializeObject(new { username = "vps02.denied", password = "IisSmoke_test-only-password_2026!" }), csrf: true);
-        Assert.Equal(200, deniedLogin.Status);
-        var deniedBearer = "Bearer " + (string)JObject.Parse(deniedLogin.Body)["data"]!["accessToken"]!;
         Assert.Equal(403, (await Request(origin + "/api/v1/catalog/products", thumbprint, deniedBearer)).Status);
-        Assert.False(await sql.QuerySingleAsync<bool>("SELECT IsActive FROM dbo.Products WHERE ProductId=@productId;", new { productId }));
         Assert.Equal(1, await sql.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.RolePermissions WHERE RoleId=@roleId;", new { roleId }));
-        Assert.True(await sql.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'Role' AND TargetId=@roleId;", new { roleId }) > 0);
+        Assert.Equal(1, await sql.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'Role' AND TargetId=@roleId AND Operation=N'PermissionImport';", new { roleId }));
+
+        var rollbackRole = await sql.QuerySingleAsync<int>(
+            "INSERT dbo.Roles(RoleName,NormalizedRoleName) OUTPUT INSERTED.RoleId VALUES(N'IIS rollback role',N'IIS ROLLBACK ROLE');");
+        var rollbackJson = new JObject { ["schemaVersion"] = 1, ["targetType"] = "Role", ["targetId"] = rollbackRole,
+            ["entries"] = new JArray(new JObject { ["permissionKey"] = "Catalog.Products.Read", ["decision"] = "Allow" }) }.ToString(Formatting.None);
+        var rollbackPreview = await Request(origin + "/api/v1/security/import/preview", thumbprint, bearer, origin, "POST",
+            new JObject { ["targetType"] = 1, ["targetId"] = rollbackRole, ["json"] = rollbackJson }.ToString(Formatting.None), csrf: true);
+        var rollbackData = JObject.Parse(rollbackPreview.Body)["data"]!;
+        var revisionBefore = await sql.QuerySingleAsync<long>("SELECT AssignmentRevision FROM dbo.Roles WHERE RoleId=@rollbackRole;", new { rollbackRole });
+        await sql.ExecuteAsync("CREATE TRIGGER dbo.Vps02IisRejectAudit ON dbo.SecurityAuditEvents AFTER INSERT AS THROW 51998,'Injected VPS-02 IIS audit failure.',1;");
+        try
+        {
+            var rollback = await Request(origin + "/api/v1/security/import/apply", thumbprint, bearer, origin, "POST",
+                new JObject { ["targetType"] = 1, ["targetId"] = rollbackRole, ["json"] = rollbackJson,
+                    ["expectedTargetRevision"] = rollbackData["targetRevision"]!.DeepClone(),
+                    ["expectedCatalogDigest"] = rollbackData["catalogDigest"]!.DeepClone() }.ToString(Formatting.None), csrf: true);
+            Assert.Equal(500, rollback.Status);
+            Assert.DoesNotContain("Injected VPS-02 IIS audit failure", rollback.Body);
+        }
+        finally { await sql.ExecuteAsync("DROP TRIGGER IF EXISTS dbo.Vps02IisRejectAudit;"); }
+        Assert.Equal(0, await sql.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.RolePermissions WHERE RoleId=@rollbackRole;", new { rollbackRole }));
+        Assert.Equal(revisionBefore, await sql.QuerySingleAsync<long>("SELECT AssignmentRevision FROM dbo.Roles WHERE RoleId=@rollbackRole;", new { rollbackRole }));
+        Assert.Equal(0, await sql.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'Role' AND TargetId=@rollbackRole;", new { rollbackRole }));
+    }
+
+    private static void AssertHttpsPage(Reply reply, int pageNumber, int pageSize, long totalCount, params int[] ids)
+    {
+        Assert.Equal(200, reply.Status);
+        var data = JObject.Parse(reply.Body)["data"]!;
+        Assert.Equal(pageNumber, (int)data["pageNumber"]!);
+        Assert.Equal(pageSize, (int)data["pageSize"]!);
+        Assert.Equal(totalCount, (long)data["totalCount"]!);
+        Assert.Equal(ids, data["items"]!.Select(item => (int)item["id"]!).ToArray());
+    }
+
+    private static async Task VerifyDesktopApiDisabledHost(string thumbprint, string bearer)
+    {
+        const string origin = "https://localhost:44321/api/v1/";
+        Assert.Equal(404, (await Request(origin + "catalog/products", thumbprint, bearer)).Status);
+        Assert.Equal(404, (await Request(origin + "security/roles", thumbprint, bearer)).Status);
+        Assert.Equal(200, (await Request(origin + "catalog/products/lookup?limit=25", thumbprint, bearer)).Status);
     }
 
     private static string FindRootFile(string relative)
