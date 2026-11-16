@@ -167,6 +167,10 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                // Rotation might already have committed: never allow another
+                // refresh on the old cookie after a caller-initiated cancellation.
+                _session.RequireReauthentication(generation);
+                ClearRefreshCookie();
                 throw;
             }
             catch
@@ -256,7 +260,17 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                         try
                         {
                             json = HttpDesktopWire.NormalizeResponse<T>(json);
-                            if (typeof(T) == typeof(UnitResponse))
+                            if (typeof(T) == typeof(Newtonsoft.Json.Linq.JObject) &&
+                                response.IsSuccessStatusCode)
+                            {
+                                var envelope = HttpDesktopWire.ParseObjectPreservingDates(json);
+                                if (envelope.Count != 1 ||
+                                    !(envelope["data"] is Newtonsoft.Json.Linq.JObject objectData))
+                                    return InvalidResponse<T>();
+                                decoded = (ApiResponse<T>)(object)
+                                    ApiResponse<Newtonsoft.Json.Linq.JObject>.Success(objectData);
+                            }
+                            else if (typeof(T) == typeof(UnitResponse))
                             {
                                 var unit = ApiJson.DeserializeResponse<Newtonsoft.Json.Linq.JObject>(json, status);
                                 if (unit.IsSuccess && unit.Data!.Count != 0)

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -232,6 +234,53 @@ namespace MyDmsVn.Desktop.Session.Tests
             Assert.Equal(0.4444m, preview.CalculateRevenue(1.3333m, 0.3333m, false));
             Assert.Equal(0m, preview.CalculateRevenue(1.3333m, 0.3333m, true));
             Assert.Equal(0.4444m, preview.SumAmounts(new[] { 0.2222m, 0.2222m }));
+        }
+
+
+        [Fact]
+        public void Frozen_web4_all_six_command_fingerprints_match_independent_corpus()
+        {
+            var root = new DirectoryInfo(AppContext.BaseDirectory);
+            while (root != null && !File.Exists(Path.Combine(root.FullName, "MyDmsVn.sln")))
+                root = root.Parent;
+            Assert.NotNull(root);
+            var path = Path.Combine(root!.FullName, "docs", "contracts",
+                "web4-v1", "fingerprint-vectors.json");
+            var corpus = HttpDesktopWire.ParseObjectPreservingDates(File.ReadAllText(path));
+            var wanted = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "sales-create", "sales-update", "sales-post",
+                "receipt-create", "receipt-update", "receipt-post",
+            };
+            var matched = 0;
+            foreach (var vector in ((Newtonsoft.Json.Linq.JArray)corpus["vectors"]!).OfType<JObject>())
+            {
+                var name = (string?)vector["name"];
+                if (name == null || !wanted.Contains(name)) continue;
+                var intent = (JObject)vector["intent"]!;
+                var targetText = (string?)intent["requestTargetId"];
+                long? target = targetText == null
+                    ? (long?)null
+                    : long.Parse(targetText, CultureInfo.InvariantCulture);
+                var kind = (string)intent["operationKind"]!;
+                var body = (JObject)intent["body"]!;
+                Assert.Equal((string)vector["sha256"]!,
+                    HttpDesktopOperationFingerprint.Compute(kind, target, body));
+                matched++;
+            }
+
+            Assert.Equal(6, matched);
+        }
+
+        [Fact]
+        public void Receipt_wire_rename_never_changes_a_calendar_date_or_bigint_string()
+        {
+            var original = "{\"data\":{\"receiptId\":\"9007199254740993\",\"receiptDate\":\"2024-02-29\",\"lines\":[{\"receiptLineId\":\"9007199254740994\"}]}}";
+            var normalized = HttpDesktopWire.NormalizeResponse<GoodsReceiptDto>(original);
+            Assert.Contains("\"receiptDate\":\"2024-02-29\"", normalized);
+            Assert.Contains("\"id\":\"9007199254740993\"", normalized);
+            Assert.Contains("\"id\":\"9007199254740994\"", normalized);
+            Assert.DoesNotContain("receiptLineId", normalized);
         }
 
         private static Fixture Create(Func<HttpRequestMessage, HttpResponseMessage> handler) =>

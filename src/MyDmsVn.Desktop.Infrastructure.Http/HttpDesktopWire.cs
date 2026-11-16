@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using MyDmsVn.Contracts;
@@ -168,13 +169,33 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 typeof(T) != typeof(PagedResult<GoodsReceiptDto>))
                 return json;
 
-            var envelope = JObject.Parse(json);
+            var envelope = ParseObjectPreservingDates(json);
             if (!(envelope["data"] is JObject data)) return json;
             if (typeof(T) == typeof(GoodsReceiptDto))
                 NormalizeReceipt(data);
             else if (data["items"] is JArray items)
                 foreach (var item in items.OfType<JObject>()) NormalizeReceipt(item);
             return envelope.ToString(Formatting.None);
+        }
+
+        /// <summary>JToken defaults to parsing ISO strings as DateTime; frozen wire requires exact strings.</summary>
+        public static JObject ParseObjectPreservingDates(string json)
+        {
+            using (var text = new StringReader(json))
+            using (var reader = new JsonTextReader(text)
+            {
+                DateParseHandling = DateParseHandling.None,
+                MaxDepth = 64,
+            })
+            {
+                var result = JObject.Load(reader, new JsonLoadSettings
+                {
+                    DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error,
+                });
+                if (reader.Read())
+                    throw new JsonSerializationException("Unexpected trailing JSON payload.");
+                return result;
+            }
         }
 
         private static void NormalizeReceipt(JObject receipt)
