@@ -12,7 +12,7 @@ IF OBJECT_ID(N'dbo.ApplySecurityAdministration',N'P') IS NULL
     OR OBJECT_ID(N'dbo.ApplySecurityPermissionImport',N'P') IS NULL
     THROW 51112, 'Security stored procedures are missing.', 1;
 IF DATABASE_PRINCIPAL_ID(N'MyDmsVnDesktopApiRuntimeRole') IS NULL
-    CREATE ROLE [MyDmsVnDesktopApiRuntimeRole] AUTHORIZATION dbo;
+    EXEC(N'CREATE ROLE [MyDmsVnDesktopApiRuntimeRole] AUTHORIZATION dbo;');
 IF ISNULL(IS_ROLEMEMBER(N'MyDmsVnDesktopApiRuntimeRole',N'$(WebRuntimeUser)'),0)<>1
     ALTER ROLE [MyDmsVnDesktopApiRuntimeRole] ADD MEMBER [$(WebRuntimeUser)];
 GRANT INSERT,UPDATE ON OBJECT::dbo.Products TO [MyDmsVnDesktopApiRuntimeRole];

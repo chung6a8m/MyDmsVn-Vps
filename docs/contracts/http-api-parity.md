@@ -34,3 +34,54 @@ The machine-readable [source attribute-route inventory](vps-01-route-inventory.j
 | **Total** | **29** | **178 pinned WEB2–WEB6 files** | **VPS-02/03 acceptance not claimed** |
 
 `authentication` in the inventory is the current pipeline admission classification, **not** the complete per-action authorization matrix. `verification: route-source-only` prevents conflating static discovery with real HTTP endpoint outcomes.
+
+
+## VPS-02 — additive endpoints, source parity only (draft PR #3)
+
+The VPS-01 frozen 29 route signatures and 178 WEB2–WEB6 fixtures remain unchanged.
+VPS-02 adds [28 route signatures](vps-02-route-additions.json):
+20 Catalog CRUD/list/get/active routes and eight Security, Permission and Foundation routes.
+Combined source route declarations: **57**. The [Desktop method map](vps-02-desktop-method-matrix.json)
+covers **46/46 interface methods** with an explicit source route.
+These are SOURCE claims, not live HTTP/SQL acceptance.
+
+| Group | Desktop methods | API rule |
+| --- | ---: | --- |
+| Product, Warehouse, Employee, Customer | 24 | GET list with search, pageNumber, pageSize, includeInactive; GET /{id}; POST create; PUT /{id}; PUT /{id}/active; frozen GET /lookup |
+| Sales | 5 | Frozen WEB2/4/5/6 behavior, no new handlers |
+| Goods Receipts | 5 | Frozen WEB3/4 transaction and key semantics |
+| Inventory | 2 | Frozen balance and stock card read |
+| Identity | 2 | Frozen login and /auth/me. Transport must adapt login's accessToken/expiresAtUtc/user in VPS-03 |
+| Permission | 2 | GET /security/permissions/check?key and GET /security/permissions/catalog |
+| Security Administration | 5 | GET users/roles, POST mutations and import preview/apply |
+| Foundation | 1 | GET /foundation/status?clientName |
+| **Total** | **46** | source mapping only |
+
+### Admission and SQL grants
+
+The exact environment flag MYDMSVN_WEB_DESKTOP_API=enabled is required for new Desktop routes.
+Absent/disabled returns 404 to an authorized caller; unrecognized values refuse startup.
+The existing HTTPS, same-origin, Bearer, session and Application permissions remain mandatory.
+The 29 old routes are never gated by this new flag.
+
+The opt-in role MyDmsVnDesktopApiRuntimeRole grants INSERT/UPDATE on four Catalog tables
+(Products, Warehouses, Employees, Customers) and EXECUTE on three existing Security
+procedures (ApplySecurityAdministration, ReadSecurityPermissionImportTarget,
+ApplySecurityPermissionImport); it does not permit direct Security table mutations,
+schema DML or database administrator rights. Apply base SQL principal provisioning
+before the separate deployment/sql/Provision-MyDmsVnDesktopApiGrants.sql opt-in script
+on an approved isolated SQL instance. Startup checks positive and negative rights
+and fails closed for missing or unexpected privileges. Roll out host mode, SQL principal
+and environment setting together.
+
+Strict JSON, duplicate/unknown field rejection, canonical integer/boolean decoding,
+safe generic errors and correlation IDs are preserved. Existing MediatR handler
+pipelines authorize/catalog-validate and own all transactions, Security revisions
+and auditing. Catalog update methods do not carry optimistic rowversion in the
+current Desktop interface: do not falsely advertise Catalog optimistic concurrency.
+Never auto-retry an ambiguous non-idempotent write.
+
+**Outstanding:** review and final-HEAD CI, independent HTTP negative tests, real SQL
+Catalog and Security transactions/rollback/permissions under the restricted role,
+SQL schema mode admission and Desktop-to-HTTP-to-SQL E2E (the latter belongs to VPS-03).
+Code or route presence alone cannot mark VPS-02 COMPLETE.

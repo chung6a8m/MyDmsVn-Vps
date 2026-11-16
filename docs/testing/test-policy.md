@@ -60,3 +60,15 @@ See [VPS-01 evidence](../evidence/vps-01-foundation.md) and [route inventory](..
 ### Eight additional Windows discovery floors (VPS-01)
 
 Run `dotnet test --list-tests` on each `net48` executable and count only indented `MyDmsVn.*` fully qualified test-case lines (not VSTest diagnostics). Windows-2022 VPS-01 reference run [#43850012712](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43850012712) discovered: Desktop **813**, Desktop.Ui **382**, SQL Catalog **17**, SQL Foundation **66**, SQL Harness **59**, SQL Inventory **127**, SQL Migrations **107**, SQL Security **1,684** — **3,255** listed cases total. The CI matrix fails if any suite drops below its floor; intentional changes require a reviewed inventory update. **These cases are discovered-only, not executed tests.**
+
+
+## VPS-02 contract additions and admission
+
+VPS-01's 29 signatures and 178 golden fixture blobs stay frozen. VPS-02 has
+its own 28-route additive inventory and 46-method Desktop client mapping.
+The reflection test checks all 57 attribute-route signatures. The new hosted OWIN
+tests use fake Application handlers: their PASS is NOT real SQL validation.
+MYDMSVN_WEB_DESKTOP_API must be explicitly enabled together with a
+MyDmsVnDesktopApiRuntimeRole grant; no elevated SQL principal or unapproved
+server/production SQL connection may substitute. SQL mutation and least-privilege
+negative checks on an operator-owned isolated database remain mandatory.
