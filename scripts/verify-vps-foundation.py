@@ -196,7 +196,7 @@ def main() -> int:
                 encoding="utf-8"
             ).splitlines(), 1
         ):
-            match = re.fullmatch(r"([0-9a-f]{40})  (docs/contracts/[^\\s]+)", line)
+            match = re.fullmatch(r"([0-9a-f]{40})  (docs/contracts/[^ ]+)", line)
             if not match:
                 errors.append(f"Invalid corpus blob manifest line {number}")
                 continue
