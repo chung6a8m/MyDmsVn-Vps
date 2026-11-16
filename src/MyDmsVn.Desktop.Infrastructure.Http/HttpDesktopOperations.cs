@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -338,7 +339,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             if (!Guid.TryParseExact(decision, "D", out var guid) ||
                 guid.ToString("D") != decision || decision![14] != '4' ||
                 "89ab".IndexOf(decision[19]) < 0 ||
-                string.IsNullOrEmpty(caseId) || caseId.Length > 128 ||
+                string.IsNullOrEmpty(caseId) || caseId!.Length > 128 ||
                 caseId.Any(c => !(char.IsLetterOrDigit(c) && c <= 127 || c == '_' || c == '-')))
                 return false;
             return DateTime.TryParseExact(date, "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'",

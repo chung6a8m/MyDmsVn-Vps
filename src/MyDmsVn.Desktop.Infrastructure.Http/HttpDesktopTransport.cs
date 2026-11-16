@@ -222,7 +222,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     "89ab".IndexOf(idText[19]) >= 0;
             }
             if (string.IsNullOrEmpty(route) ||
-                (!route.StartsWith("/api/v1/", StringComparison.Ordinal) &&
+                (!route!.StartsWith("/api/v1/", StringComparison.Ordinal) &&
                  !exactWeb5Context && !exactWeb5Resolution) ||
                 route.StartsWith("//", StringComparison.Ordinal) ||
                 route.IndexOf('#') >= 0)
