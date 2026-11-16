@@ -14,14 +14,12 @@ namespace MyDmsVn.Server.HttpHost.Tests;
 // VPS-01: pin existing legacy attribute routes and Newtonsoft envelope before refactoring.
 public sealed class Vps01ContractFreezeTests
 {
-    private static readonly Type[] ControllerTypes =
-    {
-        typeof(HealthController), typeof(AuthController),
-        typeof(SalesReceiptsController), typeof(CatalogLookupController),
-        typeof(GoodsReceiptsController), typeof(InventoryController),
-        typeof(OperationsController), typeof(OperationResolutionController),
-        typeof(Web6ResendEligibilityController)
-    };
+    // Scan the host assembly so a newly introduced attribute-route controller cannot bypass the freeze.
+    private static readonly Type[] ControllerTypes = typeof(HealthController).Assembly.GetTypes()
+        .Where(type => !type.IsAbstract &&
+            typeof(ApiController).IsAssignableFrom(type) &&
+            type.GetCustomAttributes(typeof(RoutePrefixAttribute), false).Length != 0)
+        .OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray();
 
     [Fact]
     public void Legacy_controller_routes_match_independent_frozen_inventory()
@@ -31,6 +29,7 @@ public sealed class Vps01ContractFreezeTests
         var expected = endpoints.Select(e => Signature((string)e["httpMethod"]!,
             (string)e["path"]!, (string)e["controller"]!, (string)e["action"]!))
             .OrderBy(e => e, StringComparer.Ordinal).ToArray();
+        Assert.Equal(9, ControllerTypes.Length);
         Assert.Equal(29, expected.Length);
         Assert.Equal(29, expected.Distinct(StringComparer.Ordinal).Count());
 

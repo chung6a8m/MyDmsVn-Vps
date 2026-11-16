@@ -46,7 +46,6 @@ jobs:
           - id: desktop
             project: src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj
           - id: legacy-http-host
-            minimum_tests: 640
             project: src/MyDmsVn.Server.HttpHost/MyDmsVn.Server.HttpHost.csproj
           - id: legacy-db-migrator
             project: src/MyDmsVn.Server.DbMigrator/MyDmsVn.Server.DbMigrator.csproj
@@ -91,6 +90,7 @@ jobs:
             minimum_tests: 212
             project: tests/MyDmsVn.Desktop.Session.Tests/MyDmsVn.Desktop.Session.Tests.csproj
           - id: legacy-http-host
+            minimum_tests: 640
             project: tests/MyDmsVn.Server.HttpHost.Tests/MyDmsVn.Server.HttpHost.Tests.csproj
     steps:
       - uses: actions/checkout@v5

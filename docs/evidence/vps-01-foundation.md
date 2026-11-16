@@ -1,6 +1,6 @@
 # VPS-01 — Test & Contract Foundation evidence ledger
 
-**Repository:** `chung6a8m/MyDmsVn-Vps`. **Branch:** `codex/vps-01-test-contract-foundation`. **PR:** [#2](https://github.com/chung6a8m/MyDmsVn-Vps/pull/2) (draft while CI/review pending). **Base:** merged VPS-00B `main` SHA `4503ae39989bcbf45fb883e5d0fbab610d043408` on 2026-11-16.
+**Repository:** `chung6a8m/MyDmsVn-Vps`. **Branch:** `codex/vps-01-test-contract-foundation`. **PR:** [#2](https://github.com/chung6a8m/MyDmsVn-Vps/pull/2) (independent review and merge pending). **Base:** merged VPS-00B `main` SHA `4503ae39989bcbf45fb883e5d0fbab610d043408` on 2026-11-16.
 
 ## Independent baseline and package boundary
 
@@ -26,6 +26,14 @@ VPS-00B Windows-2022 evidence before this increment: four SQL-free suites totali
 [Foundation workflow 43850012731](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43850012731) completed **8/8 jobs SUCCESS** at `751b8f1`: static Linux, three net48 Windows builds, and TRX-backed Architecture **13/13**, Desktop.Session **212/212**, Application **363/363**, HttpHost **648/648**. Combined **1,236 passed, 0 failed, 0 skipped** (new contract tests contribute eight).
 
 [VPS-01 workflow 43850012712](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/43850012712) completed **9/9 jobs SUCCESS** at `751b8f1`: Linux project topology/route/fixture static checks and eight Windows locked build and test discovery jobs. **3,255 discovered, not executed**: Desktop 813, Desktop.Ui 382, Catalog 17, Foundation 66, IntegrationTests 59, Inventory 127, Migrations 107, Security 1,684. These intermediate results do not automatically attest later commits.
+
+## Independent review corrections — 2026-11-16
+
+- **P1, fixed:** the HttpHost `minimum_tests: 640` requirement was in the Windows production-build matrix rather than the four-suite `windows-smoke` matrix. It is now attached to the executed HttpHost suite; the Linux static checker additionally validates all four numeric smoke floors in the correct job.
+- **P2, fixed:** the acceptance matrix contained literal backslash-n row separators, now real Markdown row breaks.
+- **P2, fixed:** the route reflection test previously used a hard-coded list of nine controllers. It now discovers attribute-route controllers from the host assembly and requires exactly nine at the frozen baseline, detecting future additions as well as edits/removals.
+
+The review corrections require both GitHub Actions workflows to run again on their resulting final PR HEAD. See the PR discussion for actual SHA, CI results and merge outcome; do not treat intermediate runs as sufficient.
 
 ## VPS-01 acceptance checklist
 

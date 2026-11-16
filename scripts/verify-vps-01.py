@@ -41,4 +41,21 @@ for e in entries:
     if e["authentication"] == "cookie-endpoint":
         assert e["path"].startswith("/api/v1/auth/")
 assert len((contract_root / "corpus-blobs.sha1").read_text(encoding="utf-8-sig").splitlines()) == 178
-print("VPS-01 static topology: PASS 12 executable xUnit v3 projects; 29 routes; 178 fixtures")
+# The four executed Windows suites must carry numeric floors in the *smoke* matrix,
+# not only in the production-build matrix. Guard against accidental movement.
+workflow = (root / ".github/workflows/vps-foundation.yml").read_text(encoding="utf-8-sig")
+sections = workflow.split("\n  windows-smoke:\n", 1)
+assert len(sections) == 2, "Missing windows-smoke job"
+smoke_matrix = sections[1].split("\n    steps:\n", 1)[0]
+expected_smoke_floors = {
+    "application": 363,
+    "architecture": 13,
+    "desktop-session": 212,
+    "legacy-http-host": 640,
+}
+for test_id, floor in expected_smoke_floors.items():
+    row = f"          - id: {test_id}\n            minimum_tests: {floor}\n"
+    assert smoke_matrix.count(row) == 1, f"Missing smoke floor {test_id}={floor}"
+assert smoke_matrix.count("minimum_tests:") == len(expected_smoke_floors), "Unexpected smoke floor inventory"
+
+print("VPS-01 static topology: PASS 12 executable xUnit v3 projects; 29 routes; 178 fixtures; 4 smoke floors")
