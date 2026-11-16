@@ -107,6 +107,15 @@ OR EXISTS(SELECT 1 FROM (VALUES
 WHERE ISNULL(HAS_PERMS_BY_NAME(N'dbo.'+required.object_name,N'OBJECT',N'EXECUTE'),0)<>1)
 THEN 1 ELSE 0 END;";
 
+    // Match one and only one known SQL fragment; a drift is a startup failure.
+    private static string ReplaceExactlyOnce(string sql, string from, string to)
+    {
+        var index = sql.IndexOf(from, StringComparison.Ordinal);
+        if (index < 0 || sql.IndexOf(from, index + from.Length, StringComparison.Ordinal) >= 0)
+            throw new InvalidOperationException("The Desktop HTTP SQL privilege allowlist drifted.");
+        return sql.Substring(0, index) + to + sql.Substring(index + from.Length);
+    }
+
     internal static string EffectiveElevatedPermissionSql(bool requireResolution, bool requireDesktopApi)
     {
         var sql = requireResolution ? ElevatedPermissionSql.Replace(
@@ -114,16 +123,16 @@ THEN 1 ELSE 0 END;";
             "N'WebDeploymentState', N'WebOperationJournal', N'WebOperationTerminalAudit'") : ElevatedPermissionSql;
         if (!requireDesktopApi) return sql;
         // Exact, bounded allowlist extensions; every other object/schema right remains forbidden.
-        sql = sql.Replace(
+        sql = ReplaceExactlyOnce(sql, 
             "(objectPermission.permission_name = N'INSERT' AND candidate.name IN (N'GoodsReceipts'",
             "(objectPermission.permission_name = N'INSERT' AND candidate.name IN (N'Products', N'Warehouses', N'Employees', N'Customers', N'GoodsReceipts'");
-        sql = sql.Replace(
+        sql = ReplaceExactlyOnce(sql, 
             "(objectPermission.permission_name = N'UPDATE' AND candidate.name IN (N'Users'",
             "(objectPermission.permission_name = N'UPDATE' AND candidate.name IN (N'Products', N'Warehouses', N'Employees', N'Customers', N'Users'");
-        sql = sql.Replace(
+        sql = ReplaceExactlyOnce(sql, 
             "(checkedPermission.permission_name = N'UPDATE' AND (ownerTable.name IN (N'GoodsReceipts'",
             "(checkedPermission.permission_name = N'UPDATE' AND (ownerTable.name IN (N'Products', N'Warehouses', N'Employees', N'Customers', N'GoodsReceipts'");
-        sql = sql.Replace(
+        sql = ReplaceExactlyOnce(sql, 
             "WHERE o.is_ms_shipped=0 AND p.permission_name IN (N'EXECUTE',N'REFERENCES')",
             "WHERE o.is_ms_shipped=0 AND (p.permission_name=N'REFERENCES' OR (p.permission_name=N'EXECUTE' AND NOT (OBJECT_SCHEMA_NAME(o.object_id)=N'dbo' AND o.name IN (N'ApplySecurityAdministration',N'ReadSecurityPermissionImportTarget',N'ApplySecurityPermissionImport'))))");
         return sql;

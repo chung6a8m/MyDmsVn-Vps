@@ -1,5 +1,5 @@
 -- VPS-02: explicit opt-in, run with SQLCMD :setvar WebRuntimeUser "existing_runtime_user"
--- after Provision-MyDmsVnWebPrincipals.sql and on a disposable, approved schema >= 9.
+-- after Provision-MyDmsVnWebPrincipals.sql on an approved isolated exact11/12/13 schema.
 -- This script never creates a login/user, never grants schema-wide DML or security-table DML.
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
@@ -7,6 +7,9 @@ IF DB_NAME() IN (N'master',N'model',N'msdb',N'tempdb')
     THROW 51110, 'Desktop API grants require an application database.', 1;
 IF USER_ID(N'$(WebRuntimeUser)') IS NULL
     THROW 51111, 'An existing restricted Web runtime principal is required.', 1;
+-- Do not grant the Desktop API role to an unprovisioned or maintenance principal.
+IF ISNULL(IS_ROLEMEMBER(N'MyDmsVnWebRuntimeRole', N'$(WebRuntimeUser)'),0)<>1
+    THROW 51113, 'Desktop API grants require the provisioned restricted Web runtime role.', 1;
 IF OBJECT_ID(N'dbo.ApplySecurityAdministration',N'P') IS NULL
     OR OBJECT_ID(N'dbo.ReadSecurityPermissionImportTarget',N'P') IS NULL
     OR OBJECT_ID(N'dbo.ApplySecurityPermissionImport',N'P') IS NULL

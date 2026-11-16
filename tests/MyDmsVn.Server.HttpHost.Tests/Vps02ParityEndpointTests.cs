@@ -180,6 +180,24 @@ public sealed class Vps02ParityEndpointTests
     }
 
     [Fact]
+    public void Elevated_permission_guard_extends_only_exact_catalog_and_security_object_rights()
+    {
+        var method = typeof(MyDmsVn.Server.Infrastructure.Operations.SqlWebRuntimePrincipalValidator)
+            .GetMethod("EffectiveElevatedPermissionSql", System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Static);
+        Assert.NotNull(method);
+        var original = Assert.IsType<string>(method!.Invoke(null, new object[] { false, false }));
+        var desktop = Assert.IsType<string>(method.Invoke(null, new object[] { false, true }));
+        Assert.DoesNotContain("N'INSERT' AND candidate.name IN (N'Products'", original);
+        Assert.Contains("N'INSERT' AND candidate.name IN (N'Products'", desktop);
+        Assert.Contains("N'UPDATE' AND candidate.name IN (N'Products'", desktop);
+        Assert.Contains("ownerTable.name IN (N'Products'", desktop);
+        Assert.Contains("o.name IN (N'ApplySecurityAdministration',N'ReadSecurityPermissionImportTarget',N'ApplySecurityPermissionImport')", desktop);
+        Assert.Contains("p.permission_name=N'REFERENCES'", desktop);
+        Assert.Contains("N'ALTER', N'CONTROL', N'TAKE OWNERSHIP'", desktop);
+    }
+
+    [Fact]
     public async Task Server_error_mapping_preserves_concurrency_conflict()
     {
         using var fixture = new DesktopParityFixture();

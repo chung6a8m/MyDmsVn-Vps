@@ -51,6 +51,23 @@ public sealed class Vps02DesktopApiPrincipalSqlTests
     }
 
     [SqlServerFact(SqlTestCategory.SecurityProvisioning)]
+    public async Task Optin_rejects_an_unprovisioned_database_user_before_granting_any_role()
+    {
+        var db = await NewDatabaseAsync();
+        try
+        {
+            using var connection = new SqlConnection(db.ConnectionString);
+            await connection.OpenAsync();
+            await connection.ExecuteAsync("CREATE USER [Vps02WebProbe] WITHOUT LOGIN;");
+            var rejected = await Assert.ThrowsAsync<SqlException>(() => connection.ExecuteAsync(OptinScript()));
+            Assert.Equal(51113, rejected.Number);
+            Assert.Equal(0, await connection.QuerySingleAsync<int>(
+                "SELECT COUNT(*) FROM sys.database_principals WHERE name=N'MyDmsVnDesktopApiRuntimeRole';"));
+        }
+        finally { await db.DisposeAsync(); }
+    }
+
+    [SqlServerFact(SqlTestCategory.SecurityProvisioning)]
     public async Task Explicit_optin_grants_catalog_writes_and_security_execute_but_not_direct_security_DML()
     {
         var db = await NewDatabaseAsync();
