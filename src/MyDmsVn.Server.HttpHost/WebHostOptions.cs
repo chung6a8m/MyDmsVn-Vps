@@ -14,7 +14,7 @@ public sealed class WebHostOptions
         IReadOnlyDictionary<string, byte[]> validationKeys, int clockSkewSeconds = 30,
         int maximumRequestBytes = 1048576, int accessLifetimeMinutes = 10, bool web4Enabled = false, bool web5Enabled = false,
         bool web6ResendEligibilityEnabled = false, string? web6CandidateId = null,
-        string? web6CandidateRoot = null, string? securityAuditPath = null)
+        string? web6CandidateRoot = null, string? securityAuditPath = null, bool desktopApiEnabled = false)
     {
         if (!Uri.TryCreate(publicOrigin, UriKind.Absolute, out var origin) || origin.Scheme != "https" ||
             origin.UserInfo.Length != 0 || publicOrigin != origin.GetLeftPart(UriPartial.Authority))
@@ -46,6 +46,7 @@ public sealed class WebHostOptions
         ClockSkewSeconds = clockSkewSeconds; MaximumRequestBytes = maximumRequestBytes; AccessLifetimeMinutes = accessLifetimeMinutes;
         Web4Enabled = web4Enabled || web5Enabled;
         Web5Enabled = web5Enabled;
+        DesktopApiEnabled = desktopApiEnabled;
         Web6ResendEligibilityEnabled = web6ResendEligibilityEnabled;
         Web6CandidateId = web6CandidateId;
         Web6CandidateRoot = web6CandidateRoot;
@@ -61,6 +62,7 @@ public sealed class WebHostOptions
     public int AccessLifetimeMinutes { get; }
     public bool Web4Enabled { get; }
     public bool Web5Enabled { get; }
+    public bool DesktopApiEnabled { get; }
     public bool Web6ResendEligibilityEnabled { get; }
     public string? Web6CandidateId { get; }
     internal string? Web6CandidateRoot { get; }
@@ -111,6 +113,13 @@ public sealed class WebHostOptions
                 "receipt-v1" => true,
                 _ => throw new FormatException()
             };
+            var desktop = Environment.GetEnvironmentVariable("MYDMSVN_WEB_DESKTOP_API");
+            var desktopEnabled = desktop switch
+            {
+                null or "disabled" => false,
+                "enabled" => true,
+                _ => throw new FormatException()
+            };
             var candidate = Environment.GetEnvironmentVariable("MYDMSVN_WEB6_CANDIDATE_ID");
             if (candidate == "") candidate = null;
             var candidateRoot = Environment.GetEnvironmentVariable("MYDMSVN_WEB6_CANDIDATE_ROOT");
@@ -120,7 +129,7 @@ public sealed class WebHostOptions
                 Required("MYDMSVN_WEB_JWT_AUDIENCE"), Required("MYDMSVN_WEB_JWT_ACTIVE_KID"), keys,
                 accessLifetimeMinutes: ReadAccessLifetime(), web4Enabled: web4, web5Enabled: mode == "web5",
                 web6ResendEligibilityEnabled: resend, web6CandidateId: candidate,
-                web6CandidateRoot: candidateRoot, securityAuditPath: auditPath);
+                web6CandidateRoot: candidateRoot, securityAuditPath: auditPath, desktopApiEnabled: desktopEnabled);
         }
         catch (Exception exception) when (exception is ArgumentException || exception is FormatException ||
             exception is InvalidOperationException || exception is IndexOutOfRangeException || exception is IOException ||

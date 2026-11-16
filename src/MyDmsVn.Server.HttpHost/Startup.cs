@@ -38,7 +38,7 @@ public sealed class Startup
                     ? new SqlWebSchemaCompatibilityChecker(connection!).CheckAsync(timeout.Token)
                     : new SqlWebSchema11CompatibilityChecker(connection!).CheckAsync(timeout.Token)).GetAwaiter().GetResult();
                 if (!compatibility.IsCompatible) throw new InvalidOperationException();
-                new SqlWebRuntimePrincipalValidator(requireJournal: options.Web4Enabled, requireResolution: options.Web5Enabled).ValidateAsync(connection!, timeout.Token).GetAwaiter().GetResult();
+                new SqlWebRuntimePrincipalValidator(requireJournal: options.Web4Enabled, requireResolution: options.Web5Enabled, requireDesktopApi: options.DesktopApiEnabled).ValidateAsync(connection!, timeout.Token).GetAwaiter().GetResult();
                 new SqlSuperuserBindingValidator().ValidateAsync(connection!, superuser!, timeout.Token).GetAwaiter().GetResult();
             }
             services.AddSqlPersistence(connection!);

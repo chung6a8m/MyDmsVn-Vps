@@ -38,6 +38,15 @@ public abstract class WireApiController : ApiController
         return WebOperationWireInput.CreateContext(Request, kind, target, body,
             identity.SessionId ?? throw new WebOperationException("Auth.Unauthorized"));
     }
+    // VPS-02 desktop parity is opt-in; legacy WEB2–WEB6 remain unmodified when disabled.
+    protected Task<HttpResponseMessage> ExecuteDesktop<T>(Func<Task<ErrorOr<T>>> operation, Func<T, object> map)
+    {
+        var options = Request.GetOwinContext().Get<WebHostOptions>(AuthController.OptionsKey);
+        return options.DesktopApiEnabled
+            ? Execute(operation, map)
+            : Task.FromResult(HttpJson.Error(404, "NotFound", "The resource was not found.", Correlation.CorrelationId));
+    }
+
     protected async Task<HttpResponseMessage> Execute<T>(Func<Task<ErrorOr<T>>> operation, Func<T, object> map)
     {
         try

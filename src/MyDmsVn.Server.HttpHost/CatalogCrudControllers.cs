@@ -17,13 +17,13 @@ public abstract class CatalogCrudControllerBase : WireApiController
 {
     protected CatalogCrudControllerBase(IMediator mediator, IRequestCorrelationAccessor correlation) : base(mediator, correlation) { }
     protected Task<HttpResponseMessage> List<T>(Func<CatalogListRequest, IRequest<ErrorOr<PagedResult<T>>>> query, CancellationToken token) =>
-        Execute<PagedResult<T>>(async () =>
+        ExecuteDesktop<PagedResult<T>>(async () =>
         {
             await CatalogWireInput.EmptyBody(Request).ConfigureAwait(false);
             return await Mediator.Send(query(CatalogWireInput.List(Request)), token).ConfigureAwait(false);
         }, result => result);
     protected Task<HttpResponseMessage> Get<T>(string id, Func<int, IRequest<ErrorOr<T>>> query, CancellationToken token) =>
-        Execute<T>(async () =>
+        ExecuteDesktop<T>(async () =>
         {
             CatalogWireInput.NoQuery(Request);
             await CatalogWireInput.EmptyBody(Request).ConfigureAwait(false);
@@ -31,21 +31,21 @@ public abstract class CatalogCrudControllerBase : WireApiController
         }, result => result!);
     protected Task<HttpResponseMessage> Create<T, TRequest>(Func<Newtonsoft.Json.Linq.JObject, TRequest> decode,
         Func<TRequest, IRequest<ErrorOr<T>>> command, CancellationToken token) =>
-        Execute<T>(async () =>
+        ExecuteDesktop<T>(async () =>
         {
             var body = await CatalogWireInput.Body(Request).ConfigureAwait(false);
             return await Mediator.Send(command(decode(body)), token).ConfigureAwait(false);
         }, result => result!);
     protected Task<HttpResponseMessage> Update<T, TRequest>(string id, Func<Newtonsoft.Json.Linq.JObject, TRequest> decode,
         Func<int, TRequest, IRequest<ErrorOr<T>>> command, CancellationToken token) =>
-        Execute<T>(async () =>
+        ExecuteDesktop<T>(async () =>
         {
             var key = CatalogWireInput.Id(id);
             var body = await CatalogWireInput.Body(Request).ConfigureAwait(false);
             return await Mediator.Send(command(key, decode(body)), token).ConfigureAwait(false);
         }, result => result!);
     protected Task<HttpResponseMessage> Active(string id, Func<int, bool, IRequest<ErrorOr<UnitResponse>>> command, CancellationToken token) =>
-        Execute<UnitResponse>(async () =>
+        ExecuteDesktop<UnitResponse>(async () =>
         {
             var key = CatalogWireInput.Id(id);
             var body = await CatalogWireInput.Body(Request).ConfigureAwait(false);
