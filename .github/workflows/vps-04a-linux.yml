@@ -69,7 +69,8 @@ jobs:
           counters=doc.find('./t:ResultSummary/t:Counters',ns)
           assert counters is not None, 'Missing native boundary TRX counters'
           counts={k:int(v) for k,v in counters.attrib.items() if k in ('total','passed','failed','executed','notExecuted')}
-          assert counts['total']>=25 and counts['executed']>=25, counts
+          # 25 original boundary + 178 source-file pins + 2 corpus/fingerprint facts.
+          assert counts['total']>=205 and counts['executed']>=205, counts
           assert counts['failed']==0 and counts['notExecuted']==0 and counts['passed']==counts['total'], counts
           print(f"PASS net10 HTTP boundary: {counts}")
           PY
@@ -79,6 +80,10 @@ jobs:
           dotnet run --project MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true --no-build -c Release -- --list-routes > "$GITHUB_WORKSPACE/vps04a-routes.json"
       - name: Compare native endpoint mapping with immutable WEB2-6 and Desktop API routes
         run: python3 scripts/verify-vps-04a.py vps04a-routes.json
+      - name: Compile optional real HTTPS to SQL tests without running or skipping them
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet build ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-restore -warnaserror -v minimal
       - name: Preserve route evidence
         if: always()
         uses: actions/upload-artifact@v6
