@@ -1,7 +1,7 @@
 # VPS-04A — ASP.NET Core 10 replatform (implementation ledger)
 
 Baseline: MyDmsVn-Vps `main` at `2685f87fcc52f62e839d4c3abe771ae6e5a680dc` (VPS-03 PR #6 merged).
-Work branch: `codex/vps-04a-net10-aspnetcore`. **Status: IN PROGRESS; no acceptance claimed.**
+Work branch: `codex/vps-04a-net10-aspnetcore`. **Status: VPS-04A IMPLEMENTED / CODE-HEAD CI VERIFIED; independent final-documentation-HEAD review and merge remain. No staging, deployment or production acceptance is claimed.**
 
 ## Implemented in the branch
 
@@ -15,7 +15,7 @@ Work branch: `codex/vps-04a-net10-aspnetcore`. **Status: IN PROGRESS; no accepta
 
 - `System.Web.Http` and `Microsoft.Owin` in the **new host source** are locally defined compile-time controller/request facades. The net10 project does **not** depend on those legacy runtime packages. They are removed in VPS-04B when routing, middleware, audit and hosting boundaries are finalized.
 - Protected WEB6 audit storage currently enforces Windows file ACL semantics. The new host **refuses startup** when that path is configured: WEB6 mode is not admitted on Linux. Portable durable audit is a separate VPS-04B gate.
-- No Linux reverse proxy trust, SPA static hosting, systemd, deployment, production readiness or live SQL runtime acceptance is claimed.
+- No Linux reverse proxy trust, SPA static hosting, systemd, protected staging, deployment or production readiness is claimed. Disposable Linux HTTPS→SQL CI is bounded evidence only.
 - The net10 graph now uses eight committed `packages.vps04a.lock.json` snapshots, separately from immutable `packages.lock.json` for net48. Linux CI executes **`--locked-mode`** for Host and both net10 test projects, with no downgrade of the legacy graph.
 - Existing SQL integration suites are `net48` and cannot be counted as Linux net10 test execution. The compiled 57-route check is structural parity, **not** a proof of response/session/wire behavior.
 
@@ -80,12 +80,12 @@ python3 scripts/verify-vps-04a.py vps04a-routes.json
 | Net10 packages locked | VERIFIED at review-code `7770a688` | Eight versioned net10 locks, `--locked-mode`, no NuGet downgrade |
 | Net10 xUnit v3 regressions / HTTP perimeter | VERIFIED at review-code `7770a688` | Server.Application 363/363; HTTP boundary + loopback 25/25, no failed/skipped |
 | 178 WEB2–WEB6 source files and NET10 WEB4 canonical/hash vectors | REVIEW FIX APPLIED; FINAL-HEAD CI REQUIRED | New 178 per-file xUnit facts, 2 corpus/vector facts; this verifies source files and hash, not 178 live HTTP responses |
-| Live Linux Kestrel HTTPS with approved exact13 SQL | NOT RUN / NOT VERIFIED | Explicit protected [live runner](../runbooks/vps-04a-live-acceptance.md) on final HEAD |
-| SQL-backed JWT/login/refresh/logout/authorization, transactions, idempotency and concurrent same-key writes | NOT RUN / NOT VERIFIED | Conditional four-fact NET10 runner with SQL session/journal/business-row oracles, protected credentials |
-| Real SQL injected-failure rollback, all applicable live WEB2–WEB6 payloads and WEB6 portable audit | NOT VERIFIED | Additional independent non-production gates; not established by static corpus or four live smoke facts |
-| VPS-04B portable audit and deployment security | OUT OF SCOPE | Separate increment |
+| Bounded disposable Linux Kestrel HTTPS→SQL13 | VERIFIED at code `420ca33e` | [Automatic SQL CI #44097480023](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44097480023): 15/15, six TRX, zero fail/skip; not staging |
+| Protected independently reviewed staging SQL | NOT RUN / DEFERRED | [Issue #11](https://github.com/chung6a8m/MyDmsVn-Vps/issues/11); the PR #9-specific live runner is historical input, not a VPS-04A merge gate |
+| Wider SQL faults, all dynamic WEB2–WEB6 variants and integrated Desktop/Linux/SQL acceptance | NOT VERIFIED / DEFERRED | [Issue #12](https://github.com/chung6a8m/MyDmsVn-Vps/issues/12); bounded PR #9 scenarios remain valid inputs |
+| VPS-04B portable audit and positive WEB6 security | NOT RUN / OUT OF SCOPE | [Issue #10](https://github.com/chung6a8m/MyDmsVn-Vps/issues/10) |
 
-Do not mark `VPS-04A COMPLETE` before its required build, CI, parity and test-coverage gates are supported by exact final HEAD evidence. Do not merge or enable production without independent review/acceptance.
+Do not mark `VPS-04A COMPLETE` before its build, bounded parity/test gates, independent review, exact final-documentation-HEAD CI and merge are recorded. VPS-04A completion does not enable staging, deployment or production.
 
 ## VPS-04A SQL acceptance harness addition (2026-11-17; PR #9)
 
@@ -95,7 +95,7 @@ Do not mark `VPS-04A COMPLETE` before its required build, CI, parity and test-co
 - The HTTPS runner creates a temporary localhost TLS certificate and installs it into only the disposable Linux runner trust store. It uses real Kestrel HTTPS with ordinary TLS certificate verification (no `-k` / no trust-all), real external/isolated SQL configured through protected environment secrets, and a separate read-only SQL oracle. No production data modification or automatic DB migration is authorized.
 - Limitations persist: the 178-file integrity suite does not prove full live wire replay or System.Text.Json parity; the four live tests do not inject a mid-transaction SQL failure to prove physical rollback, do not validate stock/COGS under all races, and do not test WEB6/Linux portable audit. No production, VPS-04B/VPS-05/VPS-07/VPS-08/VPS-09 acceptance is inferred.
 
-[Operator prerequisites, evidence fields and fail-closed run instructions](../runbooks/vps-04a-live-acceptance.md) are the canonical live gate runbook. PR #9 must remain **DRAFT / NOT ACCEPTED** until independent final-HEAD review and actual Linux HTTPS→SQL acceptance provide dated evidence.
+[Operator prerequisites and the historical PR #9 protected-lane design](../runbooks/vps-04a-live-acceptance.md) remain provenance for [Issue #11](https://github.com/chung6a8m/MyDmsVn-Vps/issues/11). They do not replace the bounded disposable SQL evidence and are no longer a VPS-04A merge gate. PR #9 still requires independent final-HEAD review and exact final-documentation-HEAD CI.
 
 ## Independent review — round 4 (2026-11-17; protected live gate)
 
@@ -199,3 +199,14 @@ The new `Vps04aCiGroupWireParitySqlAcceptanceTests` does **real** HTTPS with the
 **Exact code-HEAD GitHub Actions:** all five workflows completed `success` without a retry: [Linux SQL2022 HTTPS→SQL13 #44091528005](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44091528005), [Linux SDK10 source/routes #44091528287](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44091528287), [Windows net48 foundation #44091528052](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44091528052), [xUnit v3 discovery #44091528001](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44091528001), and [Desktop publish #44091527988](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44091527988). The Windows Application job executed **363/363** successfully. This documentary commit still requires fresh final-HEAD CI.
 
 **Disposition:** The recorded order-sensitive CI reliability blocker is fixed and verified on the code SHA. Protected independently reviewed staging, full 57-route dynamic response/value variants, positive WEB6 portable protected audit, wider WEB5/fault/race/decimal coverage and deployment remain **NOT VERIFIED**. PR #9 stays DRAFT / NOT MERGE APPROVED; no live label or Environment secret was changed.
+
+
+## Round 11 — R17 and bounded VPS-04A merge boundary (2026-11-17)
+
+**R17 code HEAD:** `420ca33e6ea7cb3a7ea024c805abb3e320e3383e`. The contract test now parses expected and actual objects with `DuplicatePropertyNameHandling.Error`, includes top-level and nested duplicate-key negative cases, proves member-order independence while preserving date text, and separately pins `2.5000` / `19.9900` numeric wire lexemes. Production contracts, serializer settings, host, schema, grants and frozen corpus are unchanged.
+
+**Fresh local Windows verification:** Windows NT 10.0.26300.0, SDK 8.0.428; locked restore, filter `FullyQualifiedName~Goods_receipt_contract` **4/4**, complete net48 Application **366/366**, zero failed/skipped. Exact code-HEAD GitHub Actions all concluded `success`: [SQL2022 HTTPS→SQL13 #44097480023](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44097480023), [Linux net10/source/routes #44097480253](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44097480253), [Windows net48 #44097480035](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44097480035), [xUnit discovery #44097480011](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44097480011), and [Desktop publish #44097480007](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44097480007). The protected job was `SKIPPED / NOT RUN`, not PASS.
+
+**Increment boundary:** The approved detailed roadmap defines VPS-04A as the separate net10 Server graph, Linux restore/build and core ASP.NET API parity. PR #9 now presents that bounded result for independent review; it does not absorb later environment/release gates. Follow-up ownership is explicit: [Issue #10](https://github.com/chung6a8m/MyDmsVn-Vps/issues/10) for VPS-04B portable audit/positive WEB6/Linux hosting security, [Issue #11](https://github.com/chung6a8m/MyDmsVn-Vps/issues/11) for protected staging/systemd/reverse proxy/VPS deployment, and [Issue #12](https://github.com/chung6a8m/MyDmsVn-Vps/issues/12) for exhaustive 57-route variants, wider reliability matrices and integrated release closeout.
+
+**Disposition:** VPS-04A is **IMPLEMENTED / CODE-HEAD CI VERIFIED**, not yet complete or merge-approved. This documentary HEAD requires its own exact-SHA CI and independent review. All staging, positive WEB6, deployment, exhaustive parity and release claims remain explicitly **NOT RUN / NOT VERIFIED** under their linked future increments.

@@ -22,4 +22,4 @@ This path ports the existing Web API 2 HTTP surface to a native Kestrel endpoint
 
 ## Next gates
 
-Run independent live Linux HTTPS/API/SQL golden-master and security/idempotency tests against an approved SQL instance, covering the 178 frozen WEB2-WEB6 contract fixtures; independently review final HEAD and its Windows + Linux workflows before VPS-04A closeout. VPS-04B replaces the compatibility facade and verifies middleware, portable audit, real Linux runtime and deployment trust.
+Independently review PR #9's exact final HEAD and Windows/Linux workflows before VPS-04A merge. The disposable SQL lane supplies bounded HTTPS/API/SQL, security, idempotency, rollback and stock/COGS evidence; it does not turn 178 frozen source files into 178 live cases. [VPS-04B](https://github.com/chung6a8m/MyDmsVn-Vps/issues/10) owns the compatibility-facade/portable-audit/Linux security follow-up, [VPS-08](https://github.com/chung6a8m/MyDmsVn-Vps/issues/11) owns protected staging/deployment trust, and [VPS-09](https://github.com/chung6a8m/MyDmsVn-Vps/issues/12) owns exhaustive integrated acceptance.

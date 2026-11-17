@@ -1,7 +1,7 @@
-# VPS-04A — Live Linux HTTPS → isolated SQL Server acceptance
+# Historical PR #9 protected Linux HTTPS → isolated SQL acceptance lane
 
-**Increment:** VPS-04A / PR #9. **Gate owner:** independent acceptance operator.
-**Disposition as of 2026-11-17 (protected staging lane ONLY):** this separately approved staging live run remains **NOT RUN / NOT VERIFIED** until its protected, isolated SQL13 environment is supplied and its final-HEAD Actions run passes. **Automatic disposable SQL Server CI is separately VERIFIED 8/8 (6 normal, 1 injected SQL rollback, 1 same-key recovery) at reviewed code HEAD `b080922d`**; see [self-contained CI runbook](vps-04a-selfcontained-ci.md). This file does not approve release, production SQL access, VPS-04B, VPS-05, or VPS-07.
+**Original increment:** VPS-04A / PR #9. **Future owner:** [VPS-08 Issue #11](https://github.com/chung6a8m/MyDmsVn-Vps/issues/11), with an independent acceptance operator.
+**Disposition as of 2026-11-17:** this PR-specific protected staging lane is **NOT RUN / DEFERRED** and is not a VPS-04A merge gate. Its workflow/helper remain reviewed provenance, but they are hard-coded to PR #9 and must be adapted and re-reviewed for the future VPS-08 branch/PR before use. Do not add `vps04a-live-approved` merely to close PR #9. Automatic disposable SQL Server CI is separately bounded evidence; see [self-contained CI runbook](vps-04a-selfcontained-ci.md). This file does not approve release, production SQL access, VPS-04B, VPS-05, VPS-07, VPS-08 or VPS-09.
 
 ## What the two acceptance lanes actually establish
 
@@ -23,7 +23,7 @@ Execute only after an operator creates a **disposable, non-production SQL Server
 3. Seed **active test-owned** Customer, Warehouse, Employee, Product rows with valid references. Their integer IDs must be supplied as environment variables; illustrative IDs (101/102/103/104) in the WEB4 fixtures are **not** authoritative live SQL IDs. The writer must be authorized to create a Sale Draft.
 4. Set these protected **Environment secrets** (redact their values): `VPS04A_RUNTIME_SQL`, `VPS04A_ORACLE_SQL`, `VPS04A_SUPERUSER_USERNAME`, `VPS04A_JWT_AUDIENCE`, `VPS04A_JWT_KID`, `VPS04A_JWT_KEYS`, `VPS04A_WRITER_USERNAME`, `VPS04A_WRITER_PASSWORD`, `VPS04A_DENIED_USERNAME`, `VPS04A_DENIED_PASSWORD`. Never commit credentials or send them in chat. The SQL connection strings must enforce encryption and verify the SQL server certificate/CA; use no `TrustServerCertificate=True` or `Encrypt=False`.
 5. Set Environment **variables** `VPS04A_CUSTOMER_ID`, `VPS04A_WAREHOUSE_ID`, `VPS04A_EMPLOYEE_ID`, `VPS04A_PRODUCT_ID` to approved active fixture identities. Ensure the SQL URL is reachable and not exposed to the public internet.
-6. **Before PR merge:** once the protected Environment is configured and its reviewers have approved the isolated SQL dataset, add label **`vps04a-live-approved`** to PR #9. The existing VPS-04A `pull_request.labeled` workflow invokes the branch-local reusable live workflow. Its guards require PR #9, the exact merge ref, the trigger label, same-repository source branch and target `main`. The workflow **checks out the event's reviewed head SHA rather than the synthetic merge commit**, then independently verifies the GitHub PR is still open, unmerged, labeled, on the same reviewed source/base branch and exact HEAD before SQL mutation and after execution. Ordinary PR synchronize/push and `workflow_dispatch` cannot execute this protected live job. After *any* code change, remove/reapply the label to rerun at the new exact HEAD. A changed HEAD disqualifies an in-flight run from final-HEAD evidence. The live job checks every setting, enforces explicit `web5` and `VPS04A_LIVE_ALLOW_MUTATION=approved-nonproduction-only`, and fails on refused startup, absent or skipped tests. `Vps04ALive` remains **off** in normal SQL-free CI.
+6. **Historical PR #9 trigger only:** the existing VPS-04A `pull_request.labeled` workflow invokes the branch-local reusable live workflow only for PR #9 and `refs/pull/9/merge`. It must remain untriggered for VPS-04A closeout. Issue #11 must adapt the PR/ref identity, environment policy and exact-HEAD guards to its future reviewed branch before any staging SQL mutation. `Vps04ALive` remains **off** in normal SQL-free CI.
 
 ## TLS and live oracle details
 
@@ -42,7 +42,7 @@ Job output uploads **only** `vps04a-live-https-sql.trx`, validates exactly 4 exe
 
 After the **same final PR HEAD** runs, record the following in the PR/evidence ledger: `HEAD_SHA`, `RUN_URL`, `RUN_SHA`, Linux/SDK image, SQL engine version and exact13 fingerprint (no host/address/credentials), TLS verified result, 178-file count, vector count, 4/4 live result, audit/rollback gaps and final owner decision. The workflow is intentionally **manual** to prevent destructive SQL acceptance from every PR push. Green ordinary SQL-free CI **never** upgrades live gates to PASS.
 
-Do not merge PR #9 as a fully accepted VPS-04A runtime until the independent live gate on final HEAD has executed successfully and the required evidence has been reviewed.
+Do not treat PR #9 merge or disposable CI as protected staging acceptance. PR #9 may become Ready for bounded VPS-04A review after exact-final-HEAD CI; the protected live lane remains NOT RUN and moves to Issue #11.
 
 
 ## GitHub Environment provisioning — operator-only execution
