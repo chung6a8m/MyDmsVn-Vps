@@ -190,9 +190,8 @@ public sealed class PermissionAssignmentImportParser
         {
             return PermissionAssignmentImportParseResult.Invalid("Import JSON is malformed or exceeds parser limits.");
         }
-    }
-
 #endif
+    }
 
 #if NET10_0_OR_GREATER
     private PermissionAssignmentImportParseResult ParseNet10(string json)
