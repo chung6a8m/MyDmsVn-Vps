@@ -66,7 +66,11 @@ internal sealed class Vps03RemoteGuiProbe : IDisposable
 
     private static void Invoke(AutomationElement window, string name)
     {
-        var element = Find(window, name);
+        var element = window.FindFirst(TreeScope.Descendants,
+            new AndCondition(
+                new PropertyCondition(AutomationElement.NameProperty, name),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button)))
+            ?? throw new InvalidOperationException("VPS03 attended button was not found: " + name);
         if (element.TryGetCurrentPattern(InvokePattern.Pattern, out var invoke))
         {
             ((InvokePattern)invoke).Invoke();
