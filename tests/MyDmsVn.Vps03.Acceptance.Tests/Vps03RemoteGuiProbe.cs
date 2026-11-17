@@ -138,9 +138,10 @@ internal sealed class Vps03RemoteGuiProbe : IDisposable
         var timer = Stopwatch.StartNew();
         while (timer.Elapsed < timeout)
         {
-            var found = window.FindFirst(TreeScope.Descendants,
-                new PropertyCondition(AutomationElement.NameProperty, name));
-            if (found != null) return;
+            var candidates = window.FindAll(TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Pane));
+            foreach (AutomationElement candidate in candidates)
+                if (candidate.Current.Name.StartsWith(name, StringComparison.Ordinal)) return;
             Thread.Sleep(100);
         }
         throw new TimeoutException("VPS03 attended element was not observed: " + name);
