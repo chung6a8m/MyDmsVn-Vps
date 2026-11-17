@@ -1,6 +1,7 @@
 name: VPS-04A — approved Linux HTTPS to isolated SQL acceptance
 
 on:
+  workflow_call:
   workflow_dispatch:
     inputs:
       nonproduction_ack:
@@ -17,7 +18,15 @@ concurrency:
 
 jobs:
   live-linux-https-sql:
-    if: github.event.inputs.nonproduction_ack == 'approved-isolated-sql13'
+    # workflow_dispatch requires a default-branch workflow; the labeled, protected
+    # workflow_call path makes this executable on a DRAFT PR before merge.
+    if: >-
+      (github.event_name == 'workflow_dispatch' &&
+       github.event.inputs.nonproduction_ack == 'approved-isolated-sql13') ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+       github.event.label.name == 'vps04a-live-approved' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'codex/vps-04a-net10-aspnetcore')
     name: Linux Kestrel TLS + exact13 SQL + JWT + journal + concurrency
     runs-on: ubuntu-24.04
     timeout-minutes: 45
