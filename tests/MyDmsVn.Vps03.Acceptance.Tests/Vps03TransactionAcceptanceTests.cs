@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MyDmsVn.Contracts;
 using MyDmsVn.Desktop.Application;
+using MyDmsVn.Desktop.Infrastructure.Http;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -11,6 +12,74 @@ namespace MyDmsVn.Vps03.Acceptance.Tests;
 
 public sealed class Vps03TransactionAcceptanceTests
 {
+    [Vps03AcceptanceFact]
+    [Trait("CaseId", "VPS03.GATE.LOST-ACK")]
+    public async Task Lost_ack_and_concurrent_session_never_duplicate_sales_post()
+    {
+        var env = await Vps03OwnedEnvironment.CreateAsync(13, CancellationToken.None);
+        try
+        {
+            Ok(await env.DesktopServices.GetRequiredService<IIdentityApiClient>()
+                .LoginAsync(new LoginRequest(env.Username, env.Password), default));
+            var suffix = Guid.NewGuid().ToString("N").Substring(0, 9);
+            var product = Ok(await env.DesktopServices.GetRequiredService<IProductApiClient>()
+                .CreateAsync(new SaveProductRequest("L" + suffix, "Lost ACK " + suffix, "EA"), default));
+            var warehouse = Ok(await env.DesktopServices.GetRequiredService<IWarehouseApiClient>()
+                .CreateAsync(new SaveWarehouseRequest("A" + suffix, "ACK Warehouse " + suffix, null), default));
+            var employee = Ok(await env.DesktopServices.GetRequiredService<IEmployeeApiClient>()
+                .CreateAsync(new SaveEmployeeRequest("B" + suffix, "ACK Employee " + suffix, null, null), default));
+            var customer = Ok(await env.DesktopServices.GetRequiredService<ICustomerApiClient>()
+                .CreateAsync(new SaveCustomerRequest("D" + suffix, "ACK Customer " + suffix, null, null, null), default));
+            var goods = env.DesktopServices.GetRequiredService<IGoodsReceiptApiClient>();
+            var goodsDraft = Ok(await goods.CreateDraftAsync(new SaveGoodsReceiptRequest(DateTime.Today,
+                warehouse.Id, employee.Id, "lost ACK stock",
+                new[] { new SaveGoodsReceiptLineRequest(product.Id, 10m, 5m) }), default));
+            Ok(await goods.PostAsync(new PostGoodsReceiptRequest(goodsDraft.Id, goodsDraft.Version), default));
+            var seedSales = env.DesktopServices.GetRequiredService<ISalesReceiptApiClient>()
+                .ForSession(env.DesktopServices.GetRequiredService<IDesktopSession>().Version);
+            var saleDraft = Ok(await seedSales.CreateDraftAsync(new SaveSalesReceiptRequest(DateTime.Today,
+                customer.Id, warehouse.Id, employee.Id, "lost ACK sale",
+                new[] { new SaveSalesReceiptLineRequest(0, product.Id, 2m, 12m, false) }), default));
+
+            var route = "/api/v1/sales-receipts/" + saleDraft.SaleId + "/post";
+            var store = new Vps03InMemoryPendingWriteStore();
+            var proxy = new Vps03LostAckProxy(env.Origin, route);
+            using var first = Vps03FaultedDesktopServices.Create(env, proxy, store);
+            Ok(await first.GetRequiredService<IIdentityApiClient>()
+                .LoginAsync(new LoginRequest(env.Username, env.Password), default));
+            var firstSales = first.GetRequiredService<ISalesReceiptApiClient>()
+                .ForSession(first.GetRequiredService<IDesktopSession>().Version);
+            var lost = await firstSales.PostAsync(
+                new PostSalesReceiptRequest(saleDraft.SaleId, saleDraft.Version), default);
+            Assert.False(lost.IsSuccess);
+            Assert.Equal("Operation.OutcomeUnknown", lost.Error?.Code);
+            Assert.Equal(1, proxy.MatchedRequests);
+            Assert.Equal(1, proxy.DroppedResponses);
+            Assert.NotNull(store.Load());
+            Assert.Equal(new Snapshot(2, 2, 8m, 40m, 10m),
+                await SnapshotAsync(env.OracleConnectionString, warehouse.Id, product.Id, goodsDraft.Id, saleDraft.SaleId));
+
+            using var second = Vps03FaultedDesktopServices.Create(env,
+                Vps03LostAckProxy.CreatePassThrough(), store);
+            Ok(await second.GetRequiredService<IIdentityApiClient>()
+                .LoginAsync(new LoginRequest(env.Username, env.Password), default));
+            var secondSales = second.GetRequiredService<ISalesReceiptApiClient>()
+                .ForSession(second.GetRequiredService<IDesktopSession>().Version);
+            var blocked = await secondSales.PostAsync(
+                new PostSalesReceiptRequest(saleDraft.SaleId, saleDraft.Version), default);
+            Assert.False(blocked.IsSuccess);
+            Assert.Equal("Operation.PendingRecovery", blocked.Error?.Code);
+            var recovered = await second.GetRequiredService<IDesktopWriteRecovery>()
+                .CheckAsync(CancellationToken.None);
+            Assert.Equal("COMMITTED", recovered.State);
+            Assert.True(recovered.FenceReleased);
+            Assert.Null(store.Load());
+            Assert.Equal(new Snapshot(2, 2, 8m, 40m, 10m),
+                await SnapshotAsync(env.OracleConnectionString, warehouse.Id, product.Id, goodsDraft.Id, saleDraft.SaleId));
+        }
+        finally { await env.DisposeAsync(); }
+    }
+
     [Vps03AcceptanceFact]
     [Trait("CaseId", "VPS03.GATE.TRANSACTIONS")]
     [Trait("CaseId", "VPS03.GATE.INVENTORY")]
