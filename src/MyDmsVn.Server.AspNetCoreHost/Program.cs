@@ -14,8 +14,8 @@ using MyDmsVn.Server.Infrastructure.Operations;
 
 namespace MyDmsVn.Server.HttpHost;
 
-// VPS-04A migration host. It is intentionally not the production VPS-08 deployment entry point.
-// The legacy Web API 2/OWIN host remains a separate net48 build until the VPS-04B gates pass.
+// VPS-04B: Linux direct-HTTPS host with portable protected WEB6 audit.
+// Reverse proxy trust, systemd deployment and production approval are VPS-08 gates.
 internal static class Program
 {
     public static async Task Main(string[] args)
@@ -34,7 +34,7 @@ internal static class Program
         catch (Exception)
         {
             // Do not expose SQL connection details, JWT key material or deployment configuration.
-            Console.Error.WriteLine("VPS-04A host startup refused. Verify SQL/schema, secrets, audit and transport configuration.");
+            Console.Error.WriteLine("VPS-04B host startup refused. Verify SQL/schema, secrets, audit and transport configuration.");
             Environment.ExitCode = 1;
         }
     }
@@ -48,11 +48,6 @@ internal static class Program
     private static async Task<WebApplication> CreateAppAsync(string[] args)
     {
         var options = WebHostOptions.FromEnvironment();
-        // WEB6 protected file audit uses a Windows-only ACL contract. Until the portable
-        // fail-closed audit sink is implemented in VPS-04B, do not silently weaken it.
-        if (options.SecurityAuditPath != null)
-            throw new InvalidOperationException("Portable protected audit storage has not been admitted.");
-
         var sessions = WebAuthSessionConfiguration.Read(Environment.GetEnvironmentVariable);
         var connection = Environment.GetEnvironmentVariable("MYDMSVN_WEB_SQL_CONNECTION_STRING");
         var superuser = Environment.GetEnvironmentVariable("MYDMSVN_WEB_SUPERUSER_USERNAME");
@@ -85,11 +80,30 @@ internal static class Program
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton(sessions);
         builder.Services.AddSingleton<AuthAttemptLimiter>();
-        builder.Services.Replace(ServiceDescriptor.Singleton<ISecurityAuditSink, TraceSecurityAuditSink>());
+        builder.Services.AddScoped<CoreApiAdmissionMiddleware>();
+        builder.Services.AddSingleton<ISecurityAuditReadiness, CoreSecurityAuditReadiness>();
+        if (options.SecurityAuditPath != null)
+        {
+            if (!OperatingSystem.IsLinux())
+                throw new InvalidOperationException("Portable protected audit is Linux-only.");
+            // Constructor proves a pre-provisioned 0700 root and 0600 file via
+            // no-follow descriptor checks and a durable fsync, before listening.
+            builder.Services.Replace(ServiceDescriptor.Singleton<ISecurityAuditSink>(
+                new PortableProtectedSecurityAuditSink(options)));
+        }
+        else
+        {
+            if (options.Web6ResendEligibilityEnabled)
+                throw new InvalidOperationException("WEB6 requires protected audit storage.");
+            builder.Services.Replace(ServiceDescriptor.Singleton<ISecurityAuditSink, TraceSecurityAuditSink>());
+        }
         builder.Services.AddSqlPersistence(connection!);
 
         var app = builder.Build();
-        app.Use(CoreApiBoundary.HandleAsync);
+        // Correlation, transport, strict CSRF, body size, Bearer+SQL session and
+        // audit readiness must run after routing, before any endpoint dispatch.
+        app.UseRouting();
+        app.UseMiddleware<CoreApiAdmissionMiddleware>();
         Net10RouteTable.Map(app);
         Net10RouteTable.MapFallback(app);
         return app;

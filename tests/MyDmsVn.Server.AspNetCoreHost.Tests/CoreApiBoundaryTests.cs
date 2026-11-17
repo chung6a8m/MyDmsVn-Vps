@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
+using MyDmsVn.Server.Application.Identity;
 using MyDmsVn.Server.HttpHost;
 using Xunit;
 
@@ -34,6 +35,7 @@ public sealed class CoreApiBoundaryTests
                 ["test-key"] = Enumerable.Repeat((byte)0x5A, 32).ToArray()
             }));
         services.AddScoped<RequestIdentityAdmission>();
+        services.AddSingleton<ISecurityAuditReadiness, CoreSecurityAuditReadiness>();
         services.AddSingleton<AuthAttemptLimiter>();
         var context = new DefaultHttpContext
         {
@@ -201,6 +203,66 @@ public sealed class CoreApiBoundaryTests
         Assert.Contains("InternalError", body);
         Assert.DoesNotContain("secret-sql-cause", body);
         Assert.DoesNotContain("unadmitted", body);
+    }
+
+
+    [Fact]
+    public async Task HealthReturnsSanitized503AfterDurableSecurityAuditFailure()
+    {
+        var context = NewRequest();
+        context.Request.Headers["X-Correlation-ID"] = "audit_degraded_04b";
+        context.RequestServices.GetRequiredService<ISecurityAuditReadiness>()
+            .MarkDegraded(DateTime.UtcNow);
+        var called = false;
+        await CoreApiBoundary.HandleAsync(context, () =>
+        {
+            called = true;
+            return Task.CompletedTask;
+        });
+        Assert.False(called);
+        Assert.Equal(503, context.Response.StatusCode);
+        Assert.Equal("audit_degraded_04b", context.Response.Headers["X-Correlation-ID"].ToString());
+        var body = System.Text.Encoding.UTF8.GetString(((MemoryStream)context.Response.Body).ToArray());
+        Assert.Contains("SecurityAudit.Unavailable", body);
+        Assert.DoesNotContain("audit.jsonl", body);
+        Assert.Equal("no-store", context.Response.Headers["Cache-Control"].ToString());
+    }
+
+    [Theory]
+    [InlineData("/api/v1/health/")]
+    [InlineData("/API/V1/HEALTH")]
+    public async Task HealthRouteAliasesShareDegradedReadinessAndAnonymousAdmission(string path)
+    {
+        var context = NewRequest(path: path);
+        context.RequestServices.GetRequiredService<ISecurityAuditReadiness>()
+            .MarkDegraded(DateTime.UtcNow);
+        var called = false;
+        await CoreApiBoundary.HandleAsync(context, () =>
+        {
+            called = true;
+            return Task.CompletedTask;
+        });
+        Assert.False(called);
+        Assert.Equal(503, context.Response.StatusCode);
+        var body = System.Text.Encoding.UTF8.GetString(((MemoryStream)context.Response.Body).ToArray());
+        Assert.Contains("SecurityAudit.Unavailable", body);
+        Assert.Equal("no-store", context.Response.Headers["Cache-Control"].ToString());
+    }
+
+    [Fact]
+    public async Task AdmissionMiddlewareDelegatesOnlyAfterNativeBoundary()
+    {
+        var context = NewRequest();
+        var middleware = new CoreApiAdmissionMiddleware();
+        var invoked = false;
+        await middleware.InvokeAsync(context, _ =>
+        {
+            invoked = true;
+            Assert.False(context.RequestServices.GetRequiredService<RequestIdentityAdmission>()
+                .Current.IsAuthenticated);
+            return Task.CompletedTask;
+        });
+        Assert.True(invoked);
     }
 
     [Fact]

@@ -72,6 +72,19 @@ public sealed class WebHostOptions
 
     private static bool IsCanonicalLocalPath(string? value)
     {
+        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+            System.Runtime.InteropServices.OSPlatform.Linux))
+        {
+            // The host accepts only exact absolute Unix paths: no dot segments,
+            // duplicate separators, Windows-style aliases or Unicode controls.
+            // Directory and inode ownership is validated again by the Linux sink.
+            return value != null && value.StartsWith("/", StringComparison.Ordinal) &&
+                value.Length > 1 && !value.EndsWith("/", StringComparison.Ordinal) &&
+                value.IndexOf('\\') < 0 &&
+                string.Equals(Path.GetFullPath(value), value, StringComparison.Ordinal) &&
+                value.Substring(1).Split('/').All(part => part.Length > 0 &&
+                    part != "." && part != ".." && part.All(c => c >= 32 && c != 127));
+        }
         if (value == null || !Regex.IsMatch(value, "\\A[A-Za-z]:\\\\") ||
             value.IndexOf(':', 2) >= 0 || value.IndexOf('/') >= 0 ||
             !string.Equals(Path.GetFullPath(value), value, StringComparison.OrdinalIgnoreCase))
