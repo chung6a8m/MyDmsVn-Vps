@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   isolated-sql13:
-    name: Ubuntu .NET 10 + isolated SQL2022 TLS + golden HTTP/stock/oversell/fractional/fault 10/10
+    name: Ubuntu .NET 10 + isolated SQL2022 TLS + golden HTTP/stock and WEB2-WEB6 group parity 15/15
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     env:
@@ -301,12 +301,25 @@ jobs:
             --logger 'trx;LogFileName=vps04a-ci-multiwarehouse-fractional.trx' \
             --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
 
+          # Five separately discovered WEB2..WEB6 grouped real HTTPS
+          # response-parity facts. Each writes safe, explicit expected/actual/
+          # diff projections plus its independent read-only SQL Oracle source;
+          # WEB6 is STRICTLY disabled/fail-closed, not a Linux WEB6 grant.
+          mkdir -p vps04a-ci-parity
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps04aCiGroupWireParitySqlAcceptanceTests' \
+            --logger 'trx;LogFileName=vps04a-ci-group-parity.trx' \
+            --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
           files=list(Path('vps04a-ci-trx').glob('*.trx'))
           expected={'vps04a-ci-https-sql.trx':6,'vps04a-ci-oversell-race.trx':1,
                     'vps04a-ci-multiwarehouse-fractional.trx':1,
+                    'vps04a-ci-group-parity.trx':5,
                     'vps04a-ci-fault-rollback.trx':1,
                     'vps04a-ci-fault-recovery.trx':1}
           assert {f.name for f in files} == set(expected),[p.name for p in files]
@@ -320,11 +333,44 @@ jobs:
             n=expected[file.name]
             assert got == {'total':n,'executed':n,'passed':n,'failed':0,'notExecuted':0},(file.name,got)
             total+=n
-          assert total==10
-          print('PASS: 10/10 real HTTPS-to-SQL tests: golden wire, stock/COGS, oversell race, fractional multiwarehouse, '
-                'mid-transaction rollback, Kestrel restart and same-key recovery; zero failed/skipped')
+          assert total==15
+          print('PASS: 15/15 real HTTPS-to-SQL tests: 10 prior SQL facts + '
+                'five WEB2..WEB6 grouped parity facts; zero failed/skipped')
+
+          # A test that reports PASS but omits a group, a case, or expected/
+          # actual/diff evidence is a hard CI failure. The WEB6 report is
+          # deliberately tagged disabled-fail-closed-only.
+          import json
+          reports=Path('vps04a-ci-parity')
+          groups={'WEB2':6,'WEB3':5,'WEB4':4,'WEB5':3,'WEB6':3}
+          assert {p.stem for p in reports.glob('*.json')}==set(groups)
+          total_scenarios=0
+          for group,minimum in groups.items():
+            value=json.loads((reports/(group+'.json')).read_text(encoding='utf-8'))
+            assert value['group']==group and value['environment']=='disposable-sql13'
+            assert value['mode']=='web5'
+            assert value['scope']==('disabled-fail-closed-only' if group=='WEB6'
+                                    else 'bounded-live-positive-and-negative')
+            cases=value['cases']
+            assert len(cases)>=minimum, (group, len(cases))
+            assert len({case['id'] for case in cases})==len(cases)
+            for case in cases:
+              assert all(key in case for key in ('expected','actual','diff','sqlOracle','fixture','route'))
+              assert not case['diff'], (group,case['id'],case['diff'])
+              assert case['sqlOracle']
+            total_scenarios+=len(cases)
+          assert total_scenarios>=21
+          print(f'PASS: {total_scenarios} explicit WEB2-WEB6 expected/actual/diff scenarios; '
+                'WEB6 fail-closed only; no implied enabled WEB6 parity')
           PY
 
+      - name: Upload only safe WEB2-WEB6 expected actual diff projections
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps04a-ci-group-parity
+          path: vps04a-ci-parity/*.json
+          if-no-files-found: warn
       - name: Upload only safe TRX (no passwords, no TLS private keys, no host logs)
         if: always()
         uses: actions/upload-artifact@v6
