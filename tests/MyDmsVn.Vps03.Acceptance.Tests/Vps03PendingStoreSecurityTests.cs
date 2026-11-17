@@ -76,6 +76,7 @@ public sealed class Vps03PendingStoreSecurityTests
             using var clearer = Vps03PendingStoreProcess.Start(
                 "clear-paused", fixture.Origin, clearExchange, fixture.Record);
             clearer.WaitForStage("clear-validated", TimeSpan.FromSeconds(15));
+            clearer.AssertGlobalMutationMutexOwnerOnly();
 
             using var replacer = Vps03PendingStoreProcess.Start(
                 "replace", fixture.Origin, replaceExchange, replacement);

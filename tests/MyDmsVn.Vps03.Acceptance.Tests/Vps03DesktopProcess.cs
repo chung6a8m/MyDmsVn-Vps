@@ -63,10 +63,13 @@ internal sealed class Vps03DesktopProcess : IDisposable
 internal sealed class Vps03AttendedResult
 {
     internal Vps03AttendedResult(string headSha, IReadOnlyDictionary<string, bool> checkpoints,
-        bool desktopExited, bool hostAbsent, bool sqlAbsent, bool aborted)
-    { HeadSha = headSha; Checkpoints = checkpoints; DesktopExited = desktopExited; HostAbsent = hostAbsent; SqlAbsent = sqlAbsent; Aborted = aborted; }
+        string desktopSha256, string hostSha256, bool desktopExited, bool hostAbsent,
+        bool sqlAbsent, bool aborted)
+    { HeadSha = headSha; Checkpoints = checkpoints; DesktopSha256 = desktopSha256; HostSha256 = hostSha256; DesktopExited = desktopExited; HostAbsent = hostAbsent; SqlAbsent = sqlAbsent; Aborted = aborted; }
     internal string HeadSha { get; }
     internal IReadOnlyDictionary<string, bool> Checkpoints { get; }
+    internal string DesktopSha256 { get; }
+    internal string HostSha256 { get; }
     internal bool DesktopExited { get; }
     internal bool HostAbsent { get; }
     internal bool SqlAbsent { get; }

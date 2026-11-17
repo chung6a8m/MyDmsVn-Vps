@@ -36,10 +36,10 @@ public sealed class Vps03AttendedGuiAcceptanceTests
     {
         var accepted = new Dictionary<string, bool>();
         foreach (var id in Required) accepted[id] = true;
-        Assert.False(new Vps03AttendedResult(new string('a', 40), accepted, true, true, true, aborted: true).Passed(Required));
-        Assert.False(new Vps03AttendedResult(new string('a', 40), accepted, true, false, true, aborted: false).Passed(Required));
+        Assert.False(new Vps03AttendedResult(new string('a', 40), accepted, new string('b', 64), new string('c', 64), true, true, true, aborted: true).Passed(Required));
+        Assert.False(new Vps03AttendedResult(new string('a', 40), accepted, new string('b', 64), new string('c', 64), true, false, true, aborted: false).Passed(Required));
         accepted.Remove("VPS03.GUI.ERRORS");
-        Assert.False(new Vps03AttendedResult(new string('a', 40), accepted, true, true, true, aborted: false).Passed(Required));
+        Assert.False(new Vps03AttendedResult(new string('a', 40), accepted, new string('b', 64), new string('c', 64), true, true, true, aborted: false).Passed(Required));
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public sealed class Vps03AttendedGuiAcceptanceTests
     {
         var accepted = new Dictionary<string, bool>();
         foreach (var id in Required) accepted[id] = true;
-        Assert.True(new Vps03AttendedResult(new string('b', 40), accepted, true, true, true, aborted: false).Passed(Required));
+        Assert.True(new Vps03AttendedResult(new string('b', 40), accepted, new string('c', 64), new string('d', 64), true, true, true, aborted: false).Passed(Required));
     }
 
     [Vps03AcceptanceFact]
@@ -70,6 +70,7 @@ public sealed class Vps03AttendedGuiAcceptanceTests
             recovery = await Vps03NativeRecoverySeed.CreateAsync(env, CancellationToken.None);
             using var desktop = Vps03DesktopProcess.Start(env);
             Assert.Equal(64, desktop.ExecutableHash.Length);
+            Assert.Equal(env.DesktopPackageSha256, desktop.ExecutableHash);
             using var probe = new Vps03RemoteGuiProbe(desktop.Id);
             probe.WaitForLogin(TimeSpan.FromSeconds(30));
             Vps03AttendedExchange.WriteStage(directory, env.HeadSha, desktop.Id,
@@ -114,11 +115,13 @@ public sealed class Vps03AttendedGuiAcceptanceTests
             finally
             {
                 var result = new Vps03AttendedResult(env.HeadSha, checkpoints,
+                    env.DesktopPackageSha256, env.HostPackageSha256,
                     desktopExited, hostAbsent, sqlAbsent, aborted);
                 Vps03AttendedExchange.WriteResult(resultPath, result, Required);
             }
         }
         Assert.True(new Vps03AttendedResult(env.HeadSha, checkpoints,
+            env.DesktopPackageSha256, env.HostPackageSha256,
             desktopExited, hostAbsent, sqlAbsent, aborted).Passed(Required));
     }
 }

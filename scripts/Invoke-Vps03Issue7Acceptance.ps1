@@ -190,7 +190,8 @@ function Read-LiveResult([string]$path, [string]$head) {
     return $record
 }
 
-function Read-AttendedResult([string]$path, [string]$head, [string]$desktopSha256) {
+function Read-AttendedResult([string]$path, [string]$head, [string]$desktopSha256,
+    [string]$hostSha256) {
     if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path)) {
         throw 'VPS03.Issue7.AttendedResultMissing'
     }
@@ -202,6 +203,7 @@ function Read-AttendedResult([string]$path, [string]$head, [string]$desktopSha25
         $record.desktopExited -ne $true -or $record.hostAbsent -ne $true -or
         $record.sqlAbsent -ne $true -or $record.aborted -ne $false -or
         $record.checkpoints.'VPS03.GUI.UNKNOWN-RECOVERY' -ne $true -or
+        $record.desktopSha256 -ne $desktopSha256 -or $record.hostSha256 -ne $hostSha256 -or
         $stage.headSha -ne $head -or $stage.stage -ne 'shell-ready' -or
         $stage.executableHash -ne $desktopSha256) {
         throw 'VPS03.Issue7.AttendedResultInvalid'
@@ -310,13 +312,13 @@ if ($AttendedOnly) {
     $env:MYDMSVN_VPS03_ATTENDED = 'approved'
     $group = Invoke-TestGroup 'attended' 'Phase=Attended' $attendedExpected $results $pendingBefore
     $attendedPath = Join-Path $results 'attended\attended-result.json'
-    [void](Read-AttendedResult $attendedPath $head $packages.desktopSha256)
+    [void](Read-AttendedResult $attendedPath $head $packages.desktopSha256 $packages.hostSha256)
     Write-Host "PASS attended head=$head total=$($group.total) failed=0 skipped=0 result=$attendedPath"
     exit 0
 }
 
 $live = Read-LiveResult $LiveResult $head
-$attended = Read-AttendedResult $AttendedResult $head $live.packages.desktopSha256
+$attended = Read-AttendedResult $AttendedResult $head $live.packages.desktopSha256 $live.packages.hostSha256
 $groups += [ordered]@{
     name = 'live'; total = [int]$live.group.total; executed = [int]$live.group.executed
     passed = [int]$live.group.passed; failed = 0; skipped = 0

@@ -117,7 +117,10 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 options.Origin.GetLeftPart(UriPartial.Authority);
             using (var sha = SHA256.Create())
                 _entropy = sha.ComputeHash(Utf8.GetBytes(binding));
-            _mutexName = @"Local\MyDmsVn-Vps.PendingWrite." + Hex(_entropy);
+            // The protected file is per Windows owner, not per Terminal Services session.
+            // A Global mutex is therefore required to serialize console/RDP processes that
+            // share the same owner SID and LocalApplicationData pending slot.
+            _mutexName = @"Global\MyDmsVn-Vps.PendingWrite." + Hex(_entropy);
             _beforeClearDelete = beforeClearDelete;
             _file = Path.Combine(directory, Hex(_entropy) + ".intent");
             // Eager load: startup must fail closed if the protected record cannot be read.
@@ -232,10 +235,18 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
         private IDisposable AcquireMutationLock()
         {
-            var mutex = new Mutex(false, _mutexName);
+            var security = new MutexSecurity();
+            security.SetAccessRuleProtection(true, false);
+            security.SetOwner(_owner);
+            security.AddAccessRule(new MutexAccessRule(_owner, MutexRights.FullControl,
+                AccessControlType.Allow));
+            security.AddAccessRule(new MutexAccessRule(_system, MutexRights.FullControl,
+                AccessControlType.Allow));
+            var mutex = new Mutex(false, _mutexName, out _, security);
             var acquired = false;
             try
             {
+                ValidateMutexOwner(mutex.GetAccessControl());
                 try { acquired = mutex.WaitOne(TimeSpan.FromSeconds(15)); }
                 catch (AbandonedMutexException) { acquired = true; }
                 if (!acquired) throw new InvalidOperationException("Desktop.PendingWriteBusy");
@@ -247,6 +258,29 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 mutex.Dispose();
                 throw;
             }
+        }
+
+        private void ValidateMutexOwner(MutexSecurity acl)
+        {
+            if (!Equals(acl.GetOwner(typeof(SecurityIdentifier)), _owner) ||
+                !acl.AreAccessRulesProtected)
+                throw new InvalidOperationException("Desktop.PendingMutexUnsafe");
+            var ownerFull = false;
+            var systemFull = false;
+            var rules = acl.GetAccessRules(true, false, typeof(SecurityIdentifier));
+            foreach (MutexAccessRule rule in rules)
+            {
+                var owner = Equals(rule.IdentityReference, _owner);
+                var system = Equals(rule.IdentityReference, _system);
+                if (rule.AccessControlType != AccessControlType.Allow || (!owner && !system))
+                    throw new InvalidOperationException("Desktop.PendingMutexUnsafe");
+                if ((rule.MutexRights & MutexRights.FullControl) != MutexRights.FullControl)
+                    throw new InvalidOperationException("Desktop.PendingMutexUnsafe");
+                ownerFull |= owner;
+                systemFull |= system;
+            }
+            if (!ownerFull || !systemFull)
+                throw new InvalidOperationException("Desktop.PendingMutexUnsafe");
         }
 
         private sealed class MutationLock : IDisposable

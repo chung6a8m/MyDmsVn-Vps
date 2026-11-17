@@ -116,6 +116,8 @@ internal static class Vps03AttendedExchange
         Write(path, new JObject
         {
             ["headSha"] = result.HeadSha,
+            ["desktopSha256"] = result.DesktopSha256,
+            ["hostSha256"] = result.HostSha256,
             ["passed"] = result.Passed(required),
             ["desktopExited"] = result.DesktopExited,
             ["hostAbsent"] = result.HostAbsent,

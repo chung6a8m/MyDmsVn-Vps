@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
 using System.Threading;
@@ -125,6 +126,35 @@ internal sealed class Vps03PendingStoreProcess : IDisposable
 
     internal void SignalRelease() =>
         File.WriteAllText(Path.Combine(_exchange, "release.marker"), "release", Utf8);
+
+    internal void AssertGlobalMutationMutexOwnerOnly()
+    {
+        var hash = Path.GetFileNameWithoutExtension(_intent);
+        var name = @"Global\MyDmsVn-Vps.PendingWrite." + hash;
+        using var mutex = Mutex.OpenExisting(name,
+            MutexRights.ReadPermissions | MutexRights.Synchronize);
+        var acl = mutex.GetAccessControl();
+        SecurityIdentifier owner;
+        using (var identity = WindowsIdentity.GetCurrent())
+            owner = identity.User ?? throw new InvalidOperationException("VPS03.PendingOwnerUnavailable");
+        var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+        if (!Equals(acl.GetOwner(typeof(SecurityIdentifier)), owner) || !acl.AreAccessRulesProtected)
+            throw new InvalidDataException("VPS03.PendingGlobalMutexAclUnsafe");
+        var ownerFull = false;
+        var systemFull = false;
+        foreach (MutexAccessRule rule in acl.GetAccessRules(true, false, typeof(SecurityIdentifier)))
+        {
+            var isOwner = Equals(rule.IdentityReference, owner);
+            var isSystem = Equals(rule.IdentityReference, system);
+            if (rule.AccessControlType != AccessControlType.Allow || (!isOwner && !isSystem) ||
+                (rule.MutexRights & MutexRights.FullControl) != MutexRights.FullControl)
+                throw new InvalidDataException("VPS03.PendingGlobalMutexAclUnsafe");
+            ownerFull |= isOwner;
+            systemFull |= isSystem;
+        }
+        if (!ownerFull || !systemFull)
+            throw new InvalidDataException("VPS03.PendingGlobalMutexAclUnsafe");
+    }
 
     internal Vps03PendingStoreLoadResult WaitForLoad(TimeSpan timeout)
     {

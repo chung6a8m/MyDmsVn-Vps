@@ -44,6 +44,8 @@ internal sealed class Vps03OwnedEnvironment
         OracleConnectionString = DatabaseConnection(options.SqlConnectionString, databaseName);
         RuntimeConnectionString = runtimeConnectionString;
         DesktopExecutable = Path.Combine(options.DesktopPackage, "MyDmsVn.Desktop.App.exe");
+        DesktopPackageSha256 = Sha256(DesktopExecutable);
+        HostPackageSha256 = Sha256(Path.Combine(options.HostPackage, "bin", "MyDmsVn.Server.HttpHost.dll"));
         HeadSha = preflight.HeadSha;
         Username = username;
         Password = password;
@@ -55,6 +57,8 @@ internal sealed class Vps03OwnedEnvironment
     internal string OracleConnectionString { get; }
     internal string RuntimeConnectionString { get; }
     internal string DesktopExecutable { get; }
+    internal string DesktopPackageSha256 { get; }
+    internal string HostPackageSha256 { get; }
     internal string HeadSha { get; }
     internal string Username { get; }
     internal string Password { get; }
@@ -391,6 +395,14 @@ SELECT 1,UserId,@normalized FROM dbo.Users WHERE NormalizedUsername=@normalized;
         }.ConnectionString;
 
     private static string QuoteIdentifier(string value) => "[" + value.Replace("]", "]]" ) + "]";
+
+    private static string Sha256(string path)
+    {
+        using var stream = File.OpenRead(path);
+        using var hash = SHA256.Create();
+        return BitConverter.ToString(hash.ComputeHash(stream)).Replace("-", string.Empty)
+            .ToLowerInvariant();
+    }
 
     private static string RepositoryRoot()
     {
