@@ -195,7 +195,8 @@ internal sealed class Web6ResendReceiptCodec
         catch (WireInputException) { throw; }
         catch (WebOperationException) { throw; }
         catch (Exception error) when (error is SecurityTokenException || error is ArgumentException || error is JsonException ||
-            error is FormatException || error is OverflowException || error is CryptographicException)
+            error is FormatException || error is OverflowException || error is CryptographicException ||
+            error is InvalidOperationException)
         { throw new WireInputException(); }
     }
 

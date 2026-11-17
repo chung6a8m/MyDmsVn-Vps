@@ -69,7 +69,8 @@ public sealed class BearerTokenValidator
             return new ValidatedBearer(userId, sessionId);
         }
         catch (Exception exception) when (exception is SecurityTokenException || exception is ArgumentException ||
-            exception is JsonException || exception is FormatException || exception is OverflowException)
+            exception is JsonException || exception is FormatException || exception is OverflowException ||
+            exception is InvalidOperationException)
         { return null; }
     }
     private static JObject ReadObject(string encoded)

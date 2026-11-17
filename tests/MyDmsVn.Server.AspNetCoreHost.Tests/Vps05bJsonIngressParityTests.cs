@@ -1,5 +1,7 @@
 using System;
 using System.Globalization;
+using System.Collections.Generic;
+using MyDmsVn.Server.Application.Identity;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -147,6 +149,25 @@ public sealed class Vps05bJsonIngressParityTests
         Assert.False(parser.Parse(valid.Replace("\"decision\":\"Deny\"", "\"decision\":\"Deny\",\"decision\":\"Allow\"")).IsValid);
         Assert.False(parser.Parse(valid + "{}").IsValid);
         Assert.False(parser.Parse(valid.Replace("\"schemaVersion\":1", "\"schemaVersion\":1.0")).IsValid);
+    }
+
+    [Fact]
+    public void Malformed_bearer_claim_scalar_is_unauthorized_not_an_unhandled_500()
+    {
+        var options = new WebHostOptions("https://example.test", "https://example.test", "mydmsvn",
+            "key01", new Dictionary<string, byte[]> { ["key01"] = new byte[32] });
+        // An integer alg value must be rejected without leaking an InvalidOperationException
+        // through the native net10 admission middleware.
+        static string Segment(string text) => Convert.ToBase64String(Utf8.GetBytes(text))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var token = Segment("{\\"alg\\":42,\\"kid\\":\\"key01\\"}") + "." +
+            Segment("{\\"iss\\":\\"https://example.test\\"}") + "." + Segment("signature");
+        Assert.Null(new BearerTokenValidator(options, new FrozenClock()).Validate(token));
+    }
+
+    private sealed class FrozenClock : IUtcClock
+    {
+        public DateTime UtcNow => new DateTime(2026, 11, 17, 0, 0, 0, DateTimeKind.Utc);
     }
 
     private static string FindRoot()
