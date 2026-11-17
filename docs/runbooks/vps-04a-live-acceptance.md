@@ -1,7 +1,7 @@
 # VPS-04A — Live Linux HTTPS → isolated SQL Server acceptance
 
 **Increment:** VPS-04A / PR #9. **Gate owner:** independent acceptance operator.
-**Disposition as of 2026-11-17:** harness implemented; live run **NOT RUN / NOT VERIFIED** until a protected, isolated SQL13 environment is supplied and its final-HEAD Actions run passes. This file does not approve release, production SQL access, VPS-04B, VPS-05, or VPS-07.
+**Disposition as of 2026-11-17 (protected staging lane ONLY):** this separately approved staging live run remains **NOT RUN / NOT VERIFIED** until its protected, isolated SQL13 environment is supplied and its final-HEAD Actions run passes. **Automatic disposable SQL Server CI is separately VERIFIED 4/4 at code HEAD `30dddbcc`**; see [self-contained CI runbook](vps-04a-selfcontained-ci.md). This file does not approve release, production SQL access, VPS-04B, VPS-05, or VPS-07.
 
 ## What the two acceptance lanes actually establish
 
