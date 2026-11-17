@@ -3,7 +3,7 @@
 **Disposition:** local Issue #7 acceptance PASS; this is not production
 approval and does not make VPS-03 complete. Base SHA:
 `f266c68958c7d3b512e1f5e036122ab6341bed5e`. Exact package and acceptance
-HEAD: `40b7ebc00d703a169566b27004825f376418ab8c`, 17 November 2026. PR #6
+HEAD: `51a15cdc0312fca91c81c03752a626b9d245f41d`, 17 November 2026. PR #6
 remains Draft pending final-HEAD CI, independent review, and merge.
 
 ## Environment and package
@@ -16,9 +16,9 @@ remains Draft pending final-HEAD CI, independent review, and merge.
   variable and is not recorded. Canonical HTTPS authority was localhost with a
   pre-trusted certificate thumbprint; no certificate bypass was enabled.
 - Desktop Release net48 x86 SHA-256:
-  `6ea4fd47ecf8b55143d75a64b4b074a72fc205c949740d6c8b3b29f6e52997a7`.
+  `1faac3c0147174ac265c3bca1936afc83378a1bd39bb87570d9e66ead21a80ce`.
   Host SHA-256:
-  `b8720d3b1eaa454b20e25e695ccd76b9b05d2960ddc9e5c150305ad602efab0b`.
+  `40503f437fd7aa353bc93d897d51ffec5f46a65749f73efde16959dc6293c58e`.
 - Publish audit: PE machine `0x014c`, 23 lock entries, 36 published files,
   zero forbidden Local/Server/SQL/MediatR/DbMigrator binaries or secret/SQL
   configuration markers.
@@ -26,7 +26,7 @@ remains Draft pending final-HEAD CI, independent review, and merge.
 ## Exact Issue #7 acceptance
 
 The strict runner wrote results beneath
-`TestResults/vps03-issue7/40b7ebc00d703a169566b27004825f376418ab8c`.
+`TestResults/vps03-issue7/51a15cdc0312fca91c81c03752a626b9d245f41d`.
 The exact commands were:
 
 ```powershell
@@ -34,8 +34,8 @@ pwsh -File scripts/Invoke-Vps03Issue7Acceptance.ps1 -PreflightOnly
 pwsh -File scripts/Invoke-Vps03Issue7Acceptance.ps1 -LiveOnly
 pwsh -File scripts/Invoke-Vps03Issue7Acceptance.ps1 -AttendedOnly
 pwsh -File scripts/Invoke-Vps03Issue7Acceptance.ps1 `
-  -LiveResult TestResults/vps03-issue7/40b7ebc00d703a169566b27004825f376418ab8c/results/live-result.json `
-  -AttendedResult TestResults/vps03-issue7/40b7ebc00d703a169566b27004825f376418ab8c/results/attended/attended-result.json
+  -LiveResult TestResults/vps03-issue7/51a15cdc0312fca91c81c03752a626b9d245f41d/results/live-result.json `
+  -AttendedResult TestResults/vps03-issue7/51a15cdc0312fca91c81c03752a626b9d245f41d/results/attended/attended-result.json
 ```
 
 | Group | Discovered/executed/passed | Failed | Skipped/not executed |
@@ -44,7 +44,17 @@ pwsh -File scripts/Invoke-Vps03Issue7Acceptance.ps1 `
 | Corruption, ACL, origin binding, exact clear | 4/4/4 | 0 | 0 |
 | Live restart/actor/grant/session/terminal/operator/unjournalled | 7/7/7 | 0 | 0 |
 | Attended Native | 1/1/1 | 0 | 0 |
-| **Total** | **14/14/14** | **0** | **0** |
+| Explicit owned-resource cleanup | 1/1/1 | 0 | 0 |
+| **Total** | **15/15/15** | **0** | **0** |
+
+The final protected-store case uses two real x86 processes and pauses an exact
+clear after validation. A second process cannot clear/save a replacement until
+the owner/origin mutex serializes the first compare-delete; the stale clearer
+cannot delete the replacement. The live fail-closed matrix first commits and
+loses an ACK through the owned IIS/SQL environment, then sends every status
+request to the real HTTPS resolution endpoint and mutates only the returned
+response. The production DPAPI pending store remains unchanged for all 18
+nonterminal, transport, HTTP and identity/contract mismatch results.
 
 The attended run accepted all nine checkpoints: LOGIN, SHELL, CATALOG, GOODS,
 SALES, SECURITY, ERRORS, LOGOUT, and UNKNOWN-RECOVERY. The recovery surface
@@ -54,6 +64,17 @@ enabled only the read-only status check, returned the exact authenticated WEB5
 finished with `No pending write` plus disabled recovery actions. Desktop exited
 cleanly. Owned child processes, IIS process, SQL database/login, and test-owned
 pending intent were absent after teardown. No required case was skipped.
+Each owned live environment wrote a HEAD-bound teardown ledger only after its
+IIS process and exact SQL database/login were absent. The final cleanup group
+validated those ledgers plus independent child-process and pending-intent
+probes; its booleans were not initialized as assumed PASS values.
+
+Two non-passing development attempts are retained as failures, not counted as
+evidence: `5a61e64` ran 6/7 live cases before the new matrix hit the login rate
+limit; `51a15cd` had one attended timeout while waiting for operator confirmation.
+Reusing one authenticated live session and rerunning the attended walkthrough
+within its bounded confirmation interval produced the authoritative results
+above.
 
 ## Regression and discovery floors
 
