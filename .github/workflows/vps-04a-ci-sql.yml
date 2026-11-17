@@ -77,8 +77,8 @@ jobs:
 
           cat > "$work/mssql.conf" <<'CONF'
           [network]
-          tlscert = /etc/ssl/certs/vps04a-sql.pem
-          tlskey = /etc/ssl/private/vps04a-sql.key
+          tlscert = /tmp/vps04a-sql.pem
+          tlskey = /tmp/vps04a-sql.key
           tlsprotocols = 1.2
           forceencryption = 1
           CONF
@@ -106,11 +106,21 @@ jobs:
             --pull=always -e ACCEPT_EULA=Y -e MSSQL_PID=Developer -e MSSQL_SA_PASSWORD \
             -p 127.0.0.1:1433:1433 \
             -v "$VPS04A_CI_TLS_DIR/mssql.conf:/var/opt/mssql/mssql.conf:ro" \
-            -v "$VPS04A_CI_TLS_DIR/sql.crt:/etc/ssl/certs/vps04a-sql.pem:ro" \
-            -v "$VPS04A_CI_TLS_DIR/sql.key:/etc/ssl/private/vps04a-sql.key:ro" \
+            -v "$VPS04A_CI_TLS_DIR/sql.crt:/tmp/vps04a-sql.pem:ro" \
+            -v "$VPS04A_CI_TLS_DIR/sql.key:/tmp/vps04a-sql.key:ro" \
             mcr.microsoft.com/mssql/server:2022-latest >/dev/null
           test "$(docker inspect -f '{{.State.Running}}' vps04a-ci-sql)" = "true"
 
+      - name: Validate SQL container identity can read configured TLS files
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Container runs as uid10001 and must traverse the TLS key directory.
+          # Never relax key mode, print the certificate private key, or bypass TLS.
+          docker exec -u 10001 vps04a-ci-sql test -r /tmp/vps04a-sql.key
+          docker exec -u 10001 vps04a-ci-sql test -r /tmp/vps04a-sql.pem
+          docker exec -u 10001 vps04a-ci-sql test -r /var/opt/mssql/mssql.conf
+          echo "PASS: mssql process account can read TLS key, certificate and config"
       - name: Check SQL engine process and readiness without printing container logs
         shell: bash
         run: |
