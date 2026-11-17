@@ -7,7 +7,7 @@
     <NuGetLockFilePath Condition="'$(Vps04Server)' == 'true'">$(MSBuildProjectDirectory)/obj/vps04a.packages.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="System.Numerics" />
+    <Reference Include="System.Numerics" Condition="'$(Vps04Server)' != 'true'" />
     <ProjectReference Include="..\MyDmsVn.SharedKernel\MyDmsVn.SharedKernel.csproj" />
   </ItemGroup>
 </Project>

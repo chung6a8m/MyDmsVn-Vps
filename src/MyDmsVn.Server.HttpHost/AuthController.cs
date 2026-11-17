@@ -96,7 +96,7 @@ public sealed class AuthController : ApiController
     {
         if (HasTokenHeaders() || !await EmptyBody().ConfigureAwait(false)) return Invalid();
         string permission;
-        switch (Request.RequestUri.Query)
+        switch (Request.RequestUri!.Query)
         {
             case "?feature=sales": permission = "Sales.Receipts"; break;
             case "?feature=goods-receipts": permission = "Inventory.GoodsReceipts"; break;
@@ -115,7 +115,7 @@ public sealed class AuthController : ApiController
     private async Task<JObject?> ReadCredentials()
     {
         if (Request.Content == null || Request.Content.Headers.ContentType?.MediaType != "application/json" ||
-            (!string.IsNullOrEmpty(Request.Content.Headers.ContentType.CharSet) && !string.Equals(Request.Content.Headers.ContentType.CharSet.Trim('"'), "utf-8", StringComparison.OrdinalIgnoreCase)) ||
+            (!string.IsNullOrEmpty(Request.Content.Headers.ContentType.CharSet) && !string.Equals(Request.Content.Headers.ContentType.CharSet!.Trim('"'), "utf-8", StringComparison.OrdinalIgnoreCase)) ||
             Request.Content.Headers.ContentEncoding.Any()) return null;
         try
         {
@@ -131,7 +131,7 @@ public sealed class AuthController : ApiController
         catch (Exception exception) when (exception is JsonException || exception is DecoderFallbackException || exception is RegexMatchTimeoutException) { return null; }
     }
     private async Task<bool> EmptyBody() => Request.Content == null || (await Request.Content.ReadAsByteArrayAsync().ConfigureAwait(false)).Length == 0;
-    private bool NoQueryOrTokenHeaders() => string.IsNullOrEmpty(Request.RequestUri.Query) && !HasTokenHeaders();
+    private bool NoQueryOrTokenHeaders() => string.IsNullOrEmpty(Request.RequestUri!.Query) && !HasTokenHeaders();
     private bool HasTokenHeaders() => Request.Headers.Contains("X-Refresh-Token") || Request.Headers.Contains("Refresh-Token");
     private bool Admit(string operation, string subject) => Context.Get<AuthAttemptLimiter>(LimiterKey)
         .TryAdmit(operation, subject, Context.Request.RemoteIpAddress ?? "unknown", _clock.UtcNow);

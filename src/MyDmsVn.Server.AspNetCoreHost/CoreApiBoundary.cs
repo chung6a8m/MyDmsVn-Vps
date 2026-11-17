@@ -102,7 +102,7 @@ internal static class CoreApiBoundary
     }
 
     internal static IList<string>? HeaderValues(HttpContext context, string name) =>
-        context.Request.Headers.TryGetValue(name, out var values) ? values.ToArray() : null;
+        context.Request.Headers.TryGetValue(name, out var values) ? values.Select(value => value ?? string.Empty).ToArray() : null;
 
     private static string SafeCorrelation(IList<string>? values) =>
         values?.Count == 1 && Regex.IsMatch(values[0], @"\A[A-Za-z0-9_-]{1,128}\z")

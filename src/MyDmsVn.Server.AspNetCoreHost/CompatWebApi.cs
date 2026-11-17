@@ -54,6 +54,7 @@ namespace Microsoft.Owin
     {
         string? RemoteIpAddress { get; }
         IOwinRequestHeaders Headers { get; }
+        QueryString QueryString { get; }
     }
 
     public interface IOwinRequestHeaders
@@ -76,11 +77,12 @@ namespace Microsoft.Owin
 
         public IOwinRequest Request => this;
         public IOwinRequestHeaders Headers => this;
+        public QueryString QueryString => _context.Request.QueryString;
         public string? RemoteIpAddress => _context.Connection.RemoteIpAddress?.ToString();
 
         public IList<string>? GetValues(string name) =>
             _context.Request.Headers.TryGetValue(name, out var values)
-                ? values.ToArray()
+                ? values.Select(value => value ?? string.Empty).ToArray()
                 : null;
 
         public T Get<T>(string key)
