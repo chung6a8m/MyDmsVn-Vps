@@ -199,7 +199,8 @@ SELECT CASE WHEN
 THEN 1 ELSE 0 END;", connection);
                 if (Convert.ToInt32(await probe.ExecuteScalarAsync(), CultureInfo.InvariantCulture) != 0)
                 {
-                    _stage = "oracle-denied:" + await DiagnoseOracleAsync(connection);
+                    try { _stage = "oracle-denied:" + await DiagnoseOracleAsync(connection); }
+                    catch { _stage = "oracle-denied:diagnostic-unavailable"; }
                     throw new InvalidOperationException("Oracle exceeds the nine explicit CI-only read tables.");
                 }
             }
@@ -240,7 +241,7 @@ THEN 1 ELSE 0 END;", connection);
         // The only visible output is a truncated database-object identifier and
         // operation name; no SQL text, login, connection string or row contents.
         using var command = new SqlCommand(@"
-SELECT TOP 1 CONCAT(OBJECT_SCHEMA_NAME(o.object_id),N'_',o.name,N'_',p.permission_name)
+SELECT TOP 1 o.name
 FROM sys.objects o
 CROSS APPLY sys.fn_my_permissions(
     QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.'+QUOTENAME(o.name),N'OBJECT') p
