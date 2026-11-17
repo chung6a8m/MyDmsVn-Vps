@@ -7,6 +7,7 @@ using System.Data;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -16,6 +17,7 @@ using Xunit;
 
 namespace MyDmsVn.Server.AspNetCoreHost.Tests;
 
+[SupportedOSPlatform("linux")]
 public sealed class Vps04bWeb6LiveSqlTests
 {
     private static string Required(string name) =>
