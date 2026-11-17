@@ -59,9 +59,14 @@ internal sealed class Vps03OwnedEnvironment
     internal string Password { get; }
 
     internal async Task<Vps03RecoveryActor> CreateRecoveryActorAsync(CancellationToken token)
+        => await CreateActorAsync("Recovery", new[] { "Sales.Receipts.Post" }, token)
+            .ConfigureAwait(false);
+
+    internal async Task<Vps03RecoveryActor> CreateActorAsync(string label,
+        IReadOnlyCollection<string> permissions, CancellationToken token)
     {
         var suffix = Guid.NewGuid().ToString("N");
-        var username = "vps03.recovery." + suffix;
+        var username = "vps03." + label.ToLowerInvariant() + "." + suffix;
         var password = "Vps03Recovery!" + suffix;
         var hash = new BcryptPasswordHasher().Hash(password);
         using var connection = new SqlConnection(OracleConnectionString);
@@ -70,23 +75,34 @@ internal sealed class Vps03OwnedEnvironment
         command.Parameters.AddWithValue("@username", username);
         command.Parameters.AddWithValue("@normalized", username.ToUpperInvariant());
         command.Parameters.AddWithValue("@hash", hash);
-        command.Parameters.AddWithValue("@permission", "Sales.Receipts.Post");
         command.CommandText = @"INSERT dbo.Users(Username,NormalizedUsername,DisplayName,Source,PasswordHash,PasswordSalt,PasswordAlgorithm)
-VALUES(@username,@normalized,N'VPS-03 Recovery Actor',N'Local',@hash,N'',N'BCrypt');
+VALUES(@username,@normalized,N'VPS-03 Test Actor',N'Local',@hash,N'',N'BCrypt');
 DECLARE @id int=CONVERT(int,SCOPE_IDENTITY());
-INSERT dbo.UserPermissions(UserId,PermissionKey,Granted) VALUES(@id,@permission,1);
 SELECT @id;";
         var actor = Convert.ToInt32(await command.ExecuteScalarAsync(token).ConfigureAwait(false));
+        foreach (var permission in permissions)
+        {
+            command.Parameters.Clear();
+            command.Parameters.AddWithValue("@actor", actor);
+            command.Parameters.AddWithValue("@permission", permission);
+            command.CommandText = "INSERT dbo.UserPermissions(UserId,PermissionKey,Granted) VALUES(@actor,@permission,1);";
+            await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+        }
         return new Vps03RecoveryActor(actor, username, password);
     }
 
     internal async Task SetRecoveryPostGrantAsync(int actorUserId, bool granted, CancellationToken token)
+        => await SetActorGrantAsync(actorUserId, "Sales.Receipts.Post", granted, token)
+            .ConfigureAwait(false);
+
+    internal async Task SetActorGrantAsync(int actorUserId, string permission,
+        bool granted, CancellationToken token)
     {
         using var connection = new SqlConnection(OracleConnectionString);
         await connection.OpenAsync(token).ConfigureAwait(false);
         using var command = connection.CreateCommand();
         command.Parameters.AddWithValue("@actor", actorUserId);
-        command.Parameters.AddWithValue("@permission", "Sales.Receipts.Post");
+        command.Parameters.AddWithValue("@permission", permission);
         command.Parameters.AddWithValue("@granted", granted);
         command.CommandText = @"IF EXISTS(SELECT 1 FROM dbo.SystemSecuritySettings WHERE SuperuserUserId=@actor)
 THROW 51991,'VPS-03 refuses to change the superuser grant.',1;
