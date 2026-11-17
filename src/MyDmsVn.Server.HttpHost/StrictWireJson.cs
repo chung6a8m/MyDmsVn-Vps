@@ -1,8 +1,21 @@
 ﻿using System;
 using System.IO;
 using System.Text;
+#if VPS05_STJ_INGRESS
+using JsonException = System.Text.Json.JsonException;
+#else
 using Newtonsoft.Json;
+#endif
+#if VPS05_STJ_INGRESS
+using JObject = MyDmsVn.Server.HttpHost.WireObject;
+using JArray = MyDmsVn.Server.HttpHost.WireArray;
+using JToken = MyDmsVn.Server.HttpHost.WireToken;
+using JValue = MyDmsVn.Server.HttpHost.WireValue;
+using JProperty = MyDmsVn.Server.HttpHost.WireProperty;
+using JTokenType = MyDmsVn.Server.HttpHost.WireTokenType;
+#else
 using Newtonsoft.Json.Linq;
+#endif
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -15,9 +28,13 @@ internal static class StrictWireJson
         {
             var text = new UTF8Encoding(false, true).GetString(bytes);
             new Grammar(text).Read();
+#if VPS05_STJ_INGRESS
+            return WireObject.Parse(bytes, 16);
+#else
             using var reader = new JsonTextReader(new StringReader(text))
             { DateParseHandling = DateParseHandling.None, FloatParseHandling = FloatParseHandling.Decimal, MaxDepth = 16 };
             return JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
+#endif
         }
         catch (Exception error) when (error is JsonException || error is FormatException || error is DecoderFallbackException || error is OverflowException)
         { throw new WireInputException(); }

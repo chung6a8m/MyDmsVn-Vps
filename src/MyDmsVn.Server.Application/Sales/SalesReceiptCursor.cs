@@ -8,7 +8,12 @@ using System.Text;
 using FluentValidation;
 using FluentValidation.Results;
 using MyDmsVn.Contracts;
+#if NET10_0_OR_GREATER
+using System.Text.Encodings.Web;
+using System.Text.Json;
+#else
 using Newtonsoft.Json;
+#endif
 
 namespace MyDmsVn.Server.Application.Sales;
 
@@ -84,6 +89,35 @@ public sealed class SalesReceiptCursor
         });
         using var sha = SHA256.Create(); return Base64(sha.ComputeHash(Utf8.GetBytes(canonical)));
     }
+#if NET10_0_OR_GREATER
+    private static string Json(Action<Utf8JsonWriter> write)
+    {
+        using var output = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(output, new JsonWriterOptions
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            Indented = false
+        }))
+        {
+            write(writer);
+            writer.Flush();
+        }
+        return Utf8.GetString(output.ToArray());
+    }
+
+    private static void Property(Utf8JsonWriter writer, string name, object? value)
+    {
+        writer.WritePropertyName(name);
+        switch (value)
+        {
+            case null: writer.WriteNullValue(); break;
+            case string text: writer.WriteStringValue(text); break;
+            case int integer: writer.WriteNumberValue(integer); break;
+            case long integer: writer.WriteNumberValue(integer); break;
+            default: throw new InvalidOperationException("Unsupported cursor value type.");
+        }
+    }
+#else
     private static string Json(Action<JsonTextWriter> write)
     {
         using var text = new StringWriter(CultureInfo.InvariantCulture);
@@ -91,6 +125,7 @@ public sealed class SalesReceiptCursor
         write(writer); writer.Flush(); return text.ToString();
     }
     private static void Property(JsonTextWriter writer, string name, object? value) { writer.WritePropertyName(name); writer.WriteValue(value); }
+#endif
     private static string Base64(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     private static byte[] Decode(string value, int maxChars, int maxBytes)
     {
@@ -119,7 +154,11 @@ public sealed class SalesReceiptCursor
                 if (index - start > max * 6 + 2) throw new FormatException();
             }
             if (!closed) throw new FormatException();
+#if NET10_0_OR_GREATER
+            var value = System.Text.Json.JsonSerializer.Deserialize<string>(text.Substring(start, index - start))!;
+#else
             var value = JsonConvert.DeserializeObject<string>(text.Substring(start, index - start))!;
+#endif
             if (value.Length > max) throw new FormatException(); Utf8.GetByteCount(value); return value;
         }
         string Integer()

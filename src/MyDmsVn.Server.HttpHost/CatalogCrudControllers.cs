@@ -1,3 +1,8 @@
+#if VPS05_STJ_INGRESS
+using JsonBody = MyDmsVn.Server.HttpHost.WireObject;
+#else
+using JsonBody = Newtonsoft.Json.Linq.JObject;
+#endif
 using System;
 using System.Net.Http;
 using System.Threading;
@@ -29,14 +34,14 @@ public abstract class CatalogCrudControllerBase : WireApiController
             await CatalogWireInput.EmptyBody(Request).ConfigureAwait(false);
             return await Mediator.Send(query(CatalogWireInput.Id(id)), token).ConfigureAwait(false);
         }, result => result!);
-    protected Task<HttpResponseMessage> Create<T, TRequest>(Func<Newtonsoft.Json.Linq.JObject, TRequest> decode,
+    protected Task<HttpResponseMessage> Create<T, TRequest>(Func<JsonBody, TRequest> decode,
         Func<TRequest, IRequest<ErrorOr<T>>> command, CancellationToken token) =>
         ExecuteDesktop<T>(async () =>
         {
             var body = await CatalogWireInput.Body(Request).ConfigureAwait(false);
             return await Mediator.Send(command(decode(body)), token).ConfigureAwait(false);
         }, result => result!);
-    protected Task<HttpResponseMessage> Update<T, TRequest>(string id, Func<Newtonsoft.Json.Linq.JObject, TRequest> decode,
+    protected Task<HttpResponseMessage> Update<T, TRequest>(string id, Func<JsonBody, TRequest> decode,
         Func<int, TRequest, IRequest<ErrorOr<T>>> command, CancellationToken token) =>
         ExecuteDesktop<T>(async () =>
         {

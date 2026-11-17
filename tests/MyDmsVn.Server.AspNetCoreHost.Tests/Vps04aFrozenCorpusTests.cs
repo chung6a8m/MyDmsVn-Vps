@@ -7,7 +7,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using MyDmsVn.Server.HttpHost;
-using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace MyDmsVn.Server.AspNetCoreHost.Tests;
@@ -118,7 +117,7 @@ public sealed class Vps04aFrozenCorpusTests
             var targetValue = intent.GetProperty("requestTargetId");
             long? target = targetValue.ValueKind == JsonValueKind.Null ? null :
                 long.Parse(targetValue.GetString()!, CultureInfo.InvariantCulture);
-            var body = JObject.Parse(intent.GetProperty("body").GetRawText());
+            var body = WireObject.Parse(Encoding.UTF8.GetBytes(intent.GetProperty("body").GetRawText()));
             var canonical = WebOperationWireInput.Canonicalize(kind, target, body);
             Assert.Equal(vector.GetProperty("canonical").GetString(), canonical);
             var sha = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();

@@ -1,6 +1,6 @@
 // VPS-05A: System.Text.Json response boundary for the Linux net10 host.
 // The separate legacy net48 HttpHost retains Newtonsoft.Json with no source edits.
-// TODO VPS-05B: replace remaining Json.NET request DOM and contract attributes.
+// VPS-05B: use the net10 strict STJ request DOM and explicit DTO calendar metadata.
 using System;
 using System.Globalization;
 using System.Net;
@@ -11,8 +11,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using MyDmsVn.Contracts;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -51,27 +49,30 @@ internal static class Net10WireJson
         var resolver = new DefaultJsonTypeInfoResolver();
         resolver.Modifiers.Add(typeInfo =>
         {
-            // Transitional egress compatibility: shared DTO annotations are still
-            // Newtonsoft attributes. Preserve only the known calendar-date writers;
-            // VPS-05B/C will move the contracts to native STJ metadata.
+            // Net10 contract metadata is explicit and must never depend on
+            // Newtonsoft attributes in the shared net48 DTO assembly.
+            var saleType = typeInfo.Type == typeof(SalesReceiptDto) ||
+                typeInfo.Type == typeof(SalesReceiptListRequest) ||
+                typeInfo.Type == typeof(SalesReceiptListRow) ||
+                typeInfo.Type == typeof(SaveSalesReceiptRequest) ||
+                typeInfo.Type == typeof(UpdateSalesReceiptDraftRequest);
+            var receiptType = typeInfo.Type == typeof(GoodsReceiptDto) ||
+                typeInfo.Type == typeof(SaveGoodsReceiptRequest) ||
+                typeInfo.Type == typeof(UpdateGoodsReceiptDraftRequest);
             foreach (var property in typeInfo.Properties)
             {
-                if (property.PropertyType != typeof(DateTime) && property.PropertyType != typeof(DateTime?))
-                    continue;
-                var attributes = property.AttributeProvider?.GetCustomAttributes(
-                    typeof(Newtonsoft.Json.JsonConverterAttribute), true);
-                if (attributes == null) continue;
-                foreach (var item in attributes)
-                {
-                    if (item is not Newtonsoft.Json.JsonConverterAttribute attribute ||
-                        (attribute.ConverterType != typeof(CalendarDateJsonConverter) &&
-                         attribute.ConverterType != typeof(SalesCalendarDateJsonConverter)))
-                        continue;
-                    property.CustomConverter = property.PropertyType == typeof(DateTime)
-                        ? (System.Text.Json.Serialization.JsonConverter)new CalendarDateWriter()
-                        : new NullableCalendarDateWriter();
-                    break;
-                }
+                if (property.PropertyType != typeof(DateTime) &&
+                    property.PropertyType != typeof(DateTime?)) continue;
+                var isCalendarDate = saleType &&
+                        (string.Equals(property.Name, "saleDate", StringComparison.OrdinalIgnoreCase) ||
+                         typeInfo.Type == typeof(SalesReceiptListRequest) &&
+                         (string.Equals(property.Name, "fromDate", StringComparison.OrdinalIgnoreCase) ||
+                          string.Equals(property.Name, "toDate", StringComparison.OrdinalIgnoreCase))) ||
+                    receiptType && string.Equals(property.Name, "receiptDate", StringComparison.OrdinalIgnoreCase);
+                if (!isCalendarDate) continue;
+                property.CustomConverter = property.PropertyType == typeof(DateTime)
+                    ? (JsonConverter)new CalendarDateWriter()
+                    : new NullableCalendarDateWriter();
             }
         });
         var options = new JsonSerializerOptions
@@ -141,15 +142,10 @@ internal static class Net10WireJson
 
     private static string SerializeValue(object value)
     {
-        // VPS-05A deliberately retains the trusted JToken projections. Parse
-        // them under the legacy UTC/settings oracle before JsonDocument + STJ
-        // egress, preserving explicit nulls, ordering and numeric lexemes.
-        // VPS-05B will remove this transitional branch with typed projections.
-        if (value is JToken legacy)
-        {
-            using var document = JsonDocument.Parse(JsonConvert.SerializeObject(legacy, ApiJson.CreateSerializerSettings()));
-            return System.Text.Json.JsonSerializer.Serialize(document.RootElement, Options);
-        }
+        // The net10 projection tree is already backed by System.Text.Json.Nodes.
+        // Preserve explicit null members, lexical numbers and insertion order.
+        if (value is WireToken wire)
+            return System.Text.Json.JsonSerializer.Serialize(wire.Node, Options);
         return System.Text.Json.JsonSerializer.Serialize(value, value.GetType(), Options);
     }
 }

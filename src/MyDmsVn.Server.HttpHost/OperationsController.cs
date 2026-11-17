@@ -10,7 +10,16 @@ using MyDmsVn.Server.Application;
 using MyDmsVn.Server.Application.Identity;
 using MyDmsVn.Server.Application.Operations;
 using MyDmsVn.Server.Application.Persistence;
+#if VPS05_STJ_INGRESS
+using JObject = MyDmsVn.Server.HttpHost.WireObject;
+using JArray = MyDmsVn.Server.HttpHost.WireArray;
+using JToken = MyDmsVn.Server.HttpHost.WireToken;
+using JValue = MyDmsVn.Server.HttpHost.WireValue;
+using JProperty = MyDmsVn.Server.HttpHost.WireProperty;
+using JTokenType = MyDmsVn.Server.HttpHost.WireTokenType;
+#else
 using Newtonsoft.Json.Linq;
+#endif
 
 namespace MyDmsVn.Server.HttpHost;
 

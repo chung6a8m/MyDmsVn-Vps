@@ -101,7 +101,8 @@ public sealed class Vps05JsonEgressParityTests
             ["warehouseId"] = 3
         };
         var response = ApiResponse<object>.Success(data);
-        var json = Net10WireJson.SerializeEnvelope(response);
+        var native = WireObject.Parse(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(data, ApiJson.CreateSerializerSettings())));
+        var json = Net10WireJson.SerializeEnvelope(ApiResponse<object>.Success(native));
         Assert.Equal(Legacy(response), json);
         using var doc = JsonDocument.Parse(json);
         Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("data").GetProperty("note").ValueKind);
@@ -118,7 +119,7 @@ public sealed class Vps05JsonEgressParityTests
             new[] { new GoodsReceiptLineDto(9007199254740993L, 1, 7, 1.2500m, 19.9900m) });
         var body = InventoryWireOutput.Detail(receipt);
         var result = ApiResponse<object>.Success(body);
-        var old = Legacy(result);
+        var old = Legacy(ApiResponse<object>.Success(JObject.Parse(body.Node!.ToJsonString())));
         var current = Net10WireJson.SerializeEnvelope(result);
         Assert.Equal(old, current);
         var journal = new WebOperationResultCodec().Encode(WebOperationKind.ReceiptCreate, receipt);
@@ -183,13 +184,14 @@ public sealed class Vps05JsonEgressParityTests
     [Fact]
     public void Legacy_JToken_datetime_uses_UTC_settings_before_STJ_egress()
     {
-        var response = ApiResponse<object>.Success(new JObject
+        var legacy = new JObject
         {
             ["postedAtUtc"] = new JValue(new DateTime(2026, 11, 17, 13, 14, 15, DateTimeKind.Unspecified)),
             ["note"] = JValue.CreateNull(),
-        });
-        var expected = Legacy(response);
+        };
+        var expected = Legacy(ApiResponse<object>.Success(legacy));
         Assert.Contains("\"postedAtUtc\":\"2026-11-17T13:14:15Z\"", expected);
-        Assert.Equal(expected, Net10WireJson.SerializeEnvelope(response));
+        var native = WireObject.Parse(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(legacy, ApiJson.CreateSerializerSettings())));
+        Assert.Equal(expected, Net10WireJson.SerializeEnvelope(ApiResponse<object>.Success(native)));
     }
 }

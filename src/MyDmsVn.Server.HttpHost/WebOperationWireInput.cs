@@ -6,7 +6,16 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using MyDmsVn.Server.Application.Operations;
+#if VPS05_STJ_INGRESS
+using JObject = MyDmsVn.Server.HttpHost.WireObject;
+using JArray = MyDmsVn.Server.HttpHost.WireArray;
+using JToken = MyDmsVn.Server.HttpHost.WireToken;
+using JValue = MyDmsVn.Server.HttpHost.WireValue;
+using JProperty = MyDmsVn.Server.HttpHost.WireProperty;
+using JTokenType = MyDmsVn.Server.HttpHost.WireTokenType;
+#else
 using Newtonsoft.Json.Linq;
+#endif
 
 namespace MyDmsVn.Server.HttpHost;
 
