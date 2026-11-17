@@ -2,6 +2,7 @@ name: VPS-04A — ASP.NET Core 10 Linux build and frozen route gate
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, labeled]
   push:
     branches: [main]
   workflow_dispatch:
@@ -14,6 +15,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+
+  # Manual pre-merge acceptance trigger: only on the explicit labeled event,
+  # same-repo PR head and protected nonproduction environment reviewer approval.
+  # Never run mutation tests automatically on pushes or ordinary PR synchronization.
+  approved-linux-sql:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'vps04a-live-approved' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'codex/vps-04a-net10-aspnetcore'
+    uses: ./.github/workflows/vps-04a-live-acceptance.yml
+    secrets: inherit
   linux-net10:
     name: Ubuntu SDK 10.0.404 restore/build and 57-route inventory (SQL-free)
     runs-on: ubuntu-24.04
