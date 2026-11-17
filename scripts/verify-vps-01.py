@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 root = Path(__file__).resolve().parents[1]
 projects = sorted((root / "tests").glob("*/*.csproj"))
 suites = [p for p in projects if p.parent.name != "MyDmsVn.WebOperation.CrashHost"]
-assert len(projects) == 13 and len(suites) == 12, "Test project inventory drift"
+assert len(projects) == 14 and len(suites) == 13, "Test project inventory drift"
 for path in suites:
     doc = ET.parse(path).getroot()
     props = lambda key: [n.text for n in doc.iter(key) if n.text]
@@ -58,7 +58,7 @@ for test_id, floor in expected_smoke_floors.items():
     assert smoke_matrix.count(row) == 1, f"Missing smoke floor {test_id}={floor}"
 assert smoke_matrix.count("minimum_tests:") == len(expected_smoke_floors), "Unexpected smoke floor inventory"
 
-print("VPS-01 static topology: PASS 12 executable xUnit v3 projects; 29 routes; 178 fixtures; 4 smoke floors")
+print("VPS-01 static topology: PASS 13 executable xUnit v3 projects; 29 routes; 178 fixtures; 4 smoke floors")
 
 
 # VPS-02 retains the 29 legacy routes; additions and Desktop mappings are versioned independently.
