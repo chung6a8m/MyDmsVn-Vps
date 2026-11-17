@@ -31,8 +31,9 @@ if ($env:MYDMSVN_VPS03_API_ORIGIN -notmatch '^https://[^/]+$') { throw 'VPS03.No
 $resultRoot = Join-Path $root "TestResults\vps03-issue8\$head"
 $desktop = Join-Path $resultRoot 'desktop'
 $hostPackage = Join-Path $resultRoot 'host'
+$hostStaging = Join-Path $resultRoot 'host-staging'
 $results = Join-Path $resultRoot 'results'
-New-Item -ItemType Directory -Force -Path $desktop,$hostPackage,$results | Out-Null
+New-Item -ItemType Directory -Force -Path $desktop,$hostPackage,$hostStaging,$results | Out-Null
 
 if ($PreflightOnly) {
     Write-Host "PASS preflight head=$head results=$resultRoot"
@@ -56,8 +57,13 @@ dotnet publish src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj -c $Configurat
 if ($LASTEXITCODE -ne 0) { throw 'VPS03.DesktopPublishFailed' }
 dotnet restore src/MyDmsVn.Server.HttpHost/MyDmsVn.Server.HttpHost.csproj --locked-mode -v minimal
 if ($LASTEXITCODE -ne 0) { throw 'VPS03.HostRestoreFailed' }
-dotnet publish src/MyDmsVn.Server.HttpHost/MyDmsVn.Server.HttpHost.csproj -c $Configuration -f net48 --no-restore -o $hostPackage
+dotnet publish src/MyDmsVn.Server.HttpHost/MyDmsVn.Server.HttpHost.csproj -c $Configuration -f net48 --no-restore -o $hostStaging
 if ($LASTEXITCODE -ne 0) { throw 'VPS03.HostPublishFailed' }
+$hostBin = Join-Path $hostPackage 'bin'
+New-Item -ItemType Directory -Force -Path $hostBin | Out-Null
+Copy-Item -Path (Join-Path $hostStaging '*') -Destination $hostBin -Recurse -Force
+Copy-Item -LiteralPath 'src/MyDmsVn.Server.HttpHost/Web.config' -Destination (Join-Path $hostPackage 'Web.config') -Force
+Copy-Item -LiteralPath 'src/MyDmsVn.Server.HttpHost/wwwroot' -Destination (Join-Path $hostPackage 'wwwroot') -Recurse -Force
 
 $provenance = @{ headSha = $head } | ConvertTo-Json -Compress
 [IO.File]::WriteAllText((Join-Path $desktop 'vps03-package-provenance.json'), $provenance)
