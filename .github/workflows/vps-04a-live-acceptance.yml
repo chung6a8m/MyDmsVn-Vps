@@ -88,10 +88,24 @@ jobs:
           REVIEWED_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          current="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/9" --jq '.head.sha')"
+          # Approval can wait while the PR is closed, relabeled or retargeted.
+          # Reconfirm every admission constraint before starting the SQL host.
+          snapshot="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/9")"
+          if ! printf '%s' "$snapshot" | jq -e \
+               --arg sha "$REVIEWED_HEAD" --arg repo "$GITHUB_REPOSITORY" '
+               .state == "open" and .merged_at == null and
+               .head.sha == $sha and
+               .head.ref == "codex/vps-04a-net10-aspnetcore" and
+               .head.repo.full_name == $repo and
+               .base.ref == "main" and
+               any(.labels[]; .name == "vps04a-live-approved")
+             ' >/dev/null; then
+            echo "::error::PR #9 is no longer open, labeled, or on the admitted source/base/head."
+            exit 1
+          fi
           checked="$(git rev-parse HEAD)"
-          if [ "$current" != "$REVIEWED_HEAD" ] || [ "$checked" != "$REVIEWED_HEAD" ]; then
-            echo "::error::PR HEAD advanced or checkout differs from reviewed source SHA; SQL refused."
+          if [ "$checked" != "$REVIEWED_HEAD" ]; then
+            echo "::error::Checkout is not the reviewed source SHA; SQL refused."
             exit 1
           fi
           echo "Pinned reviewed source HEAD: $checked"
@@ -154,9 +168,17 @@ jobs:
           REVIEWED_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          current="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/9" --jq '.head.sha')"
-          if [ "$current" != "$REVIEWED_HEAD" ]; then
-            echo "::error::PR HEAD advanced during live run; final-HEAD acceptance invalid."
+          snapshot="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/9")"
+          if ! printf '%s' "$snapshot" | jq -e \
+               --arg sha "$REVIEWED_HEAD" --arg repo "$GITHUB_REPOSITORY" '
+               .state == "open" and .merged_at == null and
+               .head.sha == $sha and
+               .head.ref == "codex/vps-04a-net10-aspnetcore" and
+               .head.repo.full_name == $repo and
+               .base.ref == "main" and
+               any(.labels[]; .name == "vps04a-live-approved")
+             ' >/dev/null; then
+            echo "::error::PR #9 authorization or HEAD changed during live run; final-HEAD acceptance invalid."
             exit 1
           fi
       - name: Keep exact-SHA live test TRX, never secrets or server logs

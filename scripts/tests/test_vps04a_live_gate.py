@@ -102,6 +102,11 @@ class ProtectedLiveGateTests(TestCase):
         self.assertIn("persist-credentials: false", live)
         self.assertIn("gh api", live)
         self.assertIn("REVIEWED_HEAD", live)
+        # Revoke a pending deployment when label, PR state or source/base changes
+        # while an independent Environment review was still pending.
+        self.assertEqual(live.count('.state == "open"'), 2)
+        self.assertEqual(live.count('.merged_at == null'), 2)
+        self.assertEqual(live.count('any(.labels[]; .name == "vps04a-live-approved")'), 2)
         self.assertNotIn("workflow_dispatch:", live)
 
 
