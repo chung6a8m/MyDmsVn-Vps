@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$PreflightOnly,
+    [switch]$CoreOnly,
     [string]$Configuration = 'Release',
     [string]$AttendedResult,
     [string]$LostAckResult
@@ -39,6 +40,7 @@ if ($PreflightOnly) {
 }
 
 foreach ($evidence in @(@{ Name = 'attended'; Path = $AttendedResult }, @{ Name = 'lost-ack'; Path = $LostAckResult })) {
+    if ($CoreOnly) { break }
     if ([string]::IsNullOrWhiteSpace($evidence.Path) -or -not (Test-Path -LiteralPath $evidence.Path)) {
         throw "VPS03.RequiredGateMissing:$($evidence.Name)"
     }
@@ -76,4 +78,5 @@ $counters = $document.TestRun.ResultSummary.Counters
 if ([int]$counters.total -le 0 -or [int]$counters.executed -ne [int]$counters.total -or
     [int]$counters.passed -ne [int]$counters.total -or [int]$counters.failed -ne 0 -or
     [int]$counters.notExecuted -ne 0) { throw 'VPS03.EvidenceNotComplete' }
-Write-Host "PASS head=$head total=$($counters.total) passed=$($counters.passed) failed=0 skipped=0 results=$resultRoot"
+$label = if ($CoreOnly) { 'PARTIAL CORE' } else { 'PASS' }
+Write-Host "$label head=$head total=$($counters.total) passed=$($counters.passed) failed=0 skipped=0 results=$resultRoot"
