@@ -182,6 +182,29 @@ public sealed class CoreApiBoundaryTests
         Assert.Matches(new Regex("^[0-9a-f]{32}$", RegexOptions.CultureInvariant), correlation);
     }
 
+    private sealed class ScopedIdentityMarker { }
+
+    private sealed class SingletonCapturingScopedIdentity
+    {
+        public SingletonCapturingScopedIdentity(ScopedIdentityMarker scoped) => Scoped = scoped;
+        public ScopedIdentityMarker Scoped { get; }
+    }
+
+    [Fact]
+    public void ProductionHostRejectsSingletonCaptureOfScopedIdentity()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = "Production"
+        });
+        Program.RequireScopeValidation(builder);
+        builder.Services.AddScoped<ScopedIdentityMarker>();
+        builder.Services.AddSingleton<SingletonCapturingScopedIdentity>();
+        using var app = builder.Build();
+        Assert.Throws<InvalidOperationException>(() =>
+            app.Services.GetRequiredService<SingletonCapturingScopedIdentity>());
+    }
+
     [Fact]
     public void FallbackRouteIncludesUnknownApiPathsWithFileExtensions()
     {

@@ -9,7 +9,7 @@ Work branch: `codex/vps-04a-net10-aspnetcore`. **Status: IN PROGRESS; no accepta
 - Server Contracts, SharedKernel, Domain, Application, Infrastructure use `-p:Vps04Server=true` for `net10.0` while their ordinary Windows/legacy path remains unchanged `net48`. This is a **transition mechanism**, not the final TFMs.
 - Source-links the existing WEB2-WEB6 controllers, token validation, strict wire parsing and DTO codecs. `Newtonsoft.Json`, `MediatR` and DbUp remain unchanged. Native ASP.NET Core endpoint registration emits exactly 57 source-frozen route signatures, with a fail-closed count/duplicate check.
 - Kestrel request-scoped DI; TLS origin and forwarded-header boundary checks, strict Origin/CSRF checks, 1 MiB bounded read, correlation, Bearer JWT plus SQL session admission, JSON error envelope and HttpResponseMessage write-back. Startup performs the same SQL schema, principal and superuser validation before listening.
-- New Linux CI workflow for `net10.0` locked restore/Release build, 363 Server.Application xUnit v3 regressions, initially 17 native ASP.NET Core HTTP boundary regressions (review fixes add 3 more), and compiled 57-route contract inventory. Existing net48 test/build workflows remain independent.
+- New Linux CI workflow for `net10.0` locked restore/Release build, 363 Server.Application xUnit v3 regressions, initially 17 native ASP.NET Core HTTP boundary regressions (review fixes add 4 more), and compiled 57-route contract inventory. Existing net48 test/build workflows remain independent.
 
 ## Deliberate temporary boundaries
 
@@ -43,7 +43,8 @@ python3 scripts/verify-vps-04a.py vps04a-routes.json
 
 - **R1 / P1 — unknown API path with a dot:** The default ASP.NET Core `MapFallback` uses `{*path:nonfile}` and skips paths like `/api/v1/unknown.json`, yielding a bare 404 instead of the frozen JSON `NotFound` envelope. The review-fix commit explicitly maps `{**path}`; two SQL-free regressions verify catch-all registration and fallback JSON content.
 - **R2 / P1 — escaped path delimiter corruption:** Building a legacy `HttpRequestMessage.RequestUri` by concatenating decoded `Request.Path.Value` can reinterpret `%3F` and `%23` as query/fragment separators. The review-fix commit uses ASP.NET Core `GetEncodedUrl()` and tests escaped path delimiters with an independent query string.
-- **R3 / P2 — outdated evidence ledger:** Four workflows completed successfully on the pre-review candidate `a1e1e415`: Linux net10, Windows legacy foundation, VPS-01 discovery, and VPS-03 publish. Earlier narrative still requested those checks at `9006843c`. The new review-fix HEAD requires a separate exact-SHA rerun.
+- **R3 / P1 — Production DI scope validation regression:** The legacy OWIN host explicitly enforced `ValidateScopes=true` in all environments. ASP.NET Core defaults this check off in Production, potentially allowing a singleton to capture a request-scoped identity/correlation dependency. The review-fix sets `ValidateScopes=true` explicitly for the new host and adds a Production-host regression that rejects the invalid lifetime graph.
+- **R4 / P2 — outdated evidence ledger:** Four workflows completed successfully on the pre-review candidate `a1e1e415`: Linux net10, Windows legacy foundation, VPS-01 discovery, and VPS-03 publish. Earlier narrative still requested those checks at `9006843c`. The new review-fix HEAD requires a separate exact-SHA rerun.
 - These are **code/structural gates** only; they do not supply the missing live Linux HTTPS/SQL, 178 JSON corpus, JWT/session, or idempotency acceptance. No merge or production approval is inferred.
 
 ## Evidence and remaining acceptance gates
@@ -59,7 +60,7 @@ python3 scripts/verify-vps-04a.py vps04a-routes.json
 | Linux SDK 10.0.404 server graph / ASP.NET Core build | PASS on pre-review `a1e1e415`; review-fix HEAD rerun required | [Linux run #44040635663](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44040635663) |
 | Native compiled 57/57 route map | PASS on pre-review `a1e1e415`; review-fix HEAD rerun required | Runner-generated JSON + immutable 29+28 manifest comparison |
 | Net10 packages locked | PASS on pre-review `a1e1e415`; review-fix HEAD rerun required | Eight versioned net10 locks, `--locked-mode`, no NuGet audit downgrade |
-| Net10 xUnit v3 regressions / HTTP perimeter | PASS on pre-review `a1e1e415`; review-fix HEAD rerun required | Server.Application 363/363; native boundary floor raised from 17 to 20, no failed/skipped |
+| Net10 xUnit v3 regressions / HTTP perimeter | PASS on pre-review `a1e1e415`; review-fix HEAD rerun required | Server.Application 363/363; native boundary floor raised from 17 to 21, no failed/skipped |
 | Live Linux Kestrel HTTPS with approved SQL schema | NOT RUN | Real SQL and HTTP tests, exact revision |
 | JWT/login/refresh/logout/authorization/idempotency & 178 frozen JSON corpora | NOT RUN on net10 | Independent Linux HTTP/SQL oracle |
 | VPS-04B portable audit and deployment security | OUT OF SCOPE | Separate increment |

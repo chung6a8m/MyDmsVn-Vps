@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using MyDmsVn.Server.Application;
 using MyDmsVn.Server.Application.Identity;
 using MyDmsVn.Server.Infrastructure;
@@ -37,6 +38,12 @@ internal static class Program
             Environment.ExitCode = 1;
         }
     }
+
+    // The Web API 2 host used ValidateScopes=true in every environment.
+    // ASP.NET Core enables it by default only in Development; retain fail-closed
+    // request identity/correlation lifetimes on a Linux Production deployment.
+    internal static void RequireScopeValidation(WebApplicationBuilder builder) =>
+        builder.Host.UseDefaultServiceProvider(options => options.ValidateScopes = true);
 
     private static async Task<WebApplication> CreateAppAsync(string[] args)
     {
@@ -73,6 +80,7 @@ internal static class Program
         }
 
         var builder = WebApplication.CreateBuilder(args);
+        RequireScopeValidation(builder);
         builder.Services.AddServerApplication(superuser).AddHttpRequestIdentity();
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton(sessions);
