@@ -189,7 +189,7 @@ SELECT CASE WHEN
     SELECT 1 FROM sys.objects o
     CROSS APPLY sys.fn_my_permissions(
       QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.'+QUOTENAME(o.name),N'OBJECT') p
-    WHERE o.is_ms_shipped=0 AND p.permission_name IN
+    WHERE o.is_ms_shipped=0 AND o.parent_object_id=0 AND p.permission_name IN
       (N'SELECT',N'INSERT',N'UPDATE',N'DELETE',N'EXECUTE',N'ALTER',N'CONTROL')
       AND NOT (p.permission_name=N'SELECT' AND OBJECT_SCHEMA_NAME(o.object_id)=N'dbo'
         AND o.name IN(N'WebAuthSessions',N'WebOperationJournal',N'SalesReceipts',
@@ -245,7 +245,7 @@ SELECT TOP 1 o.name
 FROM sys.objects o
 CROSS APPLY sys.fn_my_permissions(
     QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.'+QUOTENAME(o.name),N'OBJECT') p
-WHERE o.is_ms_shipped=0 AND p.permission_name IN
+WHERE o.is_ms_shipped=0 AND o.parent_object_id=0 AND p.permission_name IN
   (N'SELECT',N'INSERT',N'UPDATE',N'DELETE',N'EXECUTE',N'ALTER',N'CONTROL')
   AND NOT (p.permission_name=N'SELECT' AND OBJECT_SCHEMA_NAME(o.object_id)=N'dbo'
     AND o.name IN(N'WebAuthSessions',N'WebOperationJournal',N'SalesReceipts',
@@ -355,7 +355,7 @@ WHERE p.permission_name IN(N'SELECT',N'INSERT',N'UPDATE',N'DELETE',N'EXECUTE',N'
 SELECT TOP 1 CONCAT(o.name,':',p.permission_name) FROM sys.objects o
 CROSS APPLY sys.fn_my_permissions(
   QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.'+QUOTENAME(o.name),N'OBJECT') p
-WHERE o.is_ms_shipped=0 AND p.permission_name IN
+WHERE o.is_ms_shipped=0 AND o.parent_object_id=0 AND p.permission_name IN
   (N'SELECT',N'INSERT',N'UPDATE',N'DELETE',N'EXECUTE',N'REFERENCES',N'ALTER',N'CONTROL',N'TAKE OWNERSHIP')
   AND NOT (OBJECT_SCHEMA_NAME(o.object_id)=N'dbo' AND (
     (p.permission_name=N'SELECT' AND o.name IN
