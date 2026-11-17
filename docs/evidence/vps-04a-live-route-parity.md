@@ -1,6 +1,6 @@
 # VPS-04A — WEB2–WEB6 Linux HTTPS response coverage inventory (PR #9)
 
-**Scope:** frozen source route inventories `docs/contracts/vps-01-route-inventory.json` (29) and `docs/contracts/vps-02-route-additions.json` (28), **57 compiled signatures**. Updated for code checkpoint `874cf87b15871e671bd4d72998cc97ca39b1d971` (2026-11-17); exact final documentation HEAD CI evidence will be recorded in PR #9. This is a **coverage ledger**, not a claim of exhaustive live response parity. The canonical live roadmap status remains `docs/roadmap/README.md`.
+**Scope:** frozen source route inventories `docs/contracts/vps-01-route-inventory.json` (29) and `docs/contracts/vps-02-route-additions.json` (28), **57 compiled signatures**. Updated for code checkpoint `62544462326e413474f7d402f851a4bcf8fd4c2f` (2026-11-17); exact final documentation HEAD CI evidence will be recorded in PR #9. This is a **coverage ledger**, not a claim of exhaustive live response parity. The canonical live roadmap status remains `docs/roadmap/README.md`.
 
 ## Evidence definitions
 
@@ -21,7 +21,7 @@
 | VPS-02 | 28 | 0 | 0 | 0 | 28 |
 | **TOTAL** | **57** | **16** | **10** | **3** | **28** |
 
-**Scenario evidence:** the new suite executes **24 scenarios (WEB2 9, WEB3 5, WEB4 4, WEB5 3, WEB6 3)** across 16 enabled-response routes and 3 deliberately disabled WEB6 routes; the SQL CI runs 5 new xUnit facts plus 10 previously proven cases (**15/15**). Multiple scenarios may share a route. Do not equate 21 scenarios, 57 compiled routes or 178 frozen corpus files with 178 runnable payload replays.
+**Scenario evidence:** the new suite executes **24 scenarios (WEB2 9, WEB3 5, WEB4 4, WEB5 3, WEB6 3)** across 16 enabled-response routes and 3 deliberately disabled WEB6 routes; the SQL CI runs 5 new xUnit facts plus 10 previously proven cases (**15/15**). Multiple scenarios may share a route. Do not equate 24 scenarios, 57 compiled routes or 178 frozen corpus files with 178 runnable payload replays.
 
 **Safe artifacts:** `vps04a-ci-group-parity` contains `WEB2.json` through `WEB6.json`, each with `group`, `scope`, `mode`, `cases[].{id,route,fixture,sqlOracle,expected,actual,diff}`. The validator rejects any missing group, scenario, field or nonempty diff. These are **allowlisted projections** only, not raw HTTP responses, JWTs or cookies.
 
