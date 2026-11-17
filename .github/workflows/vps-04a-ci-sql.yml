@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   isolated-sql13:
-    name: Ubuntu .NET 10 + private SQL2022 Docker + HTTPS + 4/4 SQL oracles
+    name: Ubuntu .NET 10 + isolated SQL2022 TLS + golden HTTP/stock/fault 8/8
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     env:
@@ -31,6 +31,7 @@ jobs:
       VPS04A_LIVE_DENIED_USERNAME: vps04a_ci_denied
       VPS04A_LIVE_ALLOW_MUTATION: approved-nonproduction-only
       VPS04A_CI_EPHEMERAL_SQL: approved-container-only
+      VPS04A_CI_FAULT_APPROVED: approved-ci-only
       DOTNET_NOLOGO: "1"
 
     steps:
@@ -175,7 +176,13 @@ jobs:
           set -euo pipefail
           work="$VPS04A_CI_TLS_DIR"
           server_pid=""
+          fault_armed=0
           cleanup() {
+            if [ "$fault_armed" = "1" ]; then
+              (cd src/MyDmsVn.Server.AspNetCoreHost &&
+                dotnet run --project ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj
+                -p:Vps04Server=true -c Release -f net10.0 --no-build --no-restore -- disarm-ledger-fault) >/dev/null 2>&1 || true
+            fi
             if [ -n "$server_pid" ]; then
               kill "$server_pid" 2>/dev/null || true
               wait "$server_pid" 2>/dev/null || true
@@ -207,22 +214,66 @@ jobs:
           test "$ready" = 1 || { echo "::error::HTTPS Kestrel health failed without TLS bypass."; exit 1; }
 
           mkdir -p vps04a-ci-trx
+          # Primary phase: all four prior SQL tests PLUS two independent
+          # live JSON/ledger/COGS and strict-wire denial facts. No staging SQL.
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
             -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
-            --filter 'FullyQualifiedName~Vps04aLiveSqlAcceptanceTests' \
+            --filter 'FullyQualifiedName~Vps04aLiveSqlAcceptanceTests|FullyQualifiedName~Vps04aCiValuationSqlAcceptanceTests' \
             --logger 'trx;LogFileName=vps04a-ci-https-sql.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
+          # SQL fault is installed ONLY after Kestrel startup+schema13 admission
+          # and after all normal tests have completed. The API runtime identity
+          # never owns DDL. The next isolated test proves a genuine mid-UoW
+          # error physically rolls back header, COGS, ledger, balance & journal.
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet run --project ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
+            -p:Vps04Server=true -c Release -f net10.0 --no-build --no-restore -- arm-ledger-fault)
+          fault_armed=1
+          set +e
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~InjectedLedgerFailureRollsBackSourceCostBalanceAndJournal' \
+            --logger 'trx;LogFileName=vps04a-ci-fault-rollback.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+          fault_result="$?"
+          set -e
+          # The original exact13 fingerprint MUST be restored before the
+          # recovery HTTP request; no schema drift accepted as a success.
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet run --project ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
+            -p:Vps04Server=true -c Release -f net10.0 --no-build --no-restore -- disarm-ledger-fault)
+          fault_armed=0
+          test "$fault_result" = 0 || { echo "::error::Fault rollback oracle failed."; exit 1; }
+
+          # Only after independent SQL rollback proof and trigger teardown do
+          # we deliberately retry the ORIGINAL immutable same key/version.
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~DisarmedOriginalSameKeyRetryCommitsExactlyOnce' \
+            --logger 'trx;LogFileName=vps04a-ci-fault-recovery.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
-          paths=list(Path('vps04a-ci-trx').glob('*.trx'))
-          assert len(paths)==1, f'Expected one live TRX, got {len(paths)}'
+          files=list(Path('vps04a-ci-trx').glob('*.trx'))
+          expected={'vps04a-ci-https-sql.trx':6,'vps04a-ci-fault-rollback.trx':1,
+                    'vps04a-ci-fault-recovery.trx':1}
+          assert {f.name for f in files} == set(expected),[p.name for p in files]
           ns={'t':'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
-          counts=ET.parse(paths[0]).getroot().find('./t:ResultSummary/t:Counters',ns)
-          assert counts is not None
-          got={name:int(counts.attrib[name]) for name in ('total','executed','passed','failed','notExecuted')}
-          assert got == {'total':4,'executed':4,'passed':4,'failed':0,'notExecuted':0},got
-          print('PASS: 4/4 isolated Linux Kestrel HTTPS -> real SQL Server tests; zero failed/skipped')
+          total=0
+          for file in files:
+            counters=ET.parse(file).getroot().find('./t:ResultSummary/t:Counters',ns)
+            assert counters is not None,file.name
+            got={name:int(counters.attrib[name]) for name in
+                 ('total','executed','passed','failed','notExecuted')}
+            n=expected[file.name]
+            assert got == {'total':n,'executed':n,'passed':n,'failed':0,'notExecuted':0},(file.name,got)
+            total+=n
+          assert total==8
+          print('PASS: 8/8 real HTTPS-to-SQL tests: golden wire, stock/COGS races, '
+                'mid-transaction rollback and same-key recovery; zero failed/skipped')
           PY
 
       - name: Upload only safe TRX (no passwords, no TLS private keys, no host logs)
