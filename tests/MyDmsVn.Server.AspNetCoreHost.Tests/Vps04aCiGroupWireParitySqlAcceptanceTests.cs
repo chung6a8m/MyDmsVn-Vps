@@ -347,6 +347,58 @@ WHERE l.WarehouseId=@wh AND l.ProductId=@product;", sql);
                     rowFields = matched.Length == 1 ? Keys(matched[0]) : "(missing)" });
         }
 
+
+        // customers: Oracle sees only document reference keys, not catalog
+        // rows; verify the lookup contains the independently posted reference.
+        var customerId = await ScalarIntAsync("SELECT TOP(1) CustomerId FROM dbo.SalesReceipts ORDER BY SaleId DESC;");
+        using (var lookup = await http.GetAsync("/api/v1/catalog/customers/lookup?limit=25", session.Token))
+        {
+            var rows = lookup.Body.RootElement.GetProperty("data");
+            var matched = rows.EnumerateArray()
+                .Where(x => x.GetProperty("id").GetInt32() == customerId).ToArray();
+            report.Record("catalog-customers", "GET /api/v1/catalog/customers/lookup?limit=25",
+                "web2-v1/catalog-customers-response.json", "SalesReceipts.CustomerId referenced from posted source rows",
+                new { status = 200, referencedRowsMatched = 1, referenceId = customerId,
+                    rowFields = FixtureLookupRowKeys("web2-v1", "catalog-customers-response.json") },
+                new { status = lookup.Status, referencedRowsMatched = matched.Length,
+                    referenceId = matched.Length == 1 ? matched[0].GetProperty("id").GetInt32() : -1,
+                    rowFields = matched.Length == 1 ? Keys(matched[0]) : "(missing)" });
+        }
+
+        // warehouses: Oracle sees only document reference keys, not catalog
+        // rows; verify the lookup contains the independently posted reference.
+        var warehouseId = await ScalarIntAsync("SELECT TOP(1) WarehouseId FROM dbo.GoodsReceipts ORDER BY ReceiptId DESC;");
+        using (var lookup = await http.GetAsync("/api/v1/catalog/warehouses/lookup?limit=25", session.Token))
+        {
+            var rows = lookup.Body.RootElement.GetProperty("data");
+            var matched = rows.EnumerateArray()
+                .Where(x => x.GetProperty("id").GetInt32() == warehouseId).ToArray();
+            report.Record("catalog-warehouses", "GET /api/v1/catalog/warehouses/lookup?limit=25",
+                "web2-v1/catalog-warehouses-response.json", "GoodsReceipts.WarehouseId referenced from posted source rows",
+                new { status = 200, referencedRowsMatched = 1, referenceId = warehouseId,
+                    rowFields = FixtureLookupRowKeys("web2-v1", "catalog-warehouses-response.json") },
+                new { status = lookup.Status, referencedRowsMatched = matched.Length,
+                    referenceId = matched.Length == 1 ? matched[0].GetProperty("id").GetInt32() : -1,
+                    rowFields = matched.Length == 1 ? Keys(matched[0]) : "(missing)" });
+        }
+
+        // employees: Oracle sees only document reference keys, not catalog
+        // rows; verify the lookup contains the independently posted reference.
+        var employeeId = await ScalarIntAsync("SELECT TOP(1) EmployeeId FROM dbo.GoodsReceipts ORDER BY ReceiptId DESC;");
+        using (var lookup = await http.GetAsync("/api/v1/catalog/employees/lookup?limit=25", session.Token))
+        {
+            var rows = lookup.Body.RootElement.GetProperty("data");
+            var matched = rows.EnumerateArray()
+                .Where(x => x.GetProperty("id").GetInt32() == employeeId).ToArray();
+            report.Record("catalog-employees", "GET /api/v1/catalog/employees/lookup?limit=25",
+                "web2-v1/catalog-employees-response.json", "GoodsReceipts.EmployeeId referenced from posted source rows",
+                new { status = 200, referencedRowsMatched = 1, referenceId = employeeId,
+                    rowFields = FixtureLookupRowKeys("web2-v1", "catalog-employees-response.json") },
+                new { status = lookup.Status, referencedRowsMatched = matched.Length,
+                    referenceId = matched.Length == 1 ? matched[0].GetProperty("id").GetInt32() : -1,
+                    rowFields = matched.Length == 1 ? Keys(matched[0]) : "(missing)" });
+        }
+
         var sqlCount = await ScalarIntAsync("SELECT COUNT(*) FROM dbo.SalesReceipts;");
         using (var list = await http.GetAsync("/api/v1/sales-receipts?pageSize=25", session.Token))
         {
