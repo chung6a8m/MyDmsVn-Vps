@@ -3,7 +3,7 @@
 **Disposition:** local Issue #7 acceptance PASS; this is not production
 approval and does not make VPS-03 complete. Base SHA:
 `f266c68958c7d3b512e1f5e036122ab6341bed5e`. Exact package and acceptance
-HEAD: `51a15cdc0312fca91c81c03752a626b9d245f41d`, 17 November 2026. PR #6
+HEAD: `6baa1e8c56c85d9f938866dd924b98d238d75035`, 17 November 2026. PR #6
 remains Draft pending final-HEAD CI, independent review, and merge.
 
 ## Environment and package
@@ -16,9 +16,9 @@ remains Draft pending final-HEAD CI, independent review, and merge.
   variable and is not recorded. Canonical HTTPS authority was localhost with a
   pre-trusted certificate thumbprint; no certificate bypass was enabled.
 - Desktop Release net48 x86 SHA-256:
-  `1faac3c0147174ac265c3bca1936afc83378a1bd39bb87570d9e66ead21a80ce`.
+  `70aacce09dbef742979077bf868c2a513213efa7add30aa3569c175ac96f7dc1`.
   Host SHA-256:
-  `40503f437fd7aa353bc93d897d51ffec5f46a65749f73efde16959dc6293c58e`.
+  `05a9438005b88b2187e27b882a33c0fcab4016826492d6397c10215a129ccdc1`.
 - Publish audit: PE machine `0x014c`, 23 lock entries, 36 published files,
   zero forbidden Local/Server/SQL/MediatR/DbMigrator binaries or secret/SQL
   configuration markers.
@@ -26,7 +26,7 @@ remains Draft pending final-HEAD CI, independent review, and merge.
 ## Exact Issue #7 acceptance
 
 The strict runner wrote results beneath
-`TestResults/vps03-issue7/51a15cdc0312fca91c81c03752a626b9d245f41d`.
+`TestResults/vps03-issue7/6baa1e8c56c85d9f938866dd924b98d238d75035`.
 The exact commands were:
 
 ```powershell
@@ -34,8 +34,8 @@ pwsh -File scripts/Invoke-Vps03Issue7Acceptance.ps1 -PreflightOnly
 pwsh -File scripts/Invoke-Vps03Issue7Acceptance.ps1 -LiveOnly
 pwsh -File scripts/Invoke-Vps03Issue7Acceptance.ps1 -AttendedOnly
 pwsh -File scripts/Invoke-Vps03Issue7Acceptance.ps1 `
-  -LiveResult TestResults/vps03-issue7/51a15cdc0312fca91c81c03752a626b9d245f41d/results/live-result.json `
-  -AttendedResult TestResults/vps03-issue7/51a15cdc0312fca91c81c03752a626b9d245f41d/results/attended/attended-result.json
+  -LiveResult TestResults/vps03-issue7/6baa1e8c56c85d9f938866dd924b98d238d75035/results/live-result.json `
+  -AttendedResult TestResults/vps03-issue7/6baa1e8c56c85d9f938866dd924b98d238d75035/results/attended/attended-result.json
 ```
 
 | Group | Discovered/executed/passed | Failed | Skipped/not executed |
@@ -49,7 +49,8 @@ pwsh -File scripts/Invoke-Vps03Issue7Acceptance.ps1 `
 
 The final protected-store case uses two real x86 processes and pauses an exact
 clear after validation. A second process cannot clear/save a replacement until
-the owner/origin mutex serializes the first compare-delete; the stale clearer
+the Owner/SYSTEM-secured global owner/origin mutex serializes the first
+compare-delete across console and RDP sessions; the stale clearer
 cannot delete the replacement. The live fail-closed matrix first commits and
 loses an ACK through the owned IIS/SQL environment, then sends every status
 request to the real HTTPS resolution endpoint and mutates only the returned
@@ -64,6 +65,8 @@ enabled only the read-only status check, returned the exact authenticated WEB5
 finished with `No pending write` plus disabled recovery actions. Desktop exited
 cleanly. Owned child processes, IIS process, SQL database/login, and test-owned
 pending intent were absent after teardown. No required case was skipped.
+The attended result records both the Desktop executable and Host DLL SHA-256;
+the final aggregator requires exact equality with the live package hashes.
 Each owned live environment wrote a HEAD-bound teardown ledger only after its
 IIS process and exact SQL database/login were absent. The final cleanup group
 validated those ledgers plus independent child-process and pending-intent
