@@ -29,9 +29,9 @@ if ($env:MYDMSVN_VPS03_API_ORIGIN -notmatch '^https://[^/]+$') { throw 'VPS03.No
 
 $resultRoot = Join-Path $root "TestResults\vps03-issue8\$head"
 $desktop = Join-Path $resultRoot 'desktop'
-$host = Join-Path $resultRoot 'host'
+$hostPackage = Join-Path $resultRoot 'host'
 $results = Join-Path $resultRoot 'results'
-New-Item -ItemType Directory -Force -Path $desktop,$host,$results | Out-Null
+New-Item -ItemType Directory -Force -Path $desktop,$hostPackage,$results | Out-Null
 
 if ($PreflightOnly) {
     Write-Host "PASS preflight head=$head results=$resultRoot"
@@ -54,16 +54,16 @@ dotnet publish src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj -c $Configurat
 if ($LASTEXITCODE -ne 0) { throw 'VPS03.DesktopPublishFailed' }
 dotnet restore src/MyDmsVn.Server.HttpHost/MyDmsVn.Server.HttpHost.csproj --locked-mode -v minimal
 if ($LASTEXITCODE -ne 0) { throw 'VPS03.HostRestoreFailed' }
-dotnet publish src/MyDmsVn.Server.HttpHost/MyDmsVn.Server.HttpHost.csproj -c $Configuration -f net48 --no-restore -o $host
+dotnet publish src/MyDmsVn.Server.HttpHost/MyDmsVn.Server.HttpHost.csproj -c $Configuration -f net48 --no-restore -o $hostPackage
 if ($LASTEXITCODE -ne 0) { throw 'VPS03.HostPublishFailed' }
 
 $provenance = @{ headSha = $head } | ConvertTo-Json -Compress
 [IO.File]::WriteAllText((Join-Path $desktop 'vps03-package-provenance.json'), $provenance)
-[IO.File]::WriteAllText((Join-Path $host 'vps03-package-provenance.json'), $provenance)
+[IO.File]::WriteAllText((Join-Path $hostPackage 'vps03-package-provenance.json'), $provenance)
 
 $env:MYDMSVN_VPS03_ACCEPTANCE = 'approved'
 $env:MYDMSVN_VPS03_DESKTOP_PACKAGE = $desktop
-$env:MYDMSVN_VPS03_HOST_PACKAGE = $host
+$env:MYDMSVN_VPS03_HOST_PACKAGE = $hostPackage
 $env:MYDMSVN_VPS03_HEAD_SHA = $head
 $env:MYDMSVN_VPS03_RESULTS_DIRECTORY = $results
 dotnet test tests/MyDmsVn.Vps03.Acceptance.Tests/MyDmsVn.Vps03.Acceptance.Tests.csproj -c $Configuration --locked-mode --logger "trx;LogFileName=vps03-issue8.trx" --results-directory $results
