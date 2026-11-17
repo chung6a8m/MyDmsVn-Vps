@@ -342,7 +342,7 @@ jobs:
           # deliberately tagged disabled-fail-closed-only.
           import json
           reports=Path('vps04a-ci-parity')
-          groups={'WEB2':6,'WEB3':5,'WEB4':4,'WEB5':3,'WEB6':3}
+          groups={'WEB2':9,'WEB3':5,'WEB4':4,'WEB5':3,'WEB6':3}
           assert {p.stem for p in reports.glob('*.json')}==set(groups)
           total_scenarios=0
           for group,minimum in groups.items():
@@ -359,7 +359,7 @@ jobs:
               assert not case['diff'], (group,case['id'],case['diff'])
               assert case['sqlOracle']
             total_scenarios+=len(cases)
-          assert total_scenarios>=21
+          assert total_scenarios>=24
           print(f'PASS: {total_scenarios} explicit WEB2-WEB6 expected/actual/diff scenarios; '
                 'WEB6 fail-closed only; no implied enabled WEB6 parity')
           PY
