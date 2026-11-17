@@ -162,7 +162,7 @@ WHERE l.WarehouseId=@wh AND l.ProductId=@product;", sql);
         using var sql = Oracle();
         await sql.OpenAsync();
         using var cmd = new SqlCommand(
-            "SELECT CostAmount FROM dbo.SalesReceiptLines WHERE SaleId=@id ORDER BY LineNo;", sql);
+            "SELECT CostAmount FROM dbo.SalesReceiptLines WHERE SaleId=@id ORDER BY [LineNo];", sql);
         cmd.Parameters.Add("@id", SqlDbType.BigInt).Value = sale;
         var costs = new List<decimal>();
         using var reader = await cmd.ExecuteReaderAsync();
