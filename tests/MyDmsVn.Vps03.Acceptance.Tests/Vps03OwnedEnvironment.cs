@@ -58,6 +58,11 @@ internal sealed class Vps03OwnedEnvironment
     internal string Username { get; }
     internal string Password { get; }
 
+    internal ServiceProvider CreateDesktopServices() => new ServiceCollection()
+        .AddHttpDesktopAdapter(new HttpDesktopOptions(Origin.GetLeftPart(UriPartial.Authority)),
+            new HttpDesktopOperationSettings(OperationMode(13)))
+        .BuildServiceProvider();
+
     internal static async Task<Vps03OwnedEnvironment> CreateAsync(int schema, CancellationToken token)
     {
         var mode = ModeForSchema(schema);
