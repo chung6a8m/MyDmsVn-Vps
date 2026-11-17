@@ -16,7 +16,11 @@ public enum WireTokenType { Object, Array, String, Integer, Float, Boolean, Null
 public abstract class WireToken
 {
     internal abstract JsonNode? Node { get; }
-    public virtual WireToken? this[string name] => null;
+    public virtual WireToken? this[string name]
+    {
+        get => null;
+        set => throw new InvalidOperationException("Expected a JSON object.");
+    }
 
     public WireTokenType Type
     {
@@ -118,14 +122,7 @@ public sealed class WireObject : WireToken
     public override WireToken? this[string name]
     {
         get => _obj.TryGetPropertyValue(name, out var value) ? Wrap(value) : null;
-    }
-    public WireToken? Get(string name) => this[name];
-    public void Set(string name, WireToken? value) => _obj[name] = Copy(value);
-    // Compiler permits object-initializer indexed assignments on this read/write indexer.
-    public new WireToken? this[string name, bool writable = true]
-    {
-        get => this[name];
-        set => Set(name, value);
+        set => _obj[name] = Copy(value);
     }
     public bool ContainsKey(string name) => _obj.ContainsKey(name);
     public bool TryGetValue(string name, StringComparison comparison, out WireToken value)
