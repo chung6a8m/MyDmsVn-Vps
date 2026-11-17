@@ -111,6 +111,22 @@ jobs:
             mcr.microsoft.com/mssql/server:2022-latest >/dev/null
           test "$(docker inspect -f '{{.State.Running}}' vps04a-ci-sql)" = "true"
 
+      - name: Check SQL engine process and readiness without printing container logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="$(docker inspect -f '{{.State.Status}}' vps04a-ci-sql)"
+          if [ "$state" != "running" ]; then
+            echo "::error::Ephemeral SQL Server container stopped during startup."
+            exit 1
+          fi
+          # Never print SQL logs: only one fixed, non-sensitive readiness classification.
+          if docker logs --tail 120 vps04a-ci-sql 2>&1 |
+              grep -Fq "SQL Server is now ready for client connections"; then
+            echo "SQL engine reports listener ready; bootstrap still verifies TLS and schema."
+          else
+            echo "SQL engine listener not yet confirmed; bootstrap will retry with verified TLS."
+          fi
       - name: Restore and compile original DbUp13 migrator under CI-only net10 bootstrap
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         shell: bash
