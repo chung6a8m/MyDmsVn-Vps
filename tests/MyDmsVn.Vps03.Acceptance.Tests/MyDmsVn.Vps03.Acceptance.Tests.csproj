@@ -11,6 +11,10 @@
     <None Update="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Security" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="xunit.v3" />
@@ -22,5 +26,11 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\MyDmsVn.Desktop.Application\MyDmsVn.Desktop.Application.csproj" />
     <ProjectReference Include="..\..\src\MyDmsVn.Desktop.Infrastructure.Http\MyDmsVn.Desktop.Infrastructure.Http.csproj" />
+    <ProjectReference Include="..\..\src\MyDmsVn.Server.DbMigrator\MyDmsVn.Server.DbMigrator.csproj" />
+    <ProjectReference Include="..\..\src\MyDmsVn.Server.Infrastructure\MyDmsVn.Server.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\MyDmsVn.Server.HttpHost\MyDmsVn.Server.HttpHost.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\FrozenWeb11Migration.cs" Link="Fixtures\FrozenWeb11Migration.cs" />
   </ItemGroup>
 </Project>
