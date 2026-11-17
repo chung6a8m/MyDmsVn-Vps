@@ -5,6 +5,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application.Operations;
 using MyDmsVn.Server.HttpHost;
@@ -25,7 +26,7 @@ public sealed class Vps05JsonEgressParityTests
         JsonConvert.SerializeObject(value, ApiJson.CreateSerializerSettings());
 
     [Fact]
-    public void Success_envelope_keeps_frozen_int64_and_decimal_string_lexemes()
+    public async Task Success_envelope_keeps_frozen_int64_and_decimal_string_lexemes()
     {
         var data = new { receiptId = "9007199254740993", quantity = "1.2500", missing = (string?)null };
         var result = ApiResponse<object>.Success(data);
@@ -34,11 +35,11 @@ public sealed class Vps05JsonEgressParityTests
         Assert.Equal(expected, Net10WireJson.SerializeEnvelope(result));
         using var http = HttpJson.From(result);
         Assert.Equal(HttpStatusCode.OK, http.StatusCode);
-        Assert.Equal(expected, http.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+        Assert.Equal(expected, await http.Content.ReadAsStringAsync());
     }
 
     [Fact]
-    public void Error_envelope_uses_actual_HTTP_status_and_never_serializes_Status()
+    public async Task Error_envelope_uses_actual_HTTP_status_and_never_serializes_Status()
     {
         var error = new ApiError(ApiStatusCode.Unauthorized, "Auth.Unauthorized",
             "Authentication is required.", correlationId: "vps01-correlation");
@@ -48,7 +49,7 @@ public sealed class Vps05JsonEgressParityTests
         Assert.Equal(expected, Net10WireJson.SerializeEnvelope(result));
         using var http = HttpJson.From(result);
         Assert.Equal(HttpStatusCode.Unauthorized, http.StatusCode);
-        Assert.Equal(expected, http.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+        Assert.Equal(expected, await http.Content.ReadAsStringAsync());
     }
 
     [Fact]
