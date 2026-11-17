@@ -9,6 +9,9 @@
   <ItemGroup>
     <PackageReference Include="dbup-sqlserver" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
+    <!-- CI-only net10 SQL graph requires the v9 DI abstractions pulled by SqlClient 7.
+         Avoid changing the frozen net48/production central pins or lock files. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" VersionOverride="9.0.13" />
     <ProjectReference Include="../../src/MyDmsVn.Server.Infrastructure/MyDmsVn.Server.Infrastructure.csproj">
       <AdditionalProperties>Vps04Server=true</AdditionalProperties>
     </ProjectReference>
