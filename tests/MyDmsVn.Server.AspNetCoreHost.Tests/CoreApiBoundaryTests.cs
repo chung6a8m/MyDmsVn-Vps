@@ -228,6 +228,27 @@ public sealed class CoreApiBoundaryTests
         Assert.Equal("no-store", context.Response.Headers["Cache-Control"].ToString());
     }
 
+    [Theory]
+    [InlineData("/api/v1/health/")]
+    [InlineData("/API/V1/HEALTH")]
+    public async Task HealthRouteAliasesShareDegradedReadinessAndAnonymousAdmission(string path)
+    {
+        var context = NewRequest(path: path);
+        context.RequestServices.GetRequiredService<ISecurityAuditReadiness>()
+            .MarkDegraded(DateTime.UtcNow);
+        var called = false;
+        await CoreApiBoundary.HandleAsync(context, () =>
+        {
+            called = true;
+            return Task.CompletedTask;
+        });
+        Assert.False(called);
+        Assert.Equal(503, context.Response.StatusCode);
+        var body = System.Text.Encoding.UTF8.GetString(((MemoryStream)context.Response.Body).ToArray());
+        Assert.Contains("SecurityAudit.Unavailable", body);
+        Assert.Equal("no-store", context.Response.Headers["Cache-Control"].ToString());
+    }
+
     [Fact]
     public async Task AdmissionMiddlewareDelegatesOnlyAfterNativeBoundary()
     {

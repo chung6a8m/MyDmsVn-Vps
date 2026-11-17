@@ -56,7 +56,11 @@ internal static class CoreApiBoundary
             Guid? sessionId = null;
             var path = context.Request.Path.Value ?? string.Empty;
             var cookieEndpoint = HttpMethods.IsPost(context.Request.Method) && IsCookieEndpoint(path);
-            var anonymous = cookieEndpoint || HttpMethods.IsGet(context.Request.Method) && path == "/api/v1/health";
+            // Endpoint routing accepts case and trailing-slash variants: all must
+            // share the same anonymous admission and degraded-health outcome.
+            var healthEndpoint = HttpMethods.IsGet(context.Request.Method) &&
+                path.TrimEnd('/').Equals("/api/v1/health", StringComparison.OrdinalIgnoreCase);
+            var anonymous = cookieEndpoint || healthEndpoint;
             var authorization = HeaderValues(context, "Authorization");
             if (!anonymous || !cookieEndpoint && authorization != null)
             {
@@ -84,8 +88,7 @@ internal static class CoreApiBoundary
             }
 
             identity.Admit(actor, sessionId);
-            if (HttpMethods.IsGet(context.Request.Method) &&
-                path.Equals("/api/v1/health", StringComparison.OrdinalIgnoreCase))
+            if (healthEndpoint)
             {
                 var audit = context.RequestServices.GetRequiredService<ISecurityAuditReadiness>().Snapshot;
                 if (audit.Status == SecurityAuditReadinessStatus.Degraded)
