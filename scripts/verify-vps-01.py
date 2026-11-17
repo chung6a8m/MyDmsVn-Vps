@@ -16,7 +16,11 @@ for path in suites:
     doc = project_docs[path]
     props = lambda key: [n.text for n in doc.iter(key) if n.text]
     refs = {n.attrib["Include"] for n in doc.iter("PackageReference")}
-    assert props("TargetFramework") == ["net48"], path
+    target_frameworks = props("TargetFramework")
+    if path.name == "MyDmsVn.Server.Application.Tests.csproj":
+        assert target_frameworks == ["net48", "net10.0"], path
+    else:
+        assert target_frameworks == ["net48"], path
     assert props("OutputType") == ["Exe"], f"xUnit v3 executable missing: {path}"
     assert "xunit.v3" in refs and "xunit" not in refs, f"xUnit v3 package mismatch: {path}"
     assert "xunit.runner.visualstudio" in refs and "Microsoft.NET.Test.Sdk" in refs
