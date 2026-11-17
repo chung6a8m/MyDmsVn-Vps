@@ -55,7 +55,8 @@ python3 scripts/verify-vps-04a.py vps04a-routes.json
 
 ## Round-2 CI test compilation correction
 
-- The initial round-2 Linux run ([#44044860855](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44044860855), `e5fa09bc`) built the ASP.NET Core host and passed 363 Application tests, but the new native-test source did not compile: `HttpResponseHeaders.Allow` is not a `HttpClient` response-header property. The regression now reads the raw `Allow` header through `GetValues("Allow")`. This was a test compilation finding, not a live HTTP/SQL execution result. The fix must be independently validated on its final HEAD.
+- Initial round-2 Linux run ([#44044860855](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44044860855), `e5fa09bc`) compiled the ASP.NET Core host and passed 363 Application tests, but native tests did not compile because `HttpResponseHeaders.Allow` does not exist.
+- The next run ([#44045089585](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44045089585), `fa5de225`) compiled and executed 24 native tests: 23 passed, and the real Kestrel method-miss test reached the expected HTTP 405 before its `GetValues("Allow")` assertion failed because .NET `HttpClient` classifies `Allow` under `HttpContentHeaders`. The test now uses `wrongVerb.Content.Headers.Allow` as documented. These were test-harness findings; neither run proves live HTTPS/SQL application parity. Latest-HEAD rerun is required.
 
 ## Evidence and remaining acceptance gates
 

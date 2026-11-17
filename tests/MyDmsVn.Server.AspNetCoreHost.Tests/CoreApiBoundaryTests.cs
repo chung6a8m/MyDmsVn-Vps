@@ -314,7 +314,7 @@ public sealed class CoreApiBoundaryTests
             using var wrongVerb = await client.SendAsync(new HttpRequestMessage(
                 HttpMethod.Delete, address + "/api/v1/health"));
             Assert.Equal(405, (int)wrongVerb.StatusCode);
-            Assert.Equal("GET", string.Join(", ", wrongVerb.Headers.GetValues("Allow")));
+            Assert.Contains("GET", wrongVerb.Content.Headers.Allow);
             Assert.Contains("Request.Invalid", await wrongVerb.Content.ReadAsStringAsync());
 
             using var unknown = await client.GetAsync(address + "/api/v1/unknown.json");
