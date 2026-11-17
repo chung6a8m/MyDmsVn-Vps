@@ -55,6 +55,8 @@ jobs:
         run: |
           dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true --locked-mode -v minimal
           dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -c Release -f net10.0 --no-restore -warnaserror -v minimal
+      - name: VPS-04B enforce Linux runtime dependency boundary
+        run: python3 scripts/verify-vps04b-runtime-boundary.py
       - name: Restore and execute net10 Server.Application xUnit v3 regressions
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
