@@ -51,3 +51,19 @@ A follow-up on draft PR #6 adds a Windows-owner-scoped, DPAPI-encrypted, ACL-res
 - **18/18 jobs success at the exact code commit `4a16c3a`**. The earlier candidate `55bba9778` failed compilation with three errors (nullable dereferences, missing System.IO); all three were fixed before this successful final code HEAD. A later documentation-only commit must separately receive its own final-HEAD CI to count as verified.
 
 **OPEN — independent acceptance, not covered by CI:** Windows process-kill/crash at file-save boundaries and restart; real Desktop → HTTPS Host → SQL session/epoch/permission and operator-journal race tests; physical ledger/stock/COGS single-post oracle; actual attended Windows UI session/reconciliation; Catalog/Security terminal release authority. No production approval or Owner-dated exception. Keep [Issue #7](https://github.com/chung6a8m/MyDmsVn-Vps/issues/7), [Issue #8](https://github.com/chung6a8m/MyDmsVn-Vps/issues/8) and VPS-03 **OPEN / IN PROGRESS**.
+
+## Issue #8 partial native acceptance — 17 November 2026
+
+This is partial evidence, not an Issue #8 PASS. Windows 11, .NET Framework 4.8, installed IIS Express, trusted localhost TLS binding and an operator-supplied SQL Server connection were used. The isolated database/login and IIS process were owned per run and cleanup was verified. The published x86 Desktop/HttpHost package provenance was `94093950ae08bf50d44ed6930568ae4a1115b1a1`; later commits listed below change only the acceptance harness/docs, not production binaries. Base remains `f266c68958c7d3b512e1f5e036122ab6341bed5e`.
+
+| Harness commit | Native result | Counts |
+| --- | --- | --- |
+| `e1a7745` plus startup-gap fix in `d58d0e9` | Owned HTTPS/restricted-SQL schema 11/12/13 admission | 3/3 PASS, 0 failed, 0 skipped |
+| `d58d0e9` | All 46 public Desktop interface methods through production `AddHttpDesktopAdapter` to actual IIS Express/SQL | 46/46 PASS, 0 failed, 0 skipped |
+| `2111d5b` | login/me/logout/re-auth, normalized unauthorized login, independent-session permission grant/revocation | 3/3 PASS, 0 failed, 0 skipped |
+| `de6911b` | Goods Post + Sales Post SQL oracle: 2 ledger rows, 2 valuation rows, ending quantity 8, inventory value 40, COGS 10 | 1/1 PASS, 0 failed, 0 skipped |
+| `1265c9c` | Fail-closed attended-result model only | 2/2 unit PASS; **GUI walkthrough NOT RUN** |
+
+The live run exposed and fixed a harness lazy-startup gap: setting a protected audit path without its candidate root allowed process admission but failed the first HTTP request. Final fixture startup now performs an authenticated request and independently checks schema compatibility and superuser binding. Two deliberately rejected write probes correctly retained an encrypted UNKNOWN fence; because their owned databases had already been abandoned, only the exact current-run files were removed after exact path/count/date verification. Final acceptance avoids claiming those probes as recoverable evidence.
+
+**Blocking gates:** deterministic response-drop/lost-ACK with retained COMMITTED readback is NOT RUN; concurrent-session idempotent replay is NOT RUN; refresh/cancellation and visible error-dialog mapping are not live-proven; exact final-HEAD package rerun is pending; attended GUI is NOT RUN; final-HEAD CI URL/counts are pending. PR #6 must remain draft, Issue #8 open and VPS-03 IN PROGRESS.

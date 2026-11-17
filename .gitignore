@@ -27,6 +27,7 @@ _ReSharper*/
 # Test / coverage
 # ------------------------------
 TestResults/
+# VPS-03 raw acceptance packages/TRX remain local under the ignored TestResults tree.
 coverage/
 coverage-report/
 BenchmarkDotNet.Artifacts/
