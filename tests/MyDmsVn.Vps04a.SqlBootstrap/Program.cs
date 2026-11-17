@@ -1,0 +1,268 @@
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
+using MyDmsVn.Server.Application.Identity;
+using MyDmsVn.Server.DbMigrator;
+using MyDmsVn.Server.Infrastructure.Identity;
+using MyDmsVn.Server.Infrastructure.Operations;
+
+namespace MyDmsVn.Vps04a.SqlBootstrap;
+
+// Disposable CI SQL preparation, never a production migrator or a reusable
+// database setup entry point. Reuses the exact DbUp runner and scripts 001-013.
+internal static class Program
+{
+    private const string Database = "MyDmsVnVps_Ci";
+    private const string RuntimeLogin = "vps04a_ci_runtime";
+    private const string OracleLogin = "vps04a_ci_oracle";
+    private const string MigrationUser = "vps04a_ci_migration";
+    private const string Writer = "vps04a_ci_writer";
+    private const string Denied = "vps04a_ci_denied";
+    private static string _stage = "admission";
+
+    private static string Require(string name) =>
+        Environment.GetEnvironmentVariable(name) is { Length: > 0 } value
+            ? value : throw new InvalidOperationException("Missing protected CI configuration.");
+
+    private static void Admit(SqlConnectionStringBuilder master)
+    {
+        if (Environment.GetEnvironmentVariable("CI") != "true" ||
+            Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
+            Environment.GetEnvironmentVariable("VPS04A_CI_EPHEMERAL_SQL") != "approved-container-only")
+            throw new InvalidOperationException("Not an admitted ephemeral CI run.");
+        if (!string.Equals(master.DataSource, "localhost,1433", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(master.InitialCatalog, "master", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(master.UserID, "sa", StringComparison.OrdinalIgnoreCase) ||
+            master.IntegratedSecurity || master.TrustServerCertificate ||
+            master.Encrypt.ToString() != "True" || !Directory.Exists("deployment/sql") ||
+            !File.Exists("src/MyDmsVn.Server.DbMigrator/Scripts/013_WebOperationTerminalResolution.sql"))
+            throw new InvalidOperationException("CI source, SQL TLS, or loopback boundary not admitted.");
+    }
+
+    public static async Task<int> Main(string[] args)
+    {
+        try
+        {
+            if (args.Length != 1 || args[0] != "provision-isolated-ci")
+                throw new InvalidOperationException("No operator or production mode is available.");
+            var admin = new SqlConnectionStringBuilder(Require("VPS04A_CI_SQL_ADMIN_CONNECTION_STRING"));
+            Admit(admin);
+            var runtimePassword = Password("VPS04A_CI_SQL_RUNTIME_PASSWORD");
+            var oraclePassword = Password("VPS04A_CI_SQL_ORACLE_PASSWORD");
+            var writerPassword = Password("VPS04A_LIVE_PASSWORD");
+            var deniedPassword = Password("VPS04A_LIVE_DENIED_PASSWORD");
+
+            _stage = "sql-readiness";
+            await WaitForSqlAsync(admin.ConnectionString);
+            _stage = "create-owned-database";
+            using (var connection = new SqlConnection(admin.ConnectionString))
+            {
+                await connection.OpenAsync();
+                using var command = new SqlCommand(
+                    "IF DB_ID(N'" + Database + "') IS NOT NULL THROW 51450, 'Refuse existing database.',1; " +
+                    "CREATE DATABASE [" + Database + "];", connection);
+                command.CommandTimeout = 60;
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var maintenance = new SqlConnectionStringBuilder(admin.ConnectionString)
+            {
+                InitialCatalog = Database, Pooling = false
+            }.ConnectionString;
+            _stage = "original-dbup-exact13";
+            var upgrade = new DatabaseMigrationRunner().MigrateWeb5(maintenance);
+            if (!upgrade.Successful || upgrade.Scripts.Count() != 13)
+                throw new InvalidOperationException("Original 13 migration scripts not applied.");
+
+            _stage = "schema-fingerprint";
+            var compatible = await new SqlWeb5SchemaCompatibilityChecker(maintenance)
+                .CheckAsync(CancellationToken.None);
+            if (!compatible.IsCompatible)
+                throw new InvalidOperationException("Exact schema13 fingerprint not verified.");
+
+            _stage = "create-isolated-logins";
+            using (var connection = new SqlConnection(admin.ConnectionString))
+            {
+                await connection.OpenAsync();
+                await ExecuteAsync(connection,
+                    "CREATE LOGIN [" + RuntimeLogin + "] WITH PASSWORD='" + runtimePassword + "',CHECK_POLICY=ON; " +
+                    "CREATE LOGIN [" + OracleLogin + "] WITH PASSWORD='" + oraclePassword + "',CHECK_POLICY=ON;");
+            }
+            _stage = "users-and-test-seeds";
+            var ids = await SeedAsync(maintenance, writerPassword, deniedPassword);
+            _stage = "reviewed-restricted-grants";
+            using (var connection = new SqlConnection(maintenance))
+            {
+                await connection.OpenAsync();
+                await ExecuteAsync(connection,
+                    "CREATE USER [" + RuntimeLogin + "] FOR LOGIN [" + RuntimeLogin + "]; " +
+                    "CREATE USER [" + OracleLogin + "] FOR LOGIN [" + OracleLogin + "]; " +
+                    "CREATE USER [" + MigrationUser + "] WITHOUT LOGIN;");
+
+                var baseGrants = File.ReadAllText("deployment/sql/Provision-MyDmsVnWebPrincipals.sql")
+                    .Replace("$(WebRuntimeUser)", RuntimeLogin, StringComparison.Ordinal)
+                    .Replace("$(MigrationUser)", MigrationUser, StringComparison.Ordinal);
+                await ExecuteAsync(connection, baseGrants);
+                var desktopGrants = File.ReadAllText("deployment/sql/Provision-MyDmsVnDesktopApiGrants.sql")
+                    .Replace("$(WebRuntimeUser)", RuntimeLogin, StringComparison.Ordinal);
+                await ExecuteAsync(connection, desktopGrants);
+
+                await ExecuteAsync(connection, "GRANT SELECT ON dbo.WebAuthSessions TO [" + OracleLogin + "]; " +
+                    "GRANT SELECT ON dbo.WebOperationJournal TO [" + OracleLogin + "]; " +
+                    "GRANT SELECT ON dbo.SalesReceipts TO [" + OracleLogin + "]; " +
+                    "GRANT SELECT ON dbo.SalesReceiptLines TO [" + OracleLogin + "];");
+            }
+
+            var runtime = new SqlConnectionStringBuilder(admin.ConnectionString)
+            {
+                InitialCatalog = Database, UserID = RuntimeLogin, Password = runtimePassword, Pooling = false
+            }.ConnectionString;
+            var oracle = new SqlConnectionStringBuilder(admin.ConnectionString)
+            {
+                InitialCatalog = Database, UserID = OracleLogin, Password = oraclePassword, Pooling = false
+            }.ConnectionString;
+            _stage = "independent-runtime-principal-admission";
+            await new SqlWebRuntimePrincipalValidator(
+                requireJournal: true, requireResolution: true, requireDesktopApi: true)
+                .ValidateAsync(runtime, CancellationToken.None);
+            await new SqlSuperuserBindingValidator()
+                .ValidateAsync(runtime, Writer, CancellationToken.None);
+
+            _stage = "independent-read-only-oracle-admission";
+            using (var connection = new SqlConnection(oracle))
+            {
+                await connection.OpenAsync();
+                using var probe = new SqlCommand(@"
+SELECT CASE WHEN
+  ISNULL(HAS_PERMS_BY_NAME(DB_NAME(),'DATABASE','CONTROL'),0)<>0 OR
+  ISNULL(IS_ROLEMEMBER('db_owner'),0)<>0 OR
+  ISNULL(IS_ROLEMEMBER('db_datawriter'),0)<>0 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.Users','OBJECT','SELECT'),0)<>0 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceipts','OBJECT','INSERT'),0)<>0 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceipts','OBJECT','UPDATE'),0)<>0 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceipts','OBJECT','DELETE'),0)<>0 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.WebOperationJournal','OBJECT','INSERT'),0)<>0 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.WebAuthSessions','OBJECT','SELECT'),0)<>1 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.WebOperationJournal','OBJECT','SELECT'),0)<>1 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceipts','OBJECT','SELECT'),0)<>1 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceiptLines','OBJECT','SELECT'),0)<>1
+THEN 1 ELSE 0 END;", connection);
+                if (Convert.ToInt32(await probe.ExecuteScalarAsync(), CultureInfo.InvariantCulture) != 0)
+                    throw new InvalidOperationException("Oracle is broader than the four approved tables.");
+            }
+
+            _stage = "emit-owned-run-configuration";
+            var envFile = Require("GITHUB_ENV");
+            File.AppendAllLines(envFile, new[]
+            {
+                "MYDMSVN_WEB_SQL_CONNECTION_STRING=" + runtime,
+                "VPS04A_SQL_ORACLE_CONNECTION_STRING=" + oracle,
+                "VPS04A_LIVE_CUSTOMER_ID=" + ids.Customer.ToString(CultureInfo.InvariantCulture),
+                "VPS04A_LIVE_WAREHOUSE_ID=" + ids.Warehouse.ToString(CultureInfo.InvariantCulture),
+                "VPS04A_LIVE_EMPLOYEE_ID=" + ids.Employee.ToString(CultureInfo.InvariantCulture),
+                "VPS04A_LIVE_PRODUCT_ID=" + ids.Product.ToString(CultureInfo.InvariantCulture),
+            });
+            Console.WriteLine("PASS: isolated SQL schema13 (13/13 DbUp), runtime principal, four-table read-only oracle and active fixtures.");
+            return 0;
+        }
+        catch
+        {
+            // Under no circumstances print SQL exception text, passwords, connection
+            // strings, tokens, or the host's protected superuser credentials.
+            Console.Error.WriteLine("VPS04A-CI bootstrap REFUSED/FAILED at stage: " + _stage + ". No acceptance is claimed.");
+            return 1;
+        }
+    }
+
+    private static string Password(string name)
+    {
+        var password = Require(name);
+        if (!Regex.IsMatch(password, @"\A[A-Za-z0-9_@%-]{20,80}\z", RegexOptions.CultureInvariant) ||
+            !password.Any(char.IsUpper) || !password.Any(char.IsLower) ||
+            !password.Any(char.IsDigit) || !password.Any(c => !char.IsLetterOrDigit(c)))
+            throw new InvalidOperationException("Generated CI credential does not meet SQL policy.");
+        return password;
+    }
+
+    private static async Task WaitForSqlAsync(string connection)
+    {
+        for (var attempt = 0; attempt < 60; attempt++)
+        {
+            try
+            {
+                using var sql = new SqlConnection(new SqlConnectionStringBuilder(connection)
+                    { ConnectTimeout = 4 }.ConnectionString);
+                await sql.OpenAsync();
+                return;
+            }
+            catch (SqlException) when (attempt < 59)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+        }
+        throw new InvalidOperationException("Ephemeral SQL Server did not become ready with verified TLS.");
+    }
+
+    private static async Task ExecuteAsync(SqlConnection connection, string sql)
+    {
+        using var command = new SqlCommand(sql, connection) { CommandTimeout = 60 };
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<(int Customer, int Warehouse, int Employee, int Product)> SeedAsync(
+        string connectionString, string writerPassword, string deniedPassword)
+    {
+        using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
+        var hasher = new BcryptPasswordHasher();
+        var writerId = await InsertUserAsync(connection, transaction, Writer, writerPassword, hasher);
+        await InsertUserAsync(connection, transaction, Denied, deniedPassword, hasher);
+
+        using (var binding = new SqlCommand(
+            "INSERT dbo.SystemSecuritySettings(Id,SuperuserUserId,BoundNormalizedUsername) VALUES (1,@id,@username);",
+            connection, transaction))
+        {
+            binding.Parameters.Add("@id", SqlDbType.Int).Value = writerId;
+            binding.Parameters.Add("@username", SqlDbType.NVarChar, 100).Value = UsernameNormalizer.Normalize(Writer);
+            await binding.ExecuteNonQueryAsync();
+        }
+
+        async Task<int> NewId(string sql, string code)
+        {
+            using var command = new SqlCommand(sql, connection, transaction);
+            command.Parameters.Add("@code", SqlDbType.NVarChar, 32).Value = code;
+            return Convert.ToInt32(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+        }
+
+        var customer = await NewId("INSERT dbo.Customers(Code,Name) OUTPUT INSERTED.CustomerId VALUES (@code,N'CI Customer');", "CI-CUST");
+        var warehouse = await NewId("INSERT dbo.Warehouses(Code,Name) OUTPUT INSERTED.WarehouseId VALUES (@code,N'CI Warehouse');", "CI-WH");
+        var employee = await NewId("INSERT dbo.Employees(Code,Name) OUTPUT INSERTED.EmployeeId VALUES (@code,N'CI Employee');", "CI-EMP");
+        var product = await NewId("INSERT dbo.Products(Code,Name,Unit) OUTPUT INSERTED.ProductId VALUES (@code,N'CI Product',N'EA');", "CI-PROD");
+        transaction.Commit();
+        return (customer, warehouse, employee, product);
+    }
+
+    private static async Task<int> InsertUserAsync(SqlConnection connection, SqlTransaction transaction,
+        string username, string password, BcryptPasswordHasher hasher)
+    {
+        using var command = new SqlCommand(@"
+INSERT dbo.Users (Username, NormalizedUsername, DisplayName, Source,
+  PasswordHash, PasswordSalt, PasswordAlgorithm, IsActive)
+OUTPUT INSERTED.UserId VALUES
+  (@name,@normalized,@display,N'Local',@hash,N'',@algorithm,1);", connection, transaction);
+        command.Parameters.Add("@name", SqlDbType.NVarChar, 100).Value = username;
+        command.Parameters.Add("@normalized", SqlDbType.NVarChar, 100).Value = UsernameNormalizer.Normalize(username);
+        command.Parameters.Add("@display", SqlDbType.NVarChar, 100).Value = username;
+        command.Parameters.Add("@hash", SqlDbType.NVarChar, 255).Value = hasher.Hash(password);
+        command.Parameters.Add("@algorithm", SqlDbType.NVarChar, 32).Value = hasher.Algorithm;
+        return Convert.ToInt32(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+    }
+}
