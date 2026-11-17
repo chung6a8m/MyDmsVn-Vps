@@ -43,3 +43,29 @@ Job output uploads **only** `vps04a-live-https-sql.trx`, validates exactly 4 exe
 After the **same final PR HEAD** runs, record the following in the PR/evidence ledger: `HEAD_SHA`, `RUN_URL`, `RUN_SHA`, Linux/SDK image, SQL engine version and exact13 fingerprint (no host/address/credentials), TLS verified result, 178-file count, vector count, 4/4 live result, audit/rollback gaps and final owner decision. The workflow is intentionally **manual** to prevent destructive SQL acceptance from every PR push. Green ordinary SQL-free CI **never** upgrades live gates to PASS.
 
 Do not merge PR #9 as a fully accepted VPS-04A runtime until the independent live gate on final HEAD has executed successfully and the required evidence has been reviewed.
+
+
+## GitHub Environment provisioning — operator-only execution
+
+**Owner authorization:** approved to prepare the gate, **not** evidence that the target database is isolated or disposable. GitHub's workflow reference alone can auto-create a missing Environment **without secrets or protection rules**. Never add the trigger label before an independent admin has verified Required reviewers, prevent self-review, exact branch restriction, and Environment-scoped secret/variable names.
+
+Chat-mode GitHub integration can update repository files/PRs but cannot write or inspect Environment settings or secrets. Use the reviewed [local admission helper](../../scripts/configure-vps04a-live-gate.py) from an authenticated operator machine. It uses GitHub CLI API calls, requires a separate reviewer login, creates the dedicated Environment with Required reviewers and exact branch deployment policy, and **never accepts/logs secret values**. It does not silently label the PR:
+
+```powershell
+# On an operator workstation, with GitHub CLI and Python 3:
+gh auth login
+gh auth status
+python scripts/configure-vps04a-live-gate.py configure --reviewer INDEPENDENT_REVIEWER_GITHUB_LOGIN
+```
+
+Then open the repository **Settings → Environments → vps04a-sql-nonproduction** and ensure admin-bypass is disabled if supported. Store the following values **only** as GitHub **Environment secrets**, using Settings or `gh secret set -e vps04a-sql-nonproduction -R chung6a8m/MyDmsVn-Vps SECRET_NAME`: `VPS04A_RUNTIME_SQL`, `VPS04A_ORACLE_SQL`, `VPS04A_SUPERUSER_USERNAME`, `VPS04A_JWT_AUDIENCE`, `VPS04A_JWT_KID`, `VPS04A_JWT_KEYS`, `VPS04A_WRITER_USERNAME`, `VPS04A_WRITER_PASSWORD`, `VPS04A_DENIED_USERNAME`, `VPS04A_DENIED_PASSWORD`. Ensure SQL connections use server-certificate verification, encryption and distinct restricted runtime/read-only oracle identities; never use production or administrator SQL credentials.
+
+Store exactly four environment variables with real nonproduction seed IDs: `VPS04A_CUSTOMER_ID`, `VPS04A_WAREHOUSE_ID`, `VPS04A_EMPLOYEE_ID`, `VPS04A_PRODUCT_ID`. The helper only checks **names**, not the confidentiality, validity or privileges of their values. Operator must independently inspect schema13 migration journal/fingerprint, backup/disposal ownership, dedicated database, active seed rows/permissions, GitHub runner-to-SQL connectivity and SQL TLS certificate chain.
+
+```powershell
+# Read-only preflight, then explicitly reviewed final-SHA trigger:
+python scripts/configure-vps04a-live-gate.py verify
+python scripts/configure-vps04a-live-gate.py trigger --expected-sha FULL_40_CHARACTER_REVIEWED_PR_HEAD_SHA --confirm approved-isolated-sql13
+```
+
+If preflight fails, **do not** add `vps04a-live-approved`; configure the missing protected resources first. The label only **requests** the deployment; a separate reviewer must approve the Environment gate in GitHub Actions. A later PR code change invalidates the earlier SHA: remove and reapply the label **only** after the new commit's CI passes and the protected preflight has been repeated. The workflow must produce 4/4 verified live cases and a real SQL oracle; neither a protected Environment nor a successful static CI is a live PASS.
