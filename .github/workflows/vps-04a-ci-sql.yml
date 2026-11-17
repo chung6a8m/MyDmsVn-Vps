@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   isolated-sql13:
-    name: Ubuntu .NET 10 + isolated SQL2022 TLS + golden HTTP/stock/oversell/fault 9/9
+    name: Ubuntu .NET 10 + isolated SQL2022 TLS + golden HTTP/stock/oversell/fractional/fault 10/10
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     env:
@@ -289,11 +289,24 @@ jobs:
             --filter 'FullyQualifiedName~DisarmedOriginalSameKeyRetryCommitsExactlyOnce' \
             --logger 'trx;LogFileName=vps04a-ci-fault-recovery.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
 
+          # After rollback + same-key recovery are proven on a freshly
+          # restarted Kestrel worker, exercise independent warehouse keys.
+          # Only the disposable bootstrap creates the two warehouse seeds.
+          # The new case checks 4-decimal line allocation and both SQL/API
+          # warehouse balances under parallel Sales.Post requests.
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~ParallelPostsForSameProductAcrossTwoWarehousesKeepFourDecimalCostAllocations' \
+            --logger 'trx;LogFileName=vps04a-ci-multiwarehouse-fractional.trx' \
+            --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
           files=list(Path('vps04a-ci-trx').glob('*.trx'))
           expected={'vps04a-ci-https-sql.trx':6,'vps04a-ci-oversell-race.trx':1,
+                    'vps04a-ci-multiwarehouse-fractional.trx':1,
                     'vps04a-ci-fault-rollback.trx':1,
                     'vps04a-ci-fault-recovery.trx':1}
           assert {f.name for f in files} == set(expected),[p.name for p in files]
@@ -307,8 +320,8 @@ jobs:
             n=expected[file.name]
             assert got == {'total':n,'executed':n,'passed':n,'failed':0,'notExecuted':0},(file.name,got)
             total+=n
-          assert total==9
-          print('PASS: 9/9 real HTTPS-to-SQL tests: golden wire, stock/COGS, oversell race, '
+          assert total==10
+          print('PASS: 10/10 real HTTPS-to-SQL tests: golden wire, stock/COGS, oversell race, fractional multiwarehouse, '
                 'mid-transaction rollback, Kestrel restart and same-key recovery; zero failed/skipped')
           PY
 
