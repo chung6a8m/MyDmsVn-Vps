@@ -98,6 +98,13 @@ internal sealed class Vps03OwnedEnvironment
                 .ValidateAsync(runtimeConnection, token).ConfigureAwait(false);
             var principal = await new Vps03SqlOracle(runtimeConnection).RuntimePrincipalAsync(token).ConfigureAwait(false);
             Vps03SqlOracle.ValidateRuntimePrincipal(principal);
+            var compatibility = schema == 13
+                ? await new SqlWeb5SchemaCompatibilityChecker(runtimeConnection).CheckAsync(token).ConfigureAwait(false)
+                : schema == 12
+                    ? await new SqlWebSchemaCompatibilityChecker(runtimeConnection).CheckAsync(token).ConfigureAwait(false)
+                    : await new SqlWebSchema11CompatibilityChecker(runtimeConnection).CheckAsync(token).ConfigureAwait(false);
+            if (!compatibility.IsCompatible) throw new InvalidOperationException("VPS-03 runtime schema compatibility failed.");
+            await new SqlSuperuserBindingValidator().ValidateAsync(runtimeConnection, username, token).ConfigureAwait(false);
 
             var signingKey = new byte[32];
             using (var random = RandomNumberGenerator.Create()) random.GetBytes(signingKey);
@@ -115,7 +122,6 @@ internal sealed class Vps03OwnedEnvironment
                 ["MYDMSVN_WEB_SUPERUSER_USERNAME"] = username,
                 ["MYDMSVN_WEB_OPERATION_MODE"] = mode,
                 ["MYDMSVN_WEB_DESKTOP_API"] = "enabled",
-                ["MYDMSVN_WEB_SECURITY_AUDIT_PATH"] = Path.Combine(diagnosticDirectory, "security-audit.log"),
             };
             host = await Vps03IisExpressHost.StartAsync(preflight.Origin, preflight.TlsThumbprint,
                 options.HostPackage, hostEnvironment, token).ConfigureAwait(false);
@@ -314,6 +320,7 @@ SELECT 1,UserId,@normalized FROM dbo.Users WHERE NormalizedUsername=@normalized;
         key.IndexOf("JWT", StringComparison.OrdinalIgnoreCase) >= 0 ||
         key.IndexOf("TOKEN", StringComparison.OrdinalIgnoreCase) >= 0 ||
         key.IndexOf("SECRET", StringComparison.OrdinalIgnoreCase) >= 0;
+
 }
 
 internal sealed class Vps03CleanupResult
