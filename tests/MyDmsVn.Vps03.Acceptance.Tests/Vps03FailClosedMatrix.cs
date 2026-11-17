@@ -25,7 +25,7 @@ internal static class Vps03FailClosedMatrix
             "cancelled", "timeout", "missing", "expired", "unavailable", "indeterminate",
             "http-404", "http-500", "http-503", "actor-mismatch", "epoch-mismatch",
             "operation-mismatch", "fingerprint-mismatch", "kind-mismatch", "method-mismatch",
-            "target-mismatch",
+            "scope-mismatch", "target-mismatch", "contract-mismatch",
         };
         var results = new List<Vps03FailClosedResult>(cases.Length);
         foreach (var @case in cases)
@@ -73,11 +73,14 @@ internal static class Vps03FailClosedMatrix
         var fingerprint = @case == "fingerprint-mismatch" ? new string('b', 64) : record.Fingerprint;
         var kind = @case == "kind-mismatch" ? "Receipt.Post" : record.Kind;
         var method = @case == "method-mismatch" ? "PUT" : record.Method;
+        var scope = @case == "scope-mismatch" ? "/api/v1/receipts/{saleId}/post" :
+            "/api/v1/sales-receipts/{saleId}/post";
         var target = @case == "target-mismatch" ? "7304" : "7303";
-        var body = "{\"data\":{\"contractVersion\":\"web5-resolution-v1\",\"actorUserId\":" +
+        var contract = @case == "contract-mismatch" ? "web5-resolution-v2" : "web5-resolution-v1";
+        var body = "{\"data\":{\"contractVersion\":\"" + contract + "\",\"actorUserId\":" +
             actor.ToString(CultureInfo.InvariantCulture) + ",\"deploymentEpoch\":\"" + epoch +
             "\",\"operationId\":\"" + operation + "\",\"operationKind\":\"" + kind +
-            "\",\"method\":\"" + method + "\",\"routeScope\":\"/api/v1/sales-receipts/{saleId}/post\"," +
+            "\",\"method\":\"" + method + "\",\"routeScope\":\"" + scope + "\"," +
             "\"requestTargetId\":\"" + target + "\",\"requestFingerprint\":\"" + fingerprint +
             "\",\"state\":\"" + state + "\",\"outcome\":null,\"terminal\":null}}";
         return Task.FromResult(Json(HttpStatusCode.OK, body));

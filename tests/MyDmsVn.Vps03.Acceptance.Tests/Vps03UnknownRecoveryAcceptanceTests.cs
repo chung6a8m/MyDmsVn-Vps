@@ -7,6 +7,15 @@ namespace MyDmsVn.Vps03.Acceptance.Tests;
 
 public sealed class Vps03UnknownRecoveryAcceptanceTests
 {
+    [Fact]
+    public async Task Fail_closed_matrix_covers_route_scope_and_contract_identity()
+    {
+        var outcomes = await Vps03FailClosedMatrix.RunAsync(CancellationToken.None);
+
+        Assert.Contains(outcomes, item => item.Case == "scope-mismatch" && !item.FenceReleased);
+        Assert.Contains(outcomes, item => item.Case == "contract-mismatch" && !item.FenceReleased);
+    }
+
     [Vps03AcceptanceFact]
     [Trait("Category", "Vps03Issue7Live")]
     [Trait("CaseId", "VPS03.ISSUE7.LIVE.RESTART")]
@@ -96,7 +105,9 @@ public sealed class Vps03UnknownRecoveryAcceptanceTests
         Assert.Contains(outcomes, item => item.Case == "fingerprint-mismatch" && !item.FenceReleased);
         Assert.Contains(outcomes, item => item.Case == "kind-mismatch" && !item.FenceReleased);
         Assert.Contains(outcomes, item => item.Case == "method-mismatch" && !item.FenceReleased);
+        Assert.Contains(outcomes, item => item.Case == "scope-mismatch" && !item.FenceReleased);
         Assert.Contains(outcomes, item => item.Case == "target-mismatch" && !item.FenceReleased);
+        Assert.Contains(outcomes, item => item.Case == "contract-mismatch" && !item.FenceReleased);
         Assert.All(outcomes, item => Assert.Equal("UNKNOWN", item.State));
     }
 }
