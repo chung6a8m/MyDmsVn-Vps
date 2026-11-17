@@ -36,7 +36,7 @@ public sealed class PortableAuditLinuxTests
 
         public string Root { get; }
         public string Path { get; }
-        public WebHostOptions Options() => new(
+        public WebHostOptions Options(string? auditPath = null) => new(
             publicOrigin: "https://localhost",
             issuer: "https://localhost",
             audience: "vps04b-test",
@@ -49,7 +49,7 @@ public sealed class PortableAuditLinuxTests
             web6ResendEligibilityEnabled: true,
             web6CandidateId: "vps04b-ci",
             web6CandidateRoot: Root,
-            securityAuditPath: Path);
+            securityAuditPath: auditPath ?? Path);
 
         public void Dispose()
         {
@@ -121,6 +121,31 @@ public sealed class PortableAuditLinuxTests
         Assert.Null(error.InnerException);
         Assert.DoesNotContain(destination.Path, error.Message);
         Assert.Empty(File.ReadAllLines(destination.Path));
+    }
+
+    [Fact]
+    public async Task FailedNestedDirectoryTraversalDoesNotLeakFileDescriptors()
+    {
+        using var destination = new Destination();
+        var parent = System.IO.Path.Combine(destination.Root, "nested");
+        var leaf = System.IO.Path.Combine(parent, "leaf");
+        System.IO.Directory.CreateDirectory(leaf);
+        File.SetUnixFileMode(parent, PrivateDirectory);
+        File.SetUnixFileMode(leaf, PrivateDirectory);
+        var nestedAudit = System.IO.Path.Combine(leaf, "audit.jsonl");
+        File.WriteAllBytes(nestedAudit, Array.Empty<byte>());
+        File.SetUnixFileMode(nestedAudit, PrivateFile);
+        var sink = new PortableProtectedSecurityAuditSink(destination.Options(nestedAudit));
+
+        // Root and first nested parent remain openable; the next openat fails.
+        // A leaking traversal retains one directory descriptor on each failure.
+        System.IO.Directory.Move(leaf, leaf + "-moved");
+        var before = System.IO.Directory.EnumerateFileSystemEntries("/proc/self/fd").Count();
+        for (var i = 0; i < 64; i++)
+            await Assert.ThrowsAsync<IOException>(() =>
+                sink.WriteAsync(Entry(), CancellationToken.None));
+        var after = System.IO.Directory.EnumerateFileSystemEntries("/proc/self/fd").Count();
+        Assert.InRange(after - before, -4, 8);
     }
 
     [Fact]

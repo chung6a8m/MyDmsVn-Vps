@@ -105,26 +105,28 @@ internal sealed class PortableProtectedSecurityAuditSink : ISecurityAuditSink
             // Each parent is opened without following links. Its permissions are
             // checked before any subsequent lookup (including the candidate root).
             SafeFileHandle current = baseDirectory;
-            for (var index = 0; index < _components.Length - 1; index++)
-            {
-                var next = Open(current.DangerousGetHandle().ToInt32(), _components[index],
-                    ReadOnly | DirectoryOnly | NoFollow | CloseOnExec);
-                try
-                {
-                    CheckDirectory(ReadMetadata(next), owner, privateDirectory: index + 1 >= _rootDepth);
-                }
-                catch
-                {
-                    next.Dispose();
-                    throw;
-                }
-                if (!ReferenceEquals(current, baseDirectory))
-                    current.Dispose();
-                current = next;
-            }
-
             try
             {
+                // Always release the last descriptor if a later openat/statx
+                // fails while traversing a nested audit destination.
+                for (var index = 0; index < _components.Length - 1; index++)
+                {
+                    var next = Open(current.DangerousGetHandle().ToInt32(), _components[index],
+                        ReadOnly | DirectoryOnly | NoFollow | CloseOnExec);
+                    try
+                    {
+                        CheckDirectory(ReadMetadata(next), owner, privateDirectory: index + 1 >= _rootDepth);
+                    }
+                    catch
+                    {
+                        next.Dispose();
+                        throw;
+                    }
+                    if (!ReferenceEquals(current, baseDirectory))
+                        current.Dispose();
+                    current = next;
+                }
+
                 using var file = Open(current.DangerousGetHandle().ToInt32(), _components[^1],
                     WriteOnly | AppendFlag | NonBlock | NoFollow | CloseOnExec);
                 var opened = ReadMetadata(file);
@@ -133,22 +135,21 @@ internal sealed class PortableProtectedSecurityAuditSink : ISecurityAuditSink
 
                 if (Flock(file.DangerousGetHandle().ToInt32(), LockExclusive) != 0)
                     throw new IOException();
+                token.ThrowIfCancellationRequested();
+                // The opened O_APPEND descriptor is locked across processes and
+                // fsync'd before an admitted audit write can be acknowledged.
+                using (var stream = new FileStream(file, FileAccess.Write, bufferSize: 4096,
+                    isAsync: false))
                 {
-                    token.ThrowIfCancellationRequested();
-                    // The opened O_APPEND descriptor is locked across processes and
-                    // fsync'd before an admitted audit write can be acknowledged.
-                    using (var stream = new FileStream(file, FileAccess.Write, bufferSize: 4096,
-                        isAsync: false))
-                    {
-                        if (line != null) stream.Write(line);
-                        stream.Flush(flushToDisk: true);
-                    }
-                    CheckSameFile(opened, ReadMetadata(current, _components[^1]), owner);
+                    if (line != null) stream.Write(line);
+                    stream.Flush(flushToDisk: true);
                 }
+                CheckSameFile(opened, ReadMetadata(current, _components[^1]), owner);
             }
             finally
             {
-                if (!ReferenceEquals(current, baseDirectory)) current.Dispose();
+                if (!ReferenceEquals(current, baseDirectory))
+                    current.Dispose();
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException

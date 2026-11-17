@@ -9,13 +9,25 @@ Choose a **dedicated unprivileged service account** (example: `mydmsvn`) with a 
 ```bash
 # The host itself must NEVER create or chmod this directory or file.
 sudo install -d -o mydmsvn -g mydmsvn -m 0700 /var/lib/mydmsvn/audit
-sudo -u mydmsvn sh -c 'umask 077; test ! -e /var/lib/mydmsvn/audit/security.jsonl && : > /var/lib/mydmsvn/audit/security.jsonl'
-sudo chmod 0600 /var/lib/mydmsvn/audit/security.jsonl
-sudo chown mydmsvn:mydmsvn /var/lib/mydmsvn/audit/security.jsonl
+sudo -u mydmsvn python3 - <<'PY'
+import os
+path = "/var/lib/mydmsvn/audit/security.jsonl"
+# Exclusive atomic creation refuses existing entries, including dangling symlinks.
+fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+try:
+    os.fsync(fd)
+finally:
+    os.close(fd)
+directory = os.open(os.path.dirname(path), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try:
+    os.fsync(directory)
+finally:
+    os.close(directory)
+PY
 stat -c '%a %U:%G %h %n' /var/lib/mydmsvn/audit /var/lib/mydmsvn/audit/security.jsonl
 ```
 
-The root must be an owner-only real directory `0700`; file a regular owner-only `0600` inode with **one** hard link. Every parent must be non-symlink, trusted-owner and non-writable by other users (root-owned sticky `/tmp` is a test-specific accepted case). The host uses `openat` with `O_NOFOLLOW`, inode validation, `flock` and `fsync` before audit write acknowledgement. A missing file, ACL/mode drift, symlink, hardlink or unwritable disk fails closed.
+The root must be an owner-only real directory `0700`; file a regular owner-only `0600` inode with **one** hard link. Creation uses `O_EXCL | O_NOFOLLOW` rather than a check-then-truncate shell redirection; it refuses any existing destination. Never rerun it on an established audit log or bypass a refusal with `chmod`/`chown` of an unverified path. Every parent must be non-symlink, trusted-owner and non-writable by other users (root-owned sticky `/tmp` is a test-specific accepted case). The host uses `openat` with `O_NOFOLLOW`, inode validation, `flock` and `fsync` before audit write acknowledgement. A missing file, ACL/mode drift, symlink, hardlink or unwritable disk fails closed.
 
 ## Configuration admission
 

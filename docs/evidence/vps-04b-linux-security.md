@@ -1,6 +1,6 @@
 # VPS-04B — portable protected audit and Linux HTTP/security evidence
 
-**Repository:** `chung6a8m/MyDmsVn-Vps`. **Increment:** Issue #10 / [PR #13](https://github.com/chung6a8m/MyDmsVn-Vps/pull/13) (draft at documentation authoring). **Base main:** `b53e5eeaffc4e3acafcda6c89f499894a66d4140` (VPS-04A PR #9 merged). **Verified code HEAD:** `b41eb7c62e5c9ffe37b634ab543f64b86c0bd779`. **Status:** IMPLEMENTED / CODE-HEAD CI VERIFIED; **not yet** independently reviewed, final-documentation-HEAD verified or merged. No production approval.
+**Repository:** `chung6a8m/MyDmsVn-Vps`. **Increment:** Issue #10 / [PR #13](https://github.com/chung6a8m/MyDmsVn-Vps/pull/13) (draft at documentation authoring). **Base main:** `b53e5eeaffc4e3acafcda6c89f499894a66d4140` (VPS-04A PR #9 merged). **Verified code HEAD:** `b41eb7c62e5c9ffe37b634ab543f64b86c0bd779`. **Evidence type:** recorded implementation-checkpoint CI. **Final-HEAD review, remedial commits, required checks and merge outcome must be verified directly in PR #13**; this document alone is not final-HEAD or production approval.
 
 ## Scope and boundaries
 
@@ -23,7 +23,7 @@
 | Linux audit refusal/recovery | same run | privileged file drift: login refused, health 503; insecure mode startup rejected; correction + new Kestrel process recovers prior durable records |
 | Windows Desktop publish | [#44111184124](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44111184124) | PASS at code HEAD; does not prove attended GUI |
 
-Executed via GitHub Actions on exact code SHA; the PR contains later documentation changes, therefore **the table above is not a final-HEAD CI pass**.
+Executed via GitHub Actions at the recorded code SHA. **Final-HEAD CI evidence and verdict are the checks and review timeline attached to PR #13**, including any later remedial commits; do not transfer the checkpoint PASS to another SHA.
 
 ## Exact reproducible gate
 
@@ -40,7 +40,7 @@ Live SQL: `.github/workflows/vps-04a-ci-sql.yml` provisions a **strictly ephemer
 
 ## Required separate reviews / remaining limitations
 
-- Independent PR security/code review, findings remediation and CI on **final documentation+code HEAD** still required before merge and VPS-04B COMPLETE.
+- Independent PR security/code review, findings remediation and CI on **final documentation+code HEAD** are the mandatory PR #13 merge gates (see PR timeline for actual outcome).
 - Systemd, trusted proxy/TLS termination, VPS secrets management, protected independently reviewed staging and production-grade operations belong to VPS-08, **NOT RUN**.
 - Exhaustive 57-route dynamic success/error matrix, Windows Desktop → Linux Host → SQL release workflows, and Owner release authorization belong to VPS-09, **NOT VERIFIED**.
 - Filesystem permissions and durable append protect against untrusted local accounts, but do **not** claim a tamper-proof cryptographic ledger against process-owner or root compromise. Audit rotation and secure backup must be governed by VPS-08 operations.

@@ -160,7 +160,8 @@ ORDER BY CreatedAtUtc DESC;", connection);
             Assert.Equal(DateTimeKind.Utc, utc.Kind);
         }
         var all = string.Concat(content);
-        Assert.DoesNotContain(Required("VPS04A_LIVE_PASSWORD"), all, StringComparison.Ordinal);
+        Assert.False(all.Contains(Required("VPS04A_LIVE_PASSWORD"), StringComparison.Ordinal),
+            "Durable audit must never contain the disposable login password.");
         Assert.DoesNotContain("__Host-mydmsvn-rt", all, StringComparison.Ordinal);
     }
 
@@ -256,7 +257,8 @@ ORDER BY CreatedAtUtc DESC;", connection);
             Assert.False(login.Headers.Contains("Set-Cookie"));
             var loginBody = await login.Content.ReadAsStringAsync();
             Assert.DoesNotContain(path, loginBody, StringComparison.Ordinal);
-            Assert.DoesNotContain(Required("VPS04A_LIVE_PASSWORD"), loginBody, StringComparison.Ordinal);
+            Assert.False(loginBody.Contains(Required("VPS04A_LIVE_PASSWORD"), StringComparison.Ordinal),
+                "HTTP failure must never return the disposable login password.");
 
             using var health = await api.Send(HttpMethod.Get, "/api/v1/health");
             using var json = await Json(health, 503);

@@ -24,8 +24,9 @@ assert isinstance(libraries, dict) and libraries, "Missing compiled host runtime
 # separately reviewable controller migration.
 blocked_exact = {
     "system.web", "system.security.accesscontrol",
-    "system.security.principal.windows", "microsoft.aspnetcore.owin",
-    "owin",
+    "system.security.principal.windows", "system.io.filesystem.accesscontrol",
+    "system.io.pipes.accesscontrol", "system.threading.accesscontrol",
+    "microsoft.aspnetcore.owin", "owin",
 }
 blocked_prefixes = ("microsoft.owin", "microsoft.aspnet.webapi", "system.web.")
 bad = sorted(
