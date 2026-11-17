@@ -54,7 +54,21 @@ namespace Microsoft.Owin
     {
         string? RemoteIpAddress { get; }
         IOwinRequestHeaders Headers { get; }
-        QueryString QueryString { get; }
+        OwinCompatibleQueryString QueryString { get; }
+    }
+
+    // OWIN's IOwinRequest.QueryString.Value omits the leading '?' while
+    // ASP.NET Core's HttpRequest.QueryString.Value includes it. The legacy
+    // strict wire decoder uses the former raw grammar; preserve escaped query
+    // bytes verbatim and never silently drop invalid/duplicate parameters.
+    public readonly struct OwinCompatibleQueryString
+    {
+        public OwinCompatibleQueryString(string? aspNetCoreValue)
+        {
+            Value = aspNetCoreValue is { Length: > 0 } value && value[0] == '?'
+                ? value.Substring(1) : aspNetCoreValue ?? string.Empty;
+        }
+        public string Value { get; }
     }
 
     public interface IOwinRequestHeaders
@@ -77,7 +91,8 @@ namespace Microsoft.Owin
 
         public IOwinRequest Request => this;
         public IOwinRequestHeaders Headers => this;
-        public QueryString QueryString => _context.Request.QueryString;
+        public OwinCompatibleQueryString QueryString =>
+            new OwinCompatibleQueryString(_context.Request.QueryString.Value);
         public string? RemoteIpAddress => _context.Connection.RemoteIpAddress?.ToString();
 
         public IList<string>? GetValues(string name) =>
