@@ -53,6 +53,10 @@ python3 scripts/verify-vps-04a.py vps04a-routes.json
 - **R6 / P2 — ignored `Route.Order` and weak parity inventory:** The bridge recorded Web API 2 route priority but dropped it during `MapMethods`, and the 57-route CI comparison checked only verb/path, not controller/action identity. Registered endpoint order now matches the source attribute; the compiler inventory gate compares exact verb/path/controller/action tuples.
 - These additions remain SQL-free routing and source-identity checks. They do **not** discharge the separately required live Linux HTTPS/SQL, session/authorization, 178 frozen payload and idempotency/concurrency acceptance.
 
+## Round-2 CI test compilation correction
+
+- The initial round-2 Linux run ([#44044860855](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44044860855), `e5fa09bc`) built the ASP.NET Core host and passed 363 Application tests, but the new native-test source did not compile: `HttpResponseHeaders.Allow` is not a `HttpClient` response-header property. The regression now reads the raw `Allow` header through `GetValues("Allow")`. This was a test compilation finding, not a live HTTP/SQL execution result. The fix must be independently validated on its final HEAD.
+
 ## Evidence and remaining acceptance gates
 
 - Source/graph build and Linux locked-restore PASS at commit `67b7f5db` ([run #44040119428](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44040119428)), including exact compiler and xUnit TRX counts.
