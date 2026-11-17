@@ -112,34 +112,35 @@ jobs:
           test "$(docker inspect -f '{{.State.Running}}' vps04a-ci-sql)" = "true"
 
       - name: Restore and compile original DbUp13 migrator under CI-only net10 bootstrap
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
         shell: bash
         run: |
           set -euo pipefail
-          dotnet restore tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
+          dotnet restore ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
             -p:Vps04Server=true --force-evaluate -v minimal
-          dotnet build tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
+          dotnet build ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
             -p:Vps04Server=true -c Release -f net10.0 --no-restore -warnaserror -v minimal
 
       - name: Apply original 001-013 migrations, principal allowlists and disposable seeds
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
         shell: bash
         run: |
           set -euo pipefail
           # The bootstrap is fail-closed to GITHUB_ACTIONS=true, exact localhost:1433,
           # fresh fixed-name database, encrypted verified SQL and explicit CI scope.
-          dotnet run --project tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
+          dotnet run --project ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
             -p:Vps04Server=true -c Release -f net10.0 --no-build --no-restore -- provision-isolated-ci
 
       - name: Restore and compile locked .NET10 production host and opt-in acceptance tests
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
         shell: bash
         run: |
           set -euo pipefail
-          dotnet restore src/MyDmsVn.Server.AspNetCoreHost/MyDmsVn.Server.AspNetCoreHost.csproj \
-            -p:Vps04Server=true --locked-mode
-          dotnet build src/MyDmsVn.Server.AspNetCoreHost/MyDmsVn.Server.AspNetCoreHost.csproj \
-            -p:Vps04Server=true -c Release -f net10.0 --no-restore -warnaserror
-          dotnet restore tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+          dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true --locked-mode
+          dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -c Release -f net10.0 --no-restore -warnaserror
+          dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
             -p:Vps04Server=true -p:Vps04ALive=true --locked-mode
-          dotnet build tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+          dotnet build ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
             -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-restore -warnaserror
 
       - name: Run actual Kestrel HTTPS against private SQL; independently reconcile SQL journal
@@ -180,10 +181,11 @@ jobs:
           test "$ready" = 1 || { echo "::error::HTTPS Kestrel health failed without TLS bypass."; exit 1; }
 
           mkdir -p vps04a-ci-trx
-          dotnet test tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
             -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
             --filter 'FullyQualifiedName~Vps04aLiveSqlAcceptanceTests' \
-            --logger 'trx;LogFileName=vps04a-ci-https-sql.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx"
+            --logger 'trx;LogFileName=vps04a-ci-https-sql.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
