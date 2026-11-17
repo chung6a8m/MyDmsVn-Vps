@@ -71,8 +71,8 @@ internal static class Net10WireJson
         if (value is JToken legacy)
         {
             using var document = JsonDocument.Parse(legacy.ToString(Formatting.None));
-            return JsonSerializer.Serialize(document.RootElement, Options);
+            return System.Text.Json.JsonSerializer.Serialize(document.RootElement, Options);
         }
-        return JsonSerializer.Serialize(value, value.GetType(), Options);
+        return System.Text.Json.JsonSerializer.Serialize(value, value.GetType(), Options);
     }
 }
