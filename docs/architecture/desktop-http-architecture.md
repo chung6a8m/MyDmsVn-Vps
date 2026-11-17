@@ -1,16 +1,15 @@
-# Desktop HTTP architecture — planned contract
+# Desktop HTTP architecture — VPS-03
 
-**Stage:** PROPOSED for VPS-02/VPS-03; no such parity is claimed by VPS-00B.
+**Stage: IN PROGRESS — Issues #7/#8 locally accepted; final-HEAD CI, review and merge remain**; see [Issue #7 closeout evidence](../evidence/vps-03-issue-7-closeout.md).
 
-Desktop net48 will use a typed HTTPS client with a replaceable transport layer. Features: Catalog/Product/Warehouse/Employee/Customer, Sales, Goods Receipt/Inventory, Security Administration, login/session and permission-aware lookups.
+Desktop.App (Windows net48) references Desktop.WinForms and Desktop.Infrastructure.Http. The HTTP adapter uses Desktop.Application and Contracts, calls HttpHost over HTTPS /api/v1/*, with SQL Server behind HttpHost. The legacy Local adapter remains only for test compatibility. The Server net10/Linux transition occurs in VPS-04, not VPS-03.
 
-## Transport ownership
+Required variables: MYDMSVN_DESKTOP_API_ORIGIN=https://api.example.com and MYDMSVN_DESKTOP_OPERATION_MODE=web5, web4, or legacy-web11, matching the actual server mode. No SQL connection string, insecure TLS or implicit mode fallback is accepted in the Desktop.
 
-- One base URL and TLS policy per client configuration; no SQL connection string or local fallback in production after cutover.
-- Bearer access token, refresh-token rotation, explicit logout, expired-session handling; never log credentials or tokens.
-- Central mapping for non-2xx HTTP, validation, concurrency conflict, permission denied and timeouts; preserve desktop interaction semantics.
-- Cancellation tokens and per-operation retry **only when proven safe/idempotent**. Never automatically retry transactional Post/ledger commands.
-- DTO/wire adapters isolate Desktop Newtonsoft.Json from later Server System.Text.Json, including decimal, int64, date/time, null and optional fields.
-- Transition matrix enumerates every Desktop API interface/operation and maps it to endpoint + scenario + test/evidence owner (see [parity register](../contracts/http-api-parity.md)).
+The adapter retains Bearer in memory, refresh cookie in CookieContainer, serializes refresh, fences stale session generations, adds Origin to unsafe calls and X-Requested-With to cookie auth, and disables redirect/automatic retries.
 
-VPS-03 acceptance requires Desktop -> HTTPS -> Host -> real SQL E2E on Windows client, not simply successful compilation or localhost-mocked responses. Keep Local adapter available solely during transition; remove from production composition after approval.
+Six Sales/Goods writes use explicit strict wire projections and WEB4-v1 SHA256 with epoch/idempotency key in WEB4/5. Before dispatch, a bounded metadata-only intent is persisted under a Windows-owner-scoped DPAPI-protected file with restricted ACL and atomic no-overwrite rename. Startup and all Catalog/Security/Sales/Goods write clients share a fail-closed fence across restarts. The backend's original WEB4/WEB5 actor/session/Write/Post grants remain mandatory; the Desktop never resends a pending operation. An exact retained COMMITTED result is the only positive journal resolution; an exact WEB5 audited NOT_EXECUTED certificate requires attended confirmation and fresh baseline. Catalog/Security readback is advisory and cannot automatically clear a fence because these APIs have no journal. See [Issue #7 operator runbook](../runbooks/issue-7-unknown-write-recovery.md).
+
+Issue #8 exact-SHA Windows acceptance proves the published Desktop/HTTPS/SQL path, attended GUI, exact stock/COGS single-post and deterministic lost-ACK COMMITTED recovery. Issue #7 exact-SHA acceptance additionally proves real process termination around the durable save, protected-store boundaries, live restart/session/grant/terminal authority, operator races, unjournalled permanent fencing and the Native UNKNOWN workflow. External operator investigation, session/epoch loss and unjournalled writes can still remain permanently UNKNOWN without a separately reviewed recovery authority.
+
+See [VPS-02 API parity matrix](../contracts/http-api-parity.md), [Issue #8 evidence](../evidence/vps-03-desktop-http-cutover.md), and [Issue #7 evidence](../evidence/vps-03-issue-7-closeout.md). Final documentation-HEAD CI, independent review and merge remain mandatory.

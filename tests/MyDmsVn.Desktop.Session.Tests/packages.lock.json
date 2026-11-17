@@ -275,6 +275,14 @@
           "MyDmsVn.Contracts": "[1.0.0, )"
         }
       },
+      "mydmsvn.desktop.infrastructure.http": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection": "[8.0.1, )",
+          "MyDmsVn.Desktop.Application": "[1.0.0, )",
+          "Newtonsoft.Json": "[13.0.4, )"
+        }
+      },
       "mydmsvn.desktop.infrastructure.local": {
         "type": "Project",
         "dependencies": {

@@ -6,7 +6,7 @@ See [test policy](../docs/testing/test-policy.md), [acceptance matrix](../docs/t
 
 ## Current targets
 
-VPS-01 branch migrates all 12 net48 xUnit test suites to `xunit.v3 3.2.2` as executable projects; the separate CrashHost is not an xUnit suite. **The source migration is not proof of CI acceptance** until final-HEAD Windows execution/discovery results are recorded. SQL/UI owner suites are compiled and discovered only in unattended CI. Windows has the .NET Framework 4.8 runtime and, for UI tests, desktop/STA capabilities; Linux does not run the legacy assemblies.
+VPS-01 migrated 12 net48 xUnit test suites to `xunit.v3 3.2.2` as executable projects; VPS-03 adds a thirteenth opt-in acceptance suite. The separate CrashHost remains a helper executable, not an xUnit suite. **Compilation or discovery is not proof of SQL, GUI, or VPS-03 acceptance.** SQL/UI/acceptance owner suites are compiled and discovered only in unattended CI. Windows has the .NET Framework 4.8 runtime and, for UI tests, desktop/STA capabilities; Linux does not run the legacy assemblies.
 
 SQL-free baseline smoke candidates: `MyDmsVn.Server.Application.Tests`, `MyDmsVn.Architecture.Tests`, `MyDmsVn.Desktop.Session.Tests` and `MyDmsVn.Server.HttpHost.Tests`. Inspect their TRX test counts: zero executed is not PASS. The SQL owners include `Infrastructure.Catalog`, `Foundation`, `Inventory`, `Security`, `Migrations` and shared `Infrastructure.IntegrationTests`; not all of their cases are SQL-free.
 
@@ -16,10 +16,33 @@ Canonical WEB2–WEB6 request/response test fixtures are local in [contracts cor
 
 GUI/native/125%-scale scenarios require attended Windows evidence. Headless GitHub Actions compile/tests cannot substitute. Do not run destructive SQL integration against a production instance. See the test policy for focused examples and detailed rules.
 
+## VPS-03 Issue #7 acceptance runner
+
+`scripts/Invoke-Vps03Issue7Acceptance.ps1` is the only aggregate Issue #7
+runner. It requires a clean 40-hex HEAD and writes only beneath
+`TestResults/vps03-issue7/<HEAD>`. Its modes are:
+
+- `-PreflightOnly`: validate the clean HEAD, Windows/net48 capability, and the
+  15-case Issue #7 manifest without executing acceptance cases.
+- `-CrashOnly`: execute the non-empty crash (2) and file-security (4) groups;
+  each TRX must have exact totals and zero failed/skipped/not-executed cases.
+- `-LiveOnly`: require the operator-approved SQL/TLS environment, publish exact
+  Desktop/host packages, and execute the seven live authority cases.
+- `-AttendedOnly`: publish the same exact packages and execute the single Native
+  walkthrough, including `VPS03.GUI.UNKNOWN-RECOVERY`.
+- With no mode switch, execute the SQL-free groups and aggregate exact-HEAD
+  `-LiveResult` and `-AttendedResult` records into sanitized JSON/Markdown.
+
+Full PASS also requires child/IIS/SQL/intent cleanup facts and matching package
+hashes. A missing external gate, SHA mismatch, empty group, skip, failure,
+unresolved owned intent, or uncertain cleanup is an error, never PASS. Never
+place connection strings, passwords, tokens, cookies, JWTs, request bodies, or
+raw errors in the evidence directory.
+
 ## VPS-01 commands and nonempty gates
 
 `python3 scripts/verify-vps-01.py` checks package/project topology and pinned HTTP route metadata on Linux (static only).
 
-On Windows 2022, run each of the four SQL-free suites with `dotnet test <csproj> -c Release -f net48 --no-restore --logger "trx;LogFileName=<id>.trx"`; independently inspect the TRX total/executed/passed/not-executed. Their minimum actual execution counts are 13 (Architecture), 212 (Desktop.Session), 363 (Application) and 640 (HttpHost). Additional eight suites use `dotnet test <csproj> -c Release -f net48 --no-build --no-restore --list-tests` to prove that the xUnit v3 runner discovers cases **without running them**. Missing test output or fewer than expected selected cases is not PASS.
+On Windows 2022, run each of the four SQL-free suites with `dotnet test <csproj> -c Release -f net48 --no-restore --logger "trx;LogFileName=<id>.trx"`; independently inspect the TRX total/executed/passed/not-executed. Their minimum actual execution counts are 13 (Architecture), 212 (Desktop.Session), 363 (Application) and 640 (HttpHost). Nine additional suites, including `MyDmsVn.Vps03.Acceptance.Tests`, use `dotnet test <csproj> -c Release -f net48 --no-build --no-restore --list-tests` to prove that the xUnit v3 runner discovers cases **without running them**. Missing test output or fewer than expected selected cases is not PASS; discovery of the VPS-03 suite is specifically not Issue #8 execution evidence.
 
 See [VPS-01 evidence](../docs/evidence/vps-01-foundation.md). The SQL env/attended GUI gates remain independently NOT RUN without their appropriate environments. `tests/Directory.Build.targets` lists narrowly scoped legacy analyzer debts `xUnit1051` and `xUnit3003`; it does not suppress build, test, runtime or product warnings.

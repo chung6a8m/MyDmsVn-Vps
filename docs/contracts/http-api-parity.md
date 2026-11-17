@@ -1,6 +1,6 @@
-# HTTP feature parity register — worklist, not an acceptance result
+# HTTP feature parity register — baseline worklist and VPS-02/03 evidence
 
-**Owner increments:** VPS-01 contract capture; VPS-02 endpoint parity; VPS-03 Desktop HTTP cutover. Current HttpHost is net48 OWIN/Web API 2, and its completeness is **not** certified.
+**Owner increments:** VPS-01 contract capture; VPS-02 endpoint parity; VPS-03 Desktop HTTP cutover. HttpHost is still net48 OWIN/Web API 2. VPS-02 has separately evidenced live HTTPS/SQL parity, and VPS-03 Issues #7/#8 have pinned-SHA Windows client/HTTPS/SQL/GUI acceptance. Neither proves Linux runtime or production readiness.
 
 | Desktop feature group | Required operation classes | Status / evidence to collect |
 | --- | --- | --- |
@@ -12,7 +12,7 @@
 | Security Admin | Users/roles/permissions, membership and grant enforcement | PENDING — unauthorized/forbidden/allowed |
 | Operations/maintenance | Reconciliation, operator commands, audit access | PENDING — locked-down auth/error map |
 
-For each interface method append: Desktop caller, HTTP method/route, request DTO, response DTO, codes, auth scope, pagination/filter semantics, error mapping, SQL side effects, concurrency/idempotency expectations, source test, frozen fixture and observed CI run. **PENDING does not equal missing implementation; actual parity must be inventoried from code and verified.**
+The table above is the **historical VPS-01 worklist**; its PENDING cells are not the current status. For current route mapping, see the 46-method VPS-02 register and for live acceptance, the [VPS-02 evidence](../evidence/vps-02-http-api-parity.md), [VPS-03 evidence](../evidence/vps-03-desktop-http-cutover.md) and [Issue #7 closeout](../evidence/vps-03-issue-7-closeout.md).
 
 Do not change legacy wire behavior during VPS-00B. See [JSON compatibility](json-wire-compatibility.md) and [Desktop HTTP plan](../architecture/desktop-http-architecture.md).
 
@@ -94,3 +94,7 @@ MyDmsVnWebRuntimeRole **before granting any Desktop object or procedure rights**
 The elevated-permission SQL extension now rejects exact-fragment drift instead
 of silently changing the security allowlist. Real SQL execution and live HTTPS
 positive/negative cases remain mandatory under [Issue #4](https://github.com/chung6a8m/MyDmsVn-Vps/issues/4).
+
+## VPS-03 HTTP client cutover — implementation and pinned-SHA acceptance (2026-11-17)
+
+The VPS-02 46-method register above remains the source of API route identities. The dedicated net48 HTTP adapter in draft PR #6 implements typed clients for these 46 methods, preserves frozen WEB2–WEB6 server routes, and removes Local/Server dependencies from production Desktop.App. Exact-SHA Windows Desktop → HTTPS Host → SQL, real cookies, write recovery, published binary and attended Native evidence passed under Issue #8 at `4c0b1be` (86/86 core, 1/1 GUI), and Issue #7 at `6baa1e8` (15/15 strict recovery/cleanup). Independent PR #6 review, final review-fix HEAD CI and merge remain separate gates; these results do not authorize production deployment. See [VPS-03 evidence](../evidence/vps-03-desktop-http-cutover.md).

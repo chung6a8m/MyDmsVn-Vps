@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <PlatformTarget>x86</PlatformTarget>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Update="vps03-issue8-case-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="vps03-issue7-case-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Security" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="UIAutomationClient" />
+    <Reference Include="UIAutomationTypes" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MyDmsVn.Vps03.PendingStore.CrashHost\MyDmsVn.Vps03.PendingStore.CrashHost.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\MyDmsVn.Vps03.RecoveryClient\MyDmsVn.Vps03.RecoveryClient.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\src\MyDmsVn.Desktop.Application\MyDmsVn.Desktop.Application.csproj" />
+    <ProjectReference Include="..\..\src\MyDmsVn.Desktop.Infrastructure.Http\MyDmsVn.Desktop.Infrastructure.Http.csproj" />
+    <ProjectReference Include="..\..\src\MyDmsVn.Server.DbMigrator\MyDmsVn.Server.DbMigrator.csproj" />
+    <ProjectReference Include="..\..\src\MyDmsVn.Server.Infrastructure\MyDmsVn.Server.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\MyDmsVn.Server.HttpHost\MyDmsVn.Server.HttpHost.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\MyDmsVn.Server.Infrastructure.IntegrationTests\FrozenWeb11Migration.cs" Link="Fixtures\FrozenWeb11Migration.cs" />
+  </ItemGroup>
+</Project>

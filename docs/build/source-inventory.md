@@ -37,3 +37,7 @@ VPS-00A compared 2,282/2,282 file contents/modes from three pinned sources, reco
 Root `global.json` chooses SDK 8.0.400 (latestFeature roll-forward); `Directory.Packages.props` enables Central Package Management; packages.lock.json retained; `NuGet.config` lists nuget.org. HttpHost and its test project have legacy locally pinned PackageReference versions. Changes to these are deferred to focused upgrades; do not conflate them with CI foundation.
 
 No sibling checkout of MyDmsVn, WinFormsKit or SourceGrid is required as an MSBuild project reference. External public NuGet feed usage is normal package restore, not cross-repository source coupling.
+
+## VPS-03 incremental inventory
+
+The VPS-00B table above is intentionally historical. VPS-03 adds the net48 Desktop.Infrastructure.Http production project, the net48 MyDmsVn.Vps03.Acceptance.Tests project, and two x86 Issue #7 test-only process helpers (src/ now 12, tests/ now 16 and repository total 48). The helpers exercise the production pending store and recovery client across real Windows process termination; neither is a production dependency. Production Desktop.App references Http + WinForms instead of Local + Server. The automated published-package audit and exact-SHA attended Windows GUI/package acceptance passed under closed Issue #8 at `4c0b1be`; final PR review/merge and Issue #7 remain separate.

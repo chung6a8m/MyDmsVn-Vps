@@ -55,6 +55,9 @@ jobs:
           - id: sql-security
             minimum_tests: 1684
             project: tests/MyDmsVn.Server.Infrastructure.Security.Tests/MyDmsVn.Server.Infrastructure.Security.Tests.csproj
+          - id: vps03-acceptance
+            minimum_tests: 38
+            project: tests/MyDmsVn.Vps03.Acceptance.Tests/MyDmsVn.Vps03.Acceptance.Tests.csproj
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v5
@@ -69,7 +72,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Locked restore failed: $env:PROJECT" }
           dotnet build $env:PROJECT --no-restore -c Release -f net48 -v minimal
           if ($LASTEXITCODE -ne 0) { throw "Build failed: $env:PROJECT" }
-      - name: Verify nonempty VSTest discovery; do not run SQL or GUI scenarios
+      - name: Verify nonempty VSTest discovery; do not claim SQL, GUI or VPS-03 acceptance
         shell: pwsh
         env:
           PROJECT: ${{ matrix.project }}
