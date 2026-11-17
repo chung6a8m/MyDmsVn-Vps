@@ -13,6 +13,20 @@ namespace MyDmsVn.Vps03.Acceptance.Tests;
 
 internal static class Vps03AttendedExchange
 {
+    internal static void Prepare(string directory)
+    {
+        Directory.CreateDirectory(directory);
+        foreach (var name in new[]
+        {
+            "attended-stage.json", "attended-result.json", "attended-decision.json",
+            "login-observed.json", "errors-observed.json", "unknown-recovery-observed.json",
+        })
+        {
+            var path = Path.Combine(directory, name);
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
     internal static void WriteStage(string directory, string headSha, int processId,
         string executableHash, string stage)
     {
@@ -23,6 +37,27 @@ internal static class Vps03AttendedExchange
             ["executableHash"] = executableHash,
             ["stage"] = stage,
             ["observedAtUtc"] = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+        });
+    }
+
+    internal static void WriteRecoveryStage(string directory, string headSha, int processId,
+        string executableHash, Vps03RecoveryDialogObservation observation)
+    {
+        Write(Path.Combine(directory, "attended-stage.json"), new JObject
+        {
+            ["headSha"] = headSha,
+            ["processId"] = processId,
+            ["executableHash"] = executableHash,
+            ["stage"] = "unknown-recovery-ready",
+            ["observedAtUtc"] = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+            ["identityFieldsMatch"] = observation.Operation && observation.Actor &&
+                observation.Epoch && observation.Kind && observation.Method &&
+                observation.Route && observation.Target && observation.Fingerprint,
+            ["warningVisible"] = observation.Warning,
+            ["shellWriteSurfaceFenced"] = observation.ShellFenced,
+            ["checkEnabled"] = observation.CheckEnabled,
+            ["confirmationDisabled"] = observation.ConfirmationDisabled,
+            ["noForceRelease"] = observation.NoForceRelease,
         });
     }
 
@@ -93,6 +128,7 @@ internal static class Vps03AttendedExchange
     private static string CaseFile(string caseId) =>
         caseId == "VPS03.GUI.LOGIN" ? "login-observed.json" :
         caseId == "VPS03.GUI.ERRORS" ? "errors-observed.json" :
+        caseId == "VPS03.GUI.UNKNOWN-RECOVERY" ? "unknown-recovery-observed.json" :
         throw new ArgumentOutOfRangeException(nameof(caseId));
 
     private static void Write(string path, JObject data)

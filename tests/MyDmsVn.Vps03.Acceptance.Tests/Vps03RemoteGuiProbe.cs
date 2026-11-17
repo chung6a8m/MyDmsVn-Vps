@@ -1,8 +1,11 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Windows.Automation;
+using MyDmsVn.Desktop.Infrastructure.Http;
 
 namespace MyDmsVn.Vps03.Acceptance.Tests;
 
@@ -39,21 +42,96 @@ internal sealed class Vps03RemoteGuiProbe : IDisposable
         WaitForWindow("MyDmsVn", timeout);
     }
 
+    internal Vps03RecoveryDialogObservation ObserveUnknownRecovery(
+        HttpPendingWriteRecord expected, TimeSpan timeout)
+    {
+        var window = WaitForWindow("UNKNOWN write — operator recovery", timeout);
+        var summary = Value(Find(window, "Exact pending write identity for support"));
+        var check = Button(window, "Check server status");
+        var accept = Button(window, "Accept certified NOT_EXECUTED");
+        var warning = window.FindFirst(TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.NameProperty,
+                "UNKNOWN: Do not click Post, Save, or resend this command. The original write may already be committed. An HTTP error or missing status is never rollback evidence."));
+        var forbidden = window.FindAll(TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button))
+            .Cast<AutomationElement>()
+            .Any(element => ForbiddenReleaseName(element.Current.Name));
+        var shell = WaitForWindow("MyDmsVn", timeout);
+        return new Vps03RecoveryDialogObservation(
+            Has(summary, "Operation ID: " + expected.OperationId),
+            Has(summary, "Actor user ID: " + expected.ActorUserId),
+            Has(summary, "Deployment epoch: " + expected.DeploymentEpoch),
+            Has(summary, "Operation kind: " + expected.Kind),
+            Has(summary, "Method: " + expected.Method),
+            Has(summary, "Route: " + expected.Route),
+            Has(summary, "Target ID: (create)"),
+            Has(summary, "Fingerprint SHA256: " + expected.Fingerprint),
+            warning != null, !shell.Current.IsEnabled, check.Current.IsEnabled,
+            !accept.Current.IsEnabled, !forbidden);
+    }
+
+    internal void WaitForUnknownRecoveryReleased(TimeSpan timeout)
+    {
+        var window = WaitForWindow("UNKNOWN write — operator recovery", timeout);
+        var timer = Stopwatch.StartNew();
+        while (timer.Elapsed < timeout)
+        {
+            var summary = Value(Find(window, "Exact pending write identity for support"));
+            var status = FindAutomationId(window, "RecoveryStatus").Current.Name;
+            if (summary == "No pending write." &&
+                (status.StartsWith("NOT_EXECUTED:", StringComparison.Ordinal) ||
+                 status == "CLEAR: No pending write exists.") &&
+                !Button(window, "Check server status").Current.IsEnabled &&
+                !Button(window, "Accept certified NOT_EXECUTED").Current.IsEnabled)
+                return;
+            Thread.Sleep(100);
+        }
+        throw new TimeoutException("VPS03 Native UNKNOWN recovery did not release after confirmation.");
+    }
+
+    internal void CloseUnknownRecovery(TimeSpan timeout)
+    {
+        var window = WaitForWindow("UNKNOWN write — operator recovery", timeout);
+        Invoke(window, "Close (keep fence)");
+        WaitForWindowAbsent("UNKNOWN write — operator recovery", timeout);
+    }
+
     public void Dispose() { }
 
     private AutomationElement WaitForWindow(string title, TimeSpan timeout)
     {
         var timer = Stopwatch.StartNew();
-        var condition = new AndCondition(
-            new PropertyCondition(AutomationElement.ProcessIdProperty, _processId),
-            new PropertyCondition(AutomationElement.NameProperty, title));
+        var condition = new PropertyCondition(AutomationElement.NameProperty, title);
         while (timer.Elapsed < timeout)
         {
-            var found = AutomationElement.RootElement.FindFirst(TreeScope.Children, condition);
-            if (found != null) return found;
+            var candidates = AutomationElement.RootElement.FindAll(TreeScope.Descendants, condition);
+            foreach (AutomationElement found in candidates)
+            {
+                GetWindowThreadProcessId(new IntPtr(found.Current.NativeWindowHandle), out var processId);
+                if (processId == _processId) return found;
+            }
             Thread.Sleep(100);
         }
         throw new TimeoutException("VPS03 attended window was not observed: " + title);
+    }
+
+    private void WaitForWindowAbsent(string title, TimeSpan timeout)
+    {
+        var timer = Stopwatch.StartNew();
+        var condition = new PropertyCondition(AutomationElement.NameProperty, title);
+        while (timer.Elapsed < timeout)
+        {
+            var owned = AutomationElement.RootElement.FindAll(TreeScope.Descendants, condition)
+                .Cast<AutomationElement>()
+                .Any(found =>
+                {
+                    GetWindowThreadProcessId(new IntPtr(found.Current.NativeWindowHandle), out var processId);
+                    return processId == _processId;
+                });
+            if (!owned) return;
+            Thread.Sleep(100);
+        }
+        throw new TimeoutException("VPS03 attended window did not close: " + title);
     }
 
     private static void SetValue(AutomationElement window, string name, string value)
@@ -128,10 +206,56 @@ internal sealed class Vps03RemoteGuiProbe : IDisposable
     [DllImport("user32.dll")]
     private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
 
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr windowHandle, out int processId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr windowHandle, StringBuilder value, int maximum);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowTextLength(IntPtr windowHandle);
+
     private static AutomationElement Find(AutomationElement window, string name) =>
         window.FindFirst(TreeScope.Descendants,
             new PropertyCondition(AutomationElement.NameProperty, name))
         ?? throw new InvalidOperationException("VPS03 attended element was not found: " + name);
+
+    private static AutomationElement Button(AutomationElement window, string name) =>
+        window.FindFirst(TreeScope.Descendants, new AndCondition(
+            new PropertyCondition(AutomationElement.NameProperty, name),
+            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button)))
+        ?? throw new InvalidOperationException("VPS03 attended button was not found: " + name);
+
+    private static AutomationElement FindAutomationId(AutomationElement window, string id) =>
+        window.FindFirst(TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.AutomationIdProperty, id))
+        ?? throw new InvalidOperationException("VPS03 attended automation id was not found: " + id);
+
+    private static string Value(AutomationElement element)
+    {
+        if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var value))
+            return ((ValuePattern)value).Current.Value;
+        if (element.TryGetCurrentPattern(TextPattern.Pattern, out var text))
+            return ((TextPattern)text).DocumentRange.GetText(-1).TrimEnd('\r', '\n');
+        var handle = new IntPtr(element.Current.NativeWindowHandle);
+        var length = GetWindowTextLength(handle);
+        if (length > 0 && length <= 4096)
+        {
+            var buffer = new StringBuilder(length + 1);
+            if (GetWindowText(handle, buffer, buffer.Capacity) > 0) return buffer.ToString();
+        }
+        throw new InvalidOperationException("VPS03 attended text value was unavailable.");
+    }
+
+    private static bool ForbiddenReleaseName(string value) =>
+        value.IndexOf("force", StringComparison.OrdinalIgnoreCase) >= 0 ||
+        value.IndexOf("retry", StringComparison.OrdinalIgnoreCase) >= 0 ||
+        value.IndexOf("resend", StringComparison.OrdinalIgnoreCase) >= 0 ||
+        value.IndexOf("clear", StringComparison.OrdinalIgnoreCase) >= 0 ||
+        value.IndexOf("release", StringComparison.OrdinalIgnoreCase) >= 0;
+
+    private static bool Has(string value, string expected) =>
+        value.IndexOf(expected, StringComparison.Ordinal) >= 0;
 
     private static void WaitForElement(AutomationElement window, string name, TimeSpan timeout)
     {
@@ -146,4 +270,32 @@ internal sealed class Vps03RemoteGuiProbe : IDisposable
         }
         throw new TimeoutException("VPS03 attended element was not observed: " + name);
     }
+}
+
+internal sealed class Vps03RecoveryDialogObservation
+{
+    internal Vps03RecoveryDialogObservation(bool operation, bool actor, bool epoch,
+        bool kind, bool method, bool route, bool target, bool fingerprint, bool warning,
+        bool shellFenced, bool checkEnabled, bool confirmationDisabled, bool noForceRelease)
+    {
+        Operation = operation; Actor = actor; Epoch = epoch; Kind = kind; Method = method;
+        Route = route; Target = target; Fingerprint = fingerprint; Warning = warning;
+        ShellFenced = shellFenced; CheckEnabled = checkEnabled;
+        ConfirmationDisabled = confirmationDisabled; NoForceRelease = noForceRelease;
+    }
+    internal bool Operation { get; }
+    internal bool Actor { get; }
+    internal bool Epoch { get; }
+    internal bool Kind { get; }
+    internal bool Method { get; }
+    internal bool Route { get; }
+    internal bool Target { get; }
+    internal bool Fingerprint { get; }
+    internal bool Warning { get; }
+    internal bool ShellFenced { get; }
+    internal bool CheckEnabled { get; }
+    internal bool ConfirmationDisabled { get; }
+    internal bool NoForceRelease { get; }
+    internal bool Complete => Operation && Actor && Epoch && Kind && Method && Route && Target &&
+        Fingerprint && Warning && ShellFenced && CheckEnabled && ConfirmationDisabled && NoForceRelease;
 }

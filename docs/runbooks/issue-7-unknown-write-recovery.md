@@ -12,11 +12,29 @@
 
 ## Attended Desktop workflow
 
+The exact published x86 package must include and pass the attended
+`VPS03.GUI.UNKNOWN-RECOVERY` checkpoint. The checkpoint records only the Git
+HEAD, executable hash/process ID, timestamp, boolean identity/control matches,
+and the operator decision; it must not record credentials, tokens, SQL
+connection strings, request bodies, or decrypted results.
+
 1. Sign in with a currently active session **as the original actor**. A different application user cannot inspect or clear that actor's operation. The session does not need to be the original in-memory Desktop session; the server will independently validate the *new* current `WebAuthSessions` row and current grants under SQL locks. This does **not** bypass session authorization. Logout, refresh rotation, revoked grant, epoch change and different actor can prevent readback.
 2. Open the shell's **UNKNOWN write — review** status link (shown automatically on entering a shell with pending state). Copy the *exact* operation ID, actor, deployment epoch, kind, method, target, route and fingerprint into the support case. Never copy secrets or full command payloads.
 3. Use **Check server status** (read-only). WEB4 uses `GET /api/v1/operations/{uuid}`; WEB5 uses `GET /api/v2/operations/{uuid}/resolution`. Both pass the exact epoch and fingerprint headers. Compare all envelope metadata, including actor/method/scope/target and WEB5 contract. An exact retained **COMMITTED** result is a positive settlement; **NOT_EXECUTED** is accepted only when WEB5 returns an exact terminal audit tuple and the user separately confirms it, with another fresh read at confirmation time.
 4. Following COMMITTED, refresh document, ledger and stock from the server; do not restore a stale editor snapshot or reconstruct line IDs from a GET. Following certified NOT_EXECUTED, obtain a fresh authorized baseline and create a **new** intent with a new ID; the Desktop never resends the old command.
 5. For **RESULT_EXPIRED, RESULT_UNAVAILABLE, INDETERMINATE, 404, 403, session mismatch, epoch mismatch or network errors**, preserve the UNKNOWN fence and escalate with immutable identifiers. Do not clear or rotate the owner record, infer rollback or bypass UI write admission.
+
+For the attended checkpoint, first verify the complete immutable identity and
+warning while the shell write surface is fenced, **Check server status** is
+enabled, and **Accept certified NOT_EXECUTED** is disabled. After the read-only
+check returns the exact WEB5 `NOT_EXECUTED` terminal and operator case, verify
+that acceptance becomes enabled and that no force-clear, retry, resend,
+Catalog, or Security release control exists. Acceptance requires the separate
+confirmation dialog and a fresh terminal reread. PASS is allowed only after the
+dialog shows `No pending write`, the terminal status remains visible, both
+recovery actions are disabled, the recovery window closes, Desktop exits
+cleanly, and the owned IIS/SQL resources are absent. Abort, timeout, missing
+confirmation, an unresolved intent, or uncertain cleanup is NOT PASS.
 
 ## Operator investigation: WEB4/WEB5
 

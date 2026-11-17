@@ -59,6 +59,7 @@
     {"caseId":"VPS03.GATE.LOST-ACK","kind":"gate","executor":"lost-ack"},
     {"caseId":"VPS03.GATE.INVENTORY","kind":"gate","executor":"inventory"},
     {"caseId":"VPS03.GATE.GUI","kind":"gate","executor":"gui"},
+    {"caseId":"VPS03.GUI.UNKNOWN-RECOVERY","kind":"gate","executor":"unknown-recovery"},
     {"caseId":"VPS03.GATE.CLEANUP","kind":"gate","executor":"cleanup"}
   ]
 }

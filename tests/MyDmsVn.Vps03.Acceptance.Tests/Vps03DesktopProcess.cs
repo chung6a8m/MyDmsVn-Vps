@@ -42,7 +42,15 @@ internal sealed class Vps03DesktopProcess : IDisposable
         return _process.HasExited;
     }
 
-    public void Dispose() => _process.Dispose();
+    public void Dispose()
+    {
+        if (!_process.HasExited)
+        {
+            _process.Kill();
+            _process.WaitForExit(15000);
+        }
+        _process.Dispose();
+    }
 
     private static string Sha256(string path)
     {
