@@ -295,6 +295,28 @@ WHERE l.WarehouseId=@wh AND l.ProductId=@product;", sql);
         Shape("web2-v1","sales-create-response.json",draftA);
         var idA = Id(draftA.RootElement.GetProperty("data"),"saleId");
         var versionA = S(draftA.RootElement.GetProperty("data"),"version");
+        var savedLines = draftA.RootElement.GetProperty("data").GetProperty("lines");
+        var updatedLines = new[]{
+            new {saleLineId=S(savedLines[0],"saleLineId"),productId=product,qty="2.0000",unitPrice="30.0000",isGift=false},
+            new {saleLineId=S(savedLines[1],"saleLineId"),productId=product,qty="1.0000",unitPrice="70.0000",isGift=true}
+        };
+        var oldVersionA = versionA;
+        using (var updatedA = await Write(client,"PUT","/api/v1/sales-receipts/" + idA + "/draft",
+            new {saleDate=today,customerId=customer,warehouseId=wh,employeeId=employee,
+                note="CI Sale A revised",lines=updatedLines,expectedVersion=oldVersionA},token,epoch))
+        {
+            Shape("web2-v1","sales-update-response.json",updatedA);
+            versionA=S(updatedA.RootElement.GetProperty("data"),"version");
+            Assert.NotEqual(oldVersionA,versionA);
+        }
+        // An old rowversion with a new operation key cannot overwrite Draft.
+        using (var staleUpdate = await client.JsonAsync(HttpMethod.Put,
+            "/api/v1/sales-receipts/" + idA + "/draft",409,token,
+            new {saleDate=today,customerId=customer,warehouseId=wh,employeeId=employee,
+                note="CI stale mutation",lines=updatedLines,expectedVersion=oldVersionA},epoch,Guid.NewGuid()))
+            Assert.Equal("SalesReceipt.ConcurrencyConflict",
+                S(staleUpdate.RootElement.GetProperty("error"),"code"));
+
         using var draftB = await Write(client,"POST","/api/v1/sales-receipts",saleB,token,epoch);
         Shape("web2-v1","sales-create-response.json",draftB);
         var idB = Id(draftB.RootElement.GetProperty("data"),"saleId");
