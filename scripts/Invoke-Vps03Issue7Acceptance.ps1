@@ -201,14 +201,14 @@ foreach ($groupName in @('crash', 'file-security', 'live', 'attended', 'cleanup'
 $resultRoot = Join-Path $root "TestResults\vps03-issue7\$head"
 $results = Join-Path $resultRoot 'results'
 New-Item -ItemType Directory -Force -Path $results | Out-Null
-$isWindows = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
-$net48Release = if ($isWindows) {
+$runnerIsWindows = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
+$net48Release = if ($runnerIsWindows) {
     (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' `
         -Name Release -ErrorAction SilentlyContinue).Release
 } else { 0 }
 $iisPath = Join-Path ${env:ProgramFiles(x86)} 'IIS Express\iisexpress.exe'
 $capabilities = [ordered]@{
-    windows = $isWindows
+    windows = $runnerIsWindows
     dotnetFramework48 = [int]$net48Release -ge 528040
     iisExpress = Test-Path -LiteralPath $iisPath
     sql = -not [string]::IsNullOrWhiteSpace($env:MYDMSVN_TEST_SQLSERVER_CONNECTION_STRING)
