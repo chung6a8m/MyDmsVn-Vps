@@ -18,6 +18,7 @@ namespace MyDmsVn.Architecture.Tests
                 ["MyDmsVn.Server.Infrastructure"] = Set("MyDmsVn.Server.Application", "MyDmsVn.Server.Domain"),
                 ["MyDmsVn.Server.DbMigrator"] = Set("MyDmsVn.Server.Infrastructure"),
                 ["MyDmsVn.Server.HttpHost"] = Set("MyDmsVn.Contracts", "MyDmsVn.Server.Application", "MyDmsVn.Server.Infrastructure"),
+                ["MyDmsVn.Server.AspNetCoreHost"] = Set("MyDmsVn.Contracts", "MyDmsVn.Server.Application", "MyDmsVn.Server.Infrastructure"),
                 ["MyDmsVn.Desktop.Application"] = Set("MyDmsVn.Contracts"),
                 ["MyDmsVn.Desktop.Infrastructure.Http"] = Set("MyDmsVn.Desktop.Application"),
                 ["MyDmsVn.Desktop.Infrastructure.Local"] = Set(

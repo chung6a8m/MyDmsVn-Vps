@@ -32,10 +32,22 @@ public sealed class OperationalPersistenceBoundaryTests
         {
             var dependencies = System.Xml.Linq.XDocument.Load(project).Descendants("PackageReference").Select(e => (string?)e.Attribute("Include"));
             Assert.DoesNotContain(dependencies, value => value == "Dapper" || (value ?? "").StartsWith("RepoDb", StringComparison.OrdinalIgnoreCase));
-            var lockFile = Path.Combine(Path.GetDirectoryName(project)!, "packages.lock.json");
-            Assert.True(File.Exists(lockFile));
-            Assert.DoesNotContain("\"Dapper\"", File.ReadAllText(lockFile));
-            Assert.DoesNotContain("\"RepoDb", File.ReadAllText(lockFile));
+            var directory = Path.GetDirectoryName(project)!;
+            var legacyLock = Path.Combine(directory, "packages.lock.json");
+            var net10Lock = Path.Combine(directory, "packages.vps04a.lock.json");
+            var newHost = Path.GetFileNameWithoutExtension(project).Equals(
+                "MyDmsVn.Server.AspNetCoreHost", StringComparison.OrdinalIgnoreCase) ||
+                Path.GetFileNameWithoutExtension(project).Equals(
+                    "MyDmsVn.Server.AspNetCoreHost.Tests", StringComparison.OrdinalIgnoreCase);
+            // Legacy graph must remain locked; two new Linux-only projects use their
+            // own reviewed net10 lockfiles without introducing a net48 package graph.
+            Assert.True(File.Exists(legacyLock) || (newHost && File.Exists(net10Lock)));
+            if (newHost) Assert.True(File.Exists(net10Lock));
+            foreach (var lockFile in new[] { legacyLock, net10Lock }.Where(File.Exists))
+            {
+                Assert.DoesNotContain("\"Dapper\"", File.ReadAllText(lockFile));
+                Assert.DoesNotContain("\"RepoDb", File.ReadAllText(lockFile));
+            }
         }
         var assembly = typeof(MyDmsVn.Server.Infrastructure.Persistence.SqlUnitOfWorkFactory).Assembly;
         Assert.Null(assembly.GetType("MyDmsVn.Server.Infrastructure.Persistence.RepoDbMappingInitializer"));
