@@ -105,3 +105,5 @@ Do not mark `VPS-04A COMPLETE` before its required build, CI, parity and test-co
 - The SQL-free operator-helper regressions are structural simulations; they do not test GitHub Environment secrets/protection in a real repository, do not trigger SQL and do not replace the four live SQL oracles.
 
 **Round-4 disposition:** Keep PR #9 DRAFT / NOT FOR MERGE; protected GitHub Environment and live HTTPS→SQL are NOT VERIFIED. Final-HEAD ordinary CI rerun and independent protected live execution are separate requirements.
+
+**R12 / P2 — safe policy replacement ordering (round-4 fix refinement):** A fail-closed Environment must never temporarily have zero deployment branch rules if creating the corrected PR-ref rule fails. The migration now **POSTs the new exact rule before DELETEing** the single known obsolete source-branch rule. Offline regression asserts the write order and proves a failed POST never issues DELETE. These are helper tests only, not evidence of Environment configuration.

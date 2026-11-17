@@ -63,8 +63,25 @@ class ProtectedLiveGateTests(TestCase):
             gate.configure("independent")
         policy_path = f"{gate.ENV_API}/deployment-branch-policies"
         self.assertIn((("api", "--method", "DELETE", f"{policy_path}/123"), None), calls)
-        self.assertIn((("api", "--method", "POST", policy_path),
-                       {"name": gate.DEPLOY_REF, "type": "branch"}), calls)
+        add = (("api", "--method", "POST", policy_path),
+               {"name": gate.DEPLOY_REF, "type": "branch"})
+        delete = (("api", "--method", "DELETE", f"{policy_path}/123"), None)
+        self.assertIn(add, calls)
+        self.assertLess(calls.index(add), calls.index(delete))
+
+    def test_migration_post_failure_preserves_existing_policy(self):
+        calls = []
+        policy_path = f"{gate.ENV_API}/deployment-branch-policies"
+        def fake_gh(*args, data=None):
+            calls.append((args, data))
+            if args == ("api", "--method", "POST", policy_path):
+                raise gate.AdmissionError("simulated GitHub policy write failure")
+            return ""
+        with patch.object(gate, "api_json", side_effect=mock_api([gate.BRANCH])), \
+             patch.object(gate, "gh", side_effect=fake_gh):
+            with self.assertRaises(gate.AdmissionError):
+                gate.configure("independent")
+        self.assertFalse(any("DELETE" in args for args, _ in calls))
 
     def test_configure_refuses_unrelated_policy(self):
         calls = []

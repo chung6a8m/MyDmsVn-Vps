@@ -100,8 +100,12 @@ def configure(reviewer: str) -> None:
         obsolete_id = records[0].get("id")
         if not isinstance(obsolete_id, int):
             raise AdmissionError("Obsolete branch policy has no ID; inspect manually.")
+        # Add the required rule BEFORE removing the old rule: never pass through
+        # an empty-policy state if GitHub rejects the replacement rule.
+        gh("api", "--method", "POST", policy_path,
+           data={"name": DEPLOY_REF, "type": "branch"})
         gh("api", "--method", "DELETE", f"{policy_path}/{obsolete_id}")
-        patterns = set()
+        patterns = {DEPLOY_REF}
     elif patterns and patterns != {DEPLOY_REF}:
         raise AdmissionError("Unknown deployment policies; inspect manually. No label added.")
     if DEPLOY_REF not in patterns:
