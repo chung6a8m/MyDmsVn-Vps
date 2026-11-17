@@ -257,8 +257,32 @@ jobs:
           fault_armed=0
           test "$fault_result" = 0 || { echo "::error::Fault rollback oracle failed."; exit 1; }
 
-          # Only after independent SQL rollback proof and trigger teardown do
-          # we deliberately retry the ORIGINAL immutable same key/version.
+          # A fresh production Kestrel worker must recover the original
+          # durable operation intent after an actual process restart. This
+          # also keeps the normal per-worker login rate limiter intact:
+          # never weaken security admission to accommodate acceptance tests.
+          kill "$server_pid"
+          wait "$server_pid" 2>/dev/null || true
+          server_pid=""
+          dotnet src/MyDmsVn.Server.AspNetCoreHost/bin/Release/net10.0/MyDmsVn.Server.AspNetCoreHost.dll \
+            >"$work/host-recovery.log" 2>&1 &
+          server_pid="$!"
+          recovery_ready=0
+          for attempt in $(seq 1 60); do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "::error::Recovery worker refused SQL/TLS/security admission."
+              exit 1
+            fi
+            if curl --silent --fail --max-time 3 https://localhost:50443/api/v1/health >/dev/null; then
+              recovery_ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$recovery_ready" = 1 || { echo "::error::Restarted Kestrel HTTPS health failed."; exit 1; }
+
+          # Only after independent SQL rollback proof, exact schema13 restore
+          # and new-worker admission do we retry the ORIGINAL same key/version.
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
             -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
@@ -285,7 +309,7 @@ jobs:
             total+=n
           assert total==9
           print('PASS: 9/9 real HTTPS-to-SQL tests: golden wire, stock/COGS, oversell race, '
-                'mid-transaction rollback and same-key recovery; zero failed/skipped')
+                'mid-transaction rollback, Kestrel restart and same-key recovery; zero failed/skipped')
           PY
 
       - name: Upload only safe TRX (no passwords, no TLS private keys, no host logs)
