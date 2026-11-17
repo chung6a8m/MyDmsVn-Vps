@@ -67,16 +67,18 @@ python3 scripts/verify-vps-04a.py vps04a-routes.json
 
 - Source/graph build and Linux locked-restore PASS at commit `67b7f5db` ([run #44040119428](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44040119428)), including exact compiler and xUnit TRX counts.
 - Windows net48 baseline history: an early architecture smoke failure was corrected at `9006843c`. Four workflows then passed on the round-1 review HEAD `c3055e65`: [Linux net10](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44043184676), [Windows foundation 8/8](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44043184610), [xUnit v3 discovery 10/10](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44043184707), [Desktop publish](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44043184614). Any later code change requires its own HEAD-specific CI.
-- The new HTTP boundary tests are SQL-free unit-level requests; no real Linux Kestrel/API/SQL or payload/idempotency oracle is claimed.
+- Round-2 review code HEAD `4bd9ba58`: four Windows/Linux workflows PASS, including [Linux 363/363 + 24/24 + 57/57](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44045329015), [Windows foundation 8/8](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44045329102), [VPS-01 discovery 10/10](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44045329002), and [Desktop publish](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44045329128).
+- Round-3 review code HEAD `7770a688`: four Windows/Linux workflows PASS, including [Linux SDK 10.0.404 / 363 Application / 25 HTTP boundary / 57 routes](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44046861655), [Windows foundation 8/8](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44046861676), [VPS-01 discovery 10/10](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44046861703), and [Desktop publish](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44046861625). All test counts have zero failed/skipped. A subsequent documentation-only commit requires its own final-HEAD CI.
+- These boundary tests include SQL-free Kestrel loopback, not live Linux HTTPS-to-SQL integration or payload/idempotency acceptance.
 
 
 | Gate | Status | Required evidence |
 | --- | --- | --- |
-| Independent net48 CI + xUnit v3 smoke/discovery | PASS at round-1 `c3055e65`; round-2 HEAD must be checked separately | Full Windows CI and discovery all PASS on latest HEAD |
-| Linux SDK 10.0.404 server graph / ASP.NET Core build | PASS at round-1 `c3055e65`; round-2 HEAD must be checked separately | [Linux run #44043184676](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44043184676) |
-| Native compiled 57/57 route map | PASS at round-1 `c3055e65`; round-2 adds controller/action parity | Runner-generated JSON + immutable 29+28 manifest comparison |
-| Net10 packages locked | PASS at round-1 `c3055e65`; round-2 HEAD must be checked separately | Eight versioned net10 locks, `--locked-mode`, no NuGet audit downgrade |
-| Net10 xUnit v3 regressions / HTTP perimeter | PASS at round-1 `c3055e65`; round-2 HEAD must be checked separately | Server.Application 363/363; native boundary floor raised to 25 with sanitized failure/header regression and SQL-free loopback HTTP, no failed/skipped |
+| Independent net48 CI + xUnit v3 smoke/discovery | VERIFIED at review-code `7770a688` | [Windows foundation 8/8](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44046861676); [discovery 10/10](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44046861703) |
+| Linux SDK 10.0.404 server graph / ASP.NET Core build | VERIFIED at review-code `7770a688` | [Linux CI](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44046861655): locked restore, Release `-warnaserror` |
+| Native compiled 57/57 route/action map | VERIFIED at review-code `7770a688` | Compiled HTTP verb/path/controller/action equals immutable 29+28 manifests |
+| Net10 packages locked | VERIFIED at review-code `7770a688` | Eight versioned net10 locks, `--locked-mode`, no NuGet downgrade |
+| Net10 xUnit v3 regressions / HTTP perimeter | VERIFIED at review-code `7770a688` | Server.Application 363/363; HTTP boundary + loopback 25/25, no failed/skipped |
 | Live Linux Kestrel HTTPS with approved SQL schema | NOT RUN | Real SQL and HTTP tests, exact revision |
 | JWT/login/refresh/logout/authorization/idempotency & 178 frozen JSON corpora | NOT RUN on net10 | Independent Linux HTTP/SQL oracle |
 | VPS-04B portable audit and deployment security | OUT OF SCOPE | Separate increment |
