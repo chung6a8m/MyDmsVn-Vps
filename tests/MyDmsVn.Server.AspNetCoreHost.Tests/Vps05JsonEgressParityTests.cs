@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net;
@@ -124,5 +125,71 @@ public sealed class Vps05JsonEgressParityTests
         Assert.Equal(current, Encoding.UTF8.GetString(journal));
         var decoded = new WebOperationResultCodec().DecodeEnvelope(WebOperationKind.ReceiptCreate, journal);
         Assert.Equal("9007199254740993", (string)decoded["data"]!["receiptId"]!);
+    }
+
+    [Fact]
+    public void Typed_dictionary_keys_follow_legacy_camel_case_naming()
+    {
+        var response = ApiResponse<object>.Success(new Dictionary<string, object>
+        {
+            ["CanRead"] = true,
+            ["UserRole"] = "Operator",
+        });
+        var expected = Legacy(response);
+        Assert.Contains("\"canRead\":true", expected);
+        Assert.Contains("\"userRole\":\"Operator\"", expected);
+        Assert.Equal(expected, Net10WireJson.SerializeEnvelope(response));
+    }
+
+    [Fact]
+    public void Unspecified_SQL_datetime_and_Local_datetime_use_legacy_UTC_wire_policy()
+    {
+        var response = ApiResponse<object>.Success(new
+        {
+            postedAtUtc = new DateTime(2026, 11, 17, 13, 14, 15, DateTimeKind.Unspecified),
+            localTime = new DateTime(2026, 11, 17, 13, 14, 15, DateTimeKind.Local),
+        });
+        var expected = Legacy(response);
+        Assert.Contains("\"postedAtUtc\":\"2026-11-17T13:14:15Z\"", expected);
+        Assert.Equal(expected, Net10WireJson.SerializeEnvelope(response));
+    }
+
+    [Fact]
+    public void Legacy_calendar_date_attributes_are_preserved_on_typed_DTOs()
+    {
+        var date = new DateTime(2026, 11, 17);
+        var sale = new SaveSalesReceiptRequest(date, 1, 2, 3, null,
+            new[] { new SaveSalesReceiptLineRequest(0, 4, 1.2500m, 19.9900m, false) });
+        var saleResponse = ApiResponse<object>.Success(sale);
+        var saleJson = Net10WireJson.SerializeEnvelope(saleResponse);
+        Assert.Equal(Legacy(saleResponse), saleJson);
+        Assert.Contains("\"saleDate\":\"2026-11-17\"", saleJson);
+
+        var filter = new SalesReceiptListRequest(date, null, null, null, null, null, null, null);
+        var filterResponse = ApiResponse<object>.Success(filter);
+        var filterJson = Net10WireJson.SerializeEnvelope(filterResponse);
+        Assert.Equal(Legacy(filterResponse), filterJson);
+        Assert.Contains("\"fromDate\":\"2026-11-17\"", filterJson);
+
+        var receipt = new GoodsReceiptDto(7, "GR0000000001", date, 2, 3, "Draft", null, null,
+            Convert.ToBase64String(new byte[8]),
+            new[] { new GoodsReceiptLineDto(8, 1, 4, 1.2500m, 19.9900m) });
+        var receiptResponse = ApiResponse<object>.Success(receipt);
+        var receiptJson = Net10WireJson.SerializeEnvelope(receiptResponse);
+        Assert.Equal(Legacy(receiptResponse), receiptJson);
+        Assert.Contains("\"receiptDate\":\"2026-11-17\"", receiptJson);
+    }
+
+    [Fact]
+    public void Legacy_JToken_datetime_uses_UTC_settings_before_STJ_egress()
+    {
+        var response = ApiResponse<object>.Success(new JObject
+        {
+            ["postedAtUtc"] = new JValue(new DateTime(2026, 11, 17, 13, 14, 15, DateTimeKind.Unspecified)),
+            ["note"] = JValue.CreateNull(),
+        });
+        var expected = Legacy(response);
+        Assert.Contains("\"postedAtUtc\":\"2026-11-17T13:14:15Z\"", expected);
+        Assert.Equal(expected, Net10WireJson.SerializeEnvelope(response));
     }
 }

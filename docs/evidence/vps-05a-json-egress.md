@@ -1,13 +1,21 @@
 # VPS-05A — System.Text.Json net10 egress checkpoint
 
-**Repository:** `chung6a8m/MyDmsVn-Vps` · **PR:** [#14](https://github.com/chung6a8m/MyDmsVn-Vps/pull/14) · **base main:** `61e8a2126c8fe9844fd3aefb6724515e1dd80203` (PR #13 merged) · **review state:** DRAFT; code checkpoint `e0fc2dbef8f010dce2bc58246eb070fe2d5ee2e5` 5/5 workflows PASS. Final documentary-HEAD run after this evidence update remains a distinct required check.
+**Repository:** `chung6a8m/MyDmsVn-Vps` · **PR:** [#14](https://github.com/chung6a8m/MyDmsVn-Vps/pull/14) · **base main:** `61e8a2126c8fe9844fd3aefb6724515e1dd80203` (PR #13 merged) · **review state:** INDEPENDENT REVIEW / REMEDIATION. Code checkpoint `e0fc2dbef8f010dce2bc58246eb070fe2d5ee2e5` and pre-review documentation HEAD `28ba8777f4adc511b3c79007e185b9df9ebf6d76` each had 5/5 workflows PASS. Subsequent review-fix HEAD must be independently rechecked before any merge.
 
 ## Implemented (bounded)
 
 1. ASP.NET Core `net10.0` host excludes the legacy `HttpJson.cs` source in its own project file and defines `VPS05_STJ_EGRESS`. The standalone `net48` HttpHost project continues compiling the original `HttpJson.cs`, untouched.
 2. New `Net10WireJson` emits an explicit single-member `data` or `error` envelope using `System.Text.Json`, with HTTP status separate, camelCase properties, null omission and invariant numeric/date formatting. It temporarily converts existing **trusted** Newtonsoft `JToken` projections through `JsonDocument` to retain explicit WEB3 nulls and stable wire names.
 3. Linked `WebOperationResultCodec.Encode` uses the **same** new writer only in the net10 host. Historical net48 codec path and immutable WEB4 canonical-input fingerprint algorithm remain unchanged.
-4. Added six differential xUnit v3 tests: frozen success and error envelope strings; error detail/null omission; decimal four-place and UTC fidelity under `vi-VN`; WEB3 explicit null, int64 string and property ordering; and a generated WEB3 receipt journal result compared to HTTP writer plus strict codec decode.
+4. Added six initial differential xUnit v3 tests: frozen success and error envelope strings; error detail/null omission; decimal four-place and UTC fidelity under `vi-VN`; WEB3 explicit null, int64 string and property ordering; and a generated WEB3 receipt journal result compared to HTTP writer plus strict codec decode.
+
+## Independent review findings under remediation
+
+- **R14-F01 — dictionary key casing:** STJ must use the original CamelCasePropertyNamesContractResolver policy for both property and dictionary keys.
+- **R14-F02 — SQL UTC fidelity:** typed DateTime values with Unspecified kind must be labelled UTC; Local values must be converted to UTC, matching Json.NET's DateTimeZoneHandling.Utc.
+- **R14-F03 — DTO calendar dates:** response DTO members annotated with the two existing Newtonsoft date-only converters need a transitional STJ egress mapping, including nullable calendar dates.
+- **R14-F04 — JToken date conversion:** the transitional adapter must honor the original ApiJson settings before JsonDocument/STJ emission.
+- Four additional differential cases exercise these paths (10 total in this PR after remediation); results are **NOT PASS** until the review-fix HEAD CI confirms the count. Stage VPS-05B/C ingress and Newtonsoft removal remain separate.
 
 ## Verification policy and current evidence
 
