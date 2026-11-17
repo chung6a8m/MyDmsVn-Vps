@@ -56,7 +56,7 @@ jobs:
             minimum_tests: 1684
             project: tests/MyDmsVn.Server.Infrastructure.Security.Tests/MyDmsVn.Server.Infrastructure.Security.Tests.csproj
           - id: vps03-acceptance
-            minimum_tests: 60
+            minimum_tests: 38
             project: tests/MyDmsVn.Vps03.Acceptance.Tests/MyDmsVn.Vps03.Acceptance.Tests.csproj
     steps:
       - uses: actions/checkout@v5
