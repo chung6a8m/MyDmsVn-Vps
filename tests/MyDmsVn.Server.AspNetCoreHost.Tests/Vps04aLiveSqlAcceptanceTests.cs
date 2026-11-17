@@ -81,7 +81,8 @@ public sealed class Vps04aLiveSqlAcceptanceTests
     {
         Assert.True(response.Headers.TryGetValues("Set-Cookie", out var values));
         var header = Assert.Single(values!);
-        Assert.True(header.StartsWith("__Host-mydmsvn-rt=", StringComparison.Ordinal));
+        // A failed assertion must not echo the refresh-token cookie into CI logs.
+        Assert.Equal(0, header.IndexOf("__Host-mydmsvn-rt=", StringComparison.Ordinal));
         Assert.True(header.Contains("; Secure", StringComparison.Ordinal) &&
             header.Contains("; HttpOnly", StringComparison.Ordinal) &&
             header.Contains("; SameSite=Strict", StringComparison.Ordinal) &&
