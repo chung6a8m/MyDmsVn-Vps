@@ -214,8 +214,8 @@ public sealed class PermissionAssignmentImportParser
             if (!HasExactProperties(root, "schemaVersion", "targetType", "targetId", "entries"))
                 return PermissionAssignmentImportParseResult.Invalid("Import fields do not match schema version 1.");
 
-            if (!root.GetProperty("schemaVersion").TryGetInt64(out var version) ||
-                root.GetProperty("schemaVersion").ValueKind != JsonValueKind.Number ||
+            if (root.GetProperty("schemaVersion").ValueKind != JsonValueKind.Number ||
+                !root.GetProperty("schemaVersion").TryGetInt64(out var version) ||
                 version != CurrentSchemaVersion)
                 return PermissionAssignmentImportParseResult.Invalid("Unsupported or missing import schema version.");
 
