@@ -104,6 +104,8 @@ jobs:
           dotnet run --project MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true --no-build -c Release -- --list-routes > "$GITHUB_WORKSPACE/vps04a-routes.json"
       - name: Compare native endpoint mapping with immutable WEB2-6 and Desktop API routes
         run: python3 scripts/verify-vps-04a.py vps04a-routes.json
+      - name: Validate WEB2-WEB6 57-route live coverage ledger against frozen route source
+        run: python3 scripts/verify-vps-04a-live-route-parity.py
       - name: Compile optional real HTTPS to SQL tests without running or skipping them
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
