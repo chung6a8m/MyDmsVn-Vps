@@ -140,7 +140,7 @@ public sealed class Vps03AcceptanceEvidenceTests
         },
         ["groups"] = new JArray(
             Group("crash", 2), Group("file-security", 4), Group("live", 7),
-            Group("attended", 1)),
+            Group("attended", 1), Group("cleanup", 1)),
         ["cleanup"] = new JObject
         {
             ["childAbsent"] = true, ["iisAbsent"] = true,

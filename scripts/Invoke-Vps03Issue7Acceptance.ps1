@@ -54,6 +54,37 @@ function Assert-NoOwnedChild {
     if ($owned.Count -ne 0) { throw 'VPS03.Issue7.ChildCleanupFailed' }
 }
 
+function Assert-NoOwnedIis([string]$hostPackage) {
+    if ([string]::IsNullOrWhiteSpace($hostPackage) -or -not [IO.Path]::IsPathRooted($hostPackage)) {
+        throw 'VPS03.Issue7.HostPackageProbeInvalid'
+    }
+    $full = [IO.Path]::GetFullPath($hostPackage).TrimEnd('\')
+    $owned = @(Get-CimInstance Win32_Process -Filter "Name='iisexpress.exe'" -ErrorAction Stop |
+        Where-Object { $_.CommandLine -and $_.CommandLine.IndexOf($full, [StringComparison]::OrdinalIgnoreCase) -ge 0 })
+    if ($owned.Count -ne 0) { throw 'VPS03.Issue7.IisCleanupFailed' }
+}
+
+function Get-LiveCleanup([string]$ledgerDirectory, [string]$head, [string]$hostPackage,
+    [string[]]$pendingBefore) {
+    Assert-NoOwnedChild
+    Assert-NoOwnedIis $hostPackage
+    Assert-NoNewPending $pendingBefore
+    if (-not (Test-Path -LiteralPath $ledgerDirectory)) { throw 'VPS03.Issue7.CleanupLedgerMissing' }
+    $ledgers = @(Get-ChildItem -LiteralPath $ledgerDirectory -File -Filter '*.json' -ErrorAction Stop)
+    if ($ledgers.Count -le 0) { throw 'VPS03.Issue7.CleanupLedgerEmpty' }
+    foreach ($ledger in $ledgers) {
+        $record = Get-Content -LiteralPath $ledger.FullName -Raw | ConvertFrom-Json
+        if ($record.schemaVersion -ne 1 -or $record.headSha -ne $head -or
+            $record.hostAbsent -ne $true -or $record.sqlAbsent -ne $true) {
+            throw 'VPS03.Issue7.CleanupLedgerInvalid'
+        }
+    }
+    return [ordered]@{
+        childAbsent = $true; iisAbsent = $true; sqlAbsent = $true; intentAbsent = $true
+        environmentLedgers = $ledgers.Count
+    }
+}
+
 function Invoke-TestGroup([string]$name, [string]$filter, [int]$expected,
     [string]$resultsDirectory, [string[]]$pendingBefore) {
     $trx = Join-Path $resultsDirectory "$name.trx"
@@ -151,21 +182,28 @@ function Read-LiveResult([string]$path, [string]$head) {
         [int]$record.group.passed -ne [int]$record.group.total -or
         [int]$record.group.failed -ne 0 -or [int]$record.group.skipped -ne 0 -or
         $record.cleanup.childAbsent -ne $true -or $record.cleanup.iisAbsent -ne $true -or
-        $record.cleanup.sqlAbsent -ne $true -or $record.cleanup.intentAbsent -ne $true) {
+        $record.cleanup.sqlAbsent -ne $true -or $record.cleanup.intentAbsent -ne $true -or
+        $record.packages.desktopSha256 -notmatch '^[0-9a-f]{64}$' -or
+        $record.packages.hostSha256 -notmatch '^[0-9a-f]{64}$') {
         throw 'VPS03.Issue7.LiveResultInvalid'
     }
     return $record
 }
 
-function Read-AttendedResult([string]$path, [string]$head) {
+function Read-AttendedResult([string]$path, [string]$head, [string]$desktopSha256) {
     if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path)) {
         throw 'VPS03.Issue7.AttendedResultMissing'
     }
     $record = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+    $stagePath = Join-Path (Split-Path -Parent $path) 'attended-stage.json'
+    if (-not (Test-Path -LiteralPath $stagePath)) { throw 'VPS03.Issue7.AttendedStageMissing' }
+    $stage = Get-Content -LiteralPath $stagePath -Raw | ConvertFrom-Json
     if ($record.headSha -ne $head -or $record.passed -ne $true -or
         $record.desktopExited -ne $true -or $record.hostAbsent -ne $true -or
         $record.sqlAbsent -ne $true -or $record.aborted -ne $false -or
-        $record.checkpoints.'VPS03.GUI.UNKNOWN-RECOVERY' -ne $true) {
+        $record.checkpoints.'VPS03.GUI.UNKNOWN-RECOVERY' -ne $true -or
+        $stage.headSha -ne $head -or $stage.stage -ne 'shell-ready' -or
+        $stage.executableHash -ne $desktopSha256) {
         throw 'VPS03.Issue7.AttendedResultInvalid'
     }
     return $record
@@ -230,8 +268,9 @@ $crashExpected = @($manifest.cases | Where-Object group -eq 'crash').Count
 $fileExpected = @($manifest.cases | Where-Object group -eq 'file-security').Count
 $liveExpected = @($manifest.cases | Where-Object group -eq 'live').Count
 $attendedExpected = @($manifest.cases | Where-Object group -eq 'attended').Count
+$cleanupExpected = @($manifest.cases | Where-Object group -eq 'cleanup').Count
 $groups = @()
-$cleanup = [ordered]@{ childAbsent = $true; iisAbsent = $true; sqlAbsent = $true; intentAbsent = $true }
+$cleanup = $null
 $packages = [ordered]@{}
 
 if ($CrashOnly -or (-not $LiveOnly -and -not $AttendedOnly)) {
@@ -252,11 +291,15 @@ if ($LiveOnly -or $AttendedOnly) {
     $env:MYDMSVN_VPS03_HOST_PACKAGE = $packages.host
     $env:MYDMSVN_VPS03_HEAD_SHA = $head
     $env:MYDMSVN_VPS03_RESULTS_DIRECTORY = $results
+    $cleanupRunId = [Guid]::NewGuid().ToString('N')
+    $env:MYDMSVN_VPS03_CLEANUP_RUN_ID = $cleanupRunId
 }
 
 if ($LiveOnly) {
     $group = Invoke-TestGroup 'live' 'Category=Vps03Issue7Live' $liveExpected $results $pendingBefore
     $groups += $group
+    $ledgerDirectory = Join-Path $results (Join-Path 'cleanup-ledgers' $cleanupRunId)
+    $cleanup = Get-LiveCleanup $ledgerDirectory $head $packages.host $pendingBefore
     $path = Join-Path $results 'live-result.json'
     Write-GateResult $path $head $group $cleanup $packages
     Write-Host "PASS live head=$head total=$($group.total) failed=0 skipped=0 result=$path"
@@ -267,13 +310,13 @@ if ($AttendedOnly) {
     $env:MYDMSVN_VPS03_ATTENDED = 'approved'
     $group = Invoke-TestGroup 'attended' 'Phase=Attended' $attendedExpected $results $pendingBefore
     $attendedPath = Join-Path $results 'attended\attended-result.json'
-    [void](Read-AttendedResult $attendedPath $head)
+    [void](Read-AttendedResult $attendedPath $head $packages.desktopSha256)
     Write-Host "PASS attended head=$head total=$($group.total) failed=0 skipped=0 result=$attendedPath"
     exit 0
 }
 
 $live = Read-LiveResult $LiveResult $head
-$attended = Read-AttendedResult $AttendedResult $head
+$attended = Read-AttendedResult $AttendedResult $head $live.packages.desktopSha256
 $groups += [ordered]@{
     name = 'live'; total = [int]$live.group.total; executed = [int]$live.group.executed
     passed = [int]$live.group.passed; failed = 0; skipped = 0
@@ -283,6 +326,28 @@ $packages = [ordered]@{
     desktopSha256 = [string]$live.packages.desktopSha256
     hostSha256 = [string]$live.packages.hostSha256
 }
+$cleanup = [ordered]@{
+    childAbsent = $true
+    iisAbsent = [bool]$live.cleanup.iisAbsent -and [bool]$attended.hostAbsent
+    sqlAbsent = [bool]$live.cleanup.sqlAbsent -and [bool]$attended.sqlAbsent
+    intentAbsent = [bool]$live.cleanup.intentAbsent
+    environmentLedgers = [int]$live.cleanup.environmentLedgers
+}
+Assert-NoOwnedChild
+Assert-NoNewPending $pendingBefore
+$cleanupObservation = Join-Path $results 'cleanup-observation.json'
+$observation = [ordered]@{
+    schemaVersion = 1; headSha = $head
+    childAbsent = $cleanup.childAbsent; iisAbsent = $cleanup.iisAbsent
+    sqlAbsent = $cleanup.sqlAbsent; intentAbsent = $cleanup.intentAbsent
+    environmentLedgers = $cleanup.environmentLedgers
+}
+[IO.File]::WriteAllText($cleanupObservation, ($observation | ConvertTo-Json -Depth 4),
+    [Text.UTF8Encoding]::new($false))
+$env:MYDMSVN_VPS03_HEAD_SHA = $head
+$env:MYDMSVN_VPS03_CLEANUP_OBSERVATION = $cleanupObservation
+$env:MYDMSVN_VPS03_ACCEPTANCE = 'approved'
+$groups += Invoke-TestGroup 'cleanup' 'Category=Vps03Issue7Cleanup' $cleanupExpected $results $pendingBefore
 $evidence = [ordered]@{
     schemaVersion = 1
     issue = 7

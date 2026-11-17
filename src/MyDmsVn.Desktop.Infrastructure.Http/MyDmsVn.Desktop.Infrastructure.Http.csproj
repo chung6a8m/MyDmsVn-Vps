@@ -13,4 +13,9 @@
   <ItemGroup>
     <ProjectReference Include="..\MyDmsVn.Desktop.Application\MyDmsVn.Desktop.Application.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>MyDmsVn.Vps03.PendingStore.CrashHost</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>

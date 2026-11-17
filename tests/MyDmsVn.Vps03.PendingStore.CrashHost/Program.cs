@@ -21,7 +21,17 @@ internal static class Program
             var options = new HttpDesktopOptions(args[1]);
             var requestPath = Path.Combine(args[2], "request.json");
             var record = ReadRecord(requestPath);
-            var store = new WindowsHttpPendingWriteStore(options);
+            Action? beforeClearDelete = args[0] == "clear-paused"
+                ? () =>
+                {
+                    Write(args[2], "stage.json", new Exchange { Stage = "clear-validated" });
+                    var release = Path.Combine(args[2], "release.marker");
+                    var deadline = DateTime.UtcNow.AddSeconds(15);
+                    while (!File.Exists(release) && DateTime.UtcNow < deadline) Thread.Sleep(25);
+                    if (!File.Exists(release)) throw new TimeoutException("VPS03.PendingClearReleaseTimeout");
+                }
+                : null;
+            var store = new WindowsHttpPendingWriteStore(options, beforeClearDelete);
             switch (args[0])
             {
                 case "before-save":
@@ -44,6 +54,22 @@ internal static class Program
                             Fingerprint = loaded.Fingerprint,
                         });
                     return 0;
+                case "clear-paused":
+                    store.Clear(record);
+                    Write(args[2], "stage.json", new Exchange { Stage = "clear-complete" });
+                    return 0;
+                case "replace":
+                    var current = store.Load() ?? throw new InvalidOperationException("Desktop.PendingIntentAbsent");
+                    try { store.Clear(current); }
+                    catch (InvalidOperationException error) when (
+                        error.Message == "Desktop.PendingWriteChanged" && store.Load() == null)
+                    {
+                        // The competing exact clearer won the serialized order. The replacement
+                        // still has to acquire the same owner/origin lock before it is admitted.
+                    }
+                    store.Save(record);
+                    Write(args[2], "stage.json", new Exchange { Stage = "replace-complete" });
+                    return 0;
                 default:
                     return 64;
             }
@@ -56,7 +82,8 @@ internal static class Program
     }
 
     private static bool AllowedMode(string mode) =>
-        mode == "before-save" || mode == "after-save" || mode == "load";
+        mode == "before-save" || mode == "after-save" || mode == "load" ||
+        mode == "clear-paused" || mode == "replace";
 
     private static HttpPendingWriteRecord ReadRecord(string path)
     {

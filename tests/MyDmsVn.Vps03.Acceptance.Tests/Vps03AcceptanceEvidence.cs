@@ -120,7 +120,7 @@ internal static class Vps03EvidenceWriter
             throw new InvalidDataException("VPS-03 Issue #7 capability/blocker evidence is absent.");
         if (data["groups"] is not JArray groups)
             throw new InvalidDataException("VPS-03 Issue #7 groups are absent.");
-        var required = new[] { "crash", "file-security", "live", "attended" };
+        var required = new[] { "crash", "file-security", "live", "attended", "cleanup" };
         var names = groups.Children<JObject>().Select(group => (string?)group["name"] ?? string.Empty)
             .ToArray();
         if (names.Distinct(StringComparer.Ordinal).Count() != names.Length ||

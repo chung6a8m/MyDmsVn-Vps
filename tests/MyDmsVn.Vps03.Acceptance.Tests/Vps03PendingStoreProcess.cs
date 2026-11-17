@@ -62,7 +62,8 @@ internal sealed class Vps03PendingStoreProcess : IDisposable
     internal static Vps03PendingStoreProcess Start(string mode, string origin,
         string exchangeDirectory, HttpPendingWriteRecord record)
     {
-        if (mode != "before-save" && mode != "after-save" && mode != "load")
+        if (mode != "before-save" && mode != "after-save" && mode != "load" &&
+            mode != "clear-paused" && mode != "replace")
             throw new ArgumentOutOfRangeException(nameof(mode));
         _ = new HttpDesktopOptions(origin);
         ValidateExchange(exchangeDirectory);
@@ -98,17 +99,32 @@ internal sealed class Vps03PendingStoreProcess : IDisposable
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            if (_process.HasExited) throw ChildFailure("VPS03.PendingChildExitedBeforeStage");
             if (File.Exists(path))
             {
                 var result = ReadResult(path);
-                if (result.Stage != expected) throw new InvalidDataException("VPS03.PendingStageMismatch");
-                return;
+                if (result.Stage == expected) return;
             }
+            if (_process.HasExited) throw ChildFailure("VPS03.PendingChildExitedBeforeStage");
             Thread.Sleep(25);
         }
         throw new TimeoutException("VPS03.PendingStageTimeout");
     }
+
+    internal void AssertStageAbsent(string unexpected, TimeSpan duration)
+    {
+        var path = Path.Combine(_exchange, "stage.json");
+        var deadline = DateTime.UtcNow + duration;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (File.Exists(path) && ReadResult(path).Stage == unexpected)
+                throw new InvalidOperationException("VPS03.PendingStageObserved:" + unexpected);
+            if (_process.HasExited) throw ChildFailure("VPS03.PendingChildExitedBeforeSerializationCheck");
+            Thread.Sleep(25);
+        }
+    }
+
+    internal void SignalRelease() =>
+        File.WriteAllText(Path.Combine(_exchange, "release.marker"), "release", Utf8);
 
     internal Vps03PendingStoreLoadResult WaitForLoad(TimeSpan timeout)
     {

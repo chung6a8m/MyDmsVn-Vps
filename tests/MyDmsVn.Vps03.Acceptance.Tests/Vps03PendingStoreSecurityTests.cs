@@ -55,7 +55,7 @@ public sealed class Vps03PendingStoreSecurityTests
     [Fact]
     [Trait("Category", "Vps03Issue7FileSecurity")]
     [Trait("CaseId", "VPS03.ISSUE7.FILE.EXACT-CLEAR")]
-    public void Clear_removes_only_the_exact_matching_record()
+    public void Clear_removes_only_the_exact_matching_record_and_cannot_delete_its_replacement()
     {
         using var fixture = Vps03PendingStoreFixture.Create();
         fixture.SaveInChild();
@@ -66,7 +66,35 @@ public sealed class Vps03PendingStoreSecurityTests
         Assert.Equal("Desktop.PendingWriteChanged", error.Message);
         Assert.True(fixture.IntentExists);
 
-        fixture.Clear(fixture.Record);
-        Assert.False(fixture.IntentExists);
+        var replacement = fixture.CloneRecord();
+        replacement.OperationId = Guid.NewGuid().ToString("D");
+        replacement.Fingerprint = new string('c', 64);
+        var clearExchange = Vps03PendingStoreProcess.CreateExchangeDirectory();
+        var replaceExchange = Vps03PendingStoreProcess.CreateExchangeDirectory();
+        try
+        {
+            using var clearer = Vps03PendingStoreProcess.Start(
+                "clear-paused", fixture.Origin, clearExchange, fixture.Record);
+            clearer.WaitForStage("clear-validated", TimeSpan.FromSeconds(15));
+
+            using var replacer = Vps03PendingStoreProcess.Start(
+                "replace", fixture.Origin, replaceExchange, replacement);
+            replacer.AssertStageAbsent("replace-complete", TimeSpan.FromMilliseconds(750));
+
+            clearer.SignalRelease();
+            clearer.WaitForStage("clear-complete", TimeSpan.FromSeconds(15));
+            replacer.WaitForStage("replace-complete", TimeSpan.FromSeconds(15));
+
+            using var loader = Vps03PendingStoreProcess.Start(
+                "load", fixture.Origin, replaceExchange, replacement);
+            var loaded = loader.WaitForLoad(TimeSpan.FromSeconds(15));
+            Assert.Equal(replacement.OperationId, loaded.OperationId);
+            Assert.Equal(replacement.Fingerprint, loaded.Fingerprint);
+        }
+        finally
+        {
+            Vps03PendingStoreProcess.Cleanup(fixture.Origin, clearExchange, replacement);
+            Vps03PendingStoreProcess.Cleanup(fixture.Origin, replaceExchange, replacement);
+        }
     }
 }

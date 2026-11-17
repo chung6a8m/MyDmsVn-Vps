@@ -5,6 +5,7 @@ using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
+using System.Threading;
 using Newtonsoft.Json;
 
 namespace MyDmsVn.Desktop.Infrastructure.Http
@@ -82,8 +83,12 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         private readonly SecurityIdentifier _owner;
         private readonly SecurityIdentifier _system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
         private readonly byte[] _entropy;
+        private readonly string _mutexName;
+        private readonly Action? _beforeClearDelete;
 
-        public WindowsHttpPendingWriteStore(HttpDesktopOptions options)
+        public WindowsHttpPendingWriteStore(HttpDesktopOptions options) : this(options, null) { }
+
+        internal WindowsHttpPendingWriteStore(HttpDesktopOptions options, Action? beforeClearDelete)
         {
             if (options == null) throw new ArgumentNullException(nameof(options));
             if (Environment.OSVersion.Platform != PlatformID.Win32NT)
@@ -112,6 +117,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 options.Origin.GetLeftPart(UriPartial.Authority);
             using (var sha = SHA256.Create())
                 _entropy = sha.ComputeHash(Utf8.GetBytes(binding));
+            _mutexName = @"Local\MyDmsVn-Vps.PendingWrite." + Hex(_entropy);
+            _beforeClearDelete = beforeClearDelete;
             _file = Path.Combine(directory, Hex(_entropy) + ".intent");
             // Eager load: startup must fail closed if the protected record cannot be read.
             Load();
@@ -173,46 +180,86 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         {
             if (record == null) throw new ArgumentNullException(nameof(record));
             record.Validate();
-            if (File.Exists(_file))
-                throw new InvalidOperationException("Desktop.PendingWriteAlreadyExists");
             var bytes = Utf8.GetBytes(JsonConvert.SerializeObject(record, Formatting.None));
             if (bytes.Length > MaximumRecordBytes)
                 throw new InvalidOperationException("Desktop.PendingIntentTooLarge");
             var encrypted = ProtectedData.Protect(bytes, _entropy, DataProtectionScope.CurrentUser);
             if (encrypted.Length > MaximumCipherBytes)
                 throw new InvalidOperationException("Desktop.PendingIntentTooLarge");
-            var temp = _file + "." + Guid.NewGuid().ToString("N") + ".tmp";
-            try
+            using (AcquireMutationLock())
             {
-                using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write,
-                    FileShare.None, 4096, FileOptions.WriteThrough))
+                if (File.Exists(_file))
+                    throw new InvalidOperationException("Desktop.PendingWriteAlreadyExists");
+                var temp = _file + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try
                 {
-                    output.Write(encrypted, 0, encrypted.Length);
-                    output.Flush(true);
+                    using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write,
+                        FileShare.None, 4096, FileOptions.WriteThrough))
+                    {
+                        output.Write(encrypted, 0, encrypted.Length);
+                        output.Flush(true);
+                    }
+                    var fileAcl = new FileSecurity();
+                    fileAcl.SetAccessRuleProtection(true, false);
+                    fileAcl.SetOwner(_owner);
+                    fileAcl.AddAccessRule(new FileSystemAccessRule(_owner, FileSystemRights.FullControl, AccessControlType.Allow));
+                    fileAcl.AddAccessRule(new FileSystemAccessRule(_system, FileSystemRights.FullControl, AccessControlType.Allow));
+                    File.SetAccessControl(temp, fileAcl);
+                    // File.Move refuses an existing destination. The owner/origin mutation lock
+                    // also keeps compare-delete and replacement save in one serial order.
+                    File.Move(temp, _file);
                 }
-                var fileAcl = new FileSecurity();
-                fileAcl.SetAccessRuleProtection(true, false);
-                fileAcl.SetOwner(_owner);
-                fileAcl.AddAccessRule(new FileSystemAccessRule(_owner, FileSystemRights.FullControl, AccessControlType.Allow));
-                fileAcl.AddAccessRule(new FileSystemAccessRule(_system, FileSystemRights.FullControl, AccessControlType.Allow));
-                File.SetAccessControl(temp, fileAcl);
-                // File.Move refuses an existing destination. A second Desktop process cannot
-                // dispatch an operation while the first one owns the pending slot.
-                File.Move(temp, _file);
-            }
-            finally
-            {
-                if (File.Exists(temp)) File.Delete(temp);
+                finally
+                {
+                    if (File.Exists(temp)) File.Delete(temp);
+                }
             }
         }
 
         public void Clear(HttpPendingWriteRecord expected)
         {
-            var stored = Load();
-            if (stored == null || stored.OperationId != expected.OperationId ||
-                stored.Fingerprint != expected.Fingerprint)
-                throw new InvalidOperationException("Desktop.PendingWriteChanged");
-            File.Delete(_file);
+            if (expected == null) throw new ArgumentNullException(nameof(expected));
+            using (AcquireMutationLock())
+            {
+                var stored = Load();
+                if (stored == null || stored.OperationId != expected.OperationId ||
+                    stored.Fingerprint != expected.Fingerprint)
+                    throw new InvalidOperationException("Desktop.PendingWriteChanged");
+                _beforeClearDelete?.Invoke();
+                File.Delete(_file);
+            }
+        }
+
+        private IDisposable AcquireMutationLock()
+        {
+            var mutex = new Mutex(false, _mutexName);
+            var acquired = false;
+            try
+            {
+                try { acquired = mutex.WaitOne(TimeSpan.FromSeconds(15)); }
+                catch (AbandonedMutexException) { acquired = true; }
+                if (!acquired) throw new InvalidOperationException("Desktop.PendingWriteBusy");
+                return new MutationLock(mutex);
+            }
+            catch
+            {
+                if (acquired) mutex.ReleaseMutex();
+                mutex.Dispose();
+                throw;
+            }
+        }
+
+        private sealed class MutationLock : IDisposable
+        {
+            private Mutex? _mutex;
+            internal MutationLock(Mutex mutex) => _mutex = mutex;
+            public void Dispose()
+            {
+                var mutex = Interlocked.Exchange(ref _mutex, null);
+                if (mutex == null) return;
+                try { mutex.ReleaseMutex(); }
+                finally { mutex.Dispose(); }
+            }
         }
 
         private void ValidateOwner(FileSystemSecurity acl)

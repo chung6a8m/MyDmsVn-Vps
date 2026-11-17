@@ -8,12 +8,10 @@ namespace MyDmsVn.Vps03.Acceptance.Tests;
 public sealed class Vps03UnknownRecoveryAcceptanceTests
 {
     [Fact]
-    public async Task Fail_closed_matrix_covers_route_scope_and_contract_identity()
+    public void Fail_closed_matrix_covers_route_scope_and_contract_identity()
     {
-        var outcomes = await Vps03FailClosedMatrix.RunAsync(CancellationToken.None);
-
-        Assert.Contains(outcomes, item => item.Case == "scope-mismatch" && !item.FenceReleased);
-        Assert.Contains(outcomes, item => item.Case == "contract-mismatch" && !item.FenceReleased);
+        Assert.Contains("scope-mismatch", Vps03FailClosedMatrix.Cases);
+        Assert.Contains("contract-mismatch", Vps03FailClosedMatrix.Cases);
     }
 
     [Vps03AcceptanceFact]
@@ -88,6 +86,7 @@ public sealed class Vps03UnknownRecoveryAcceptanceTests
     public async Task Mismatched_or_nonterminal_results_never_release_the_fence()
     {
         await using var scenario = await Vps03RecoveryScenario.CreateAsync(CancellationToken.None);
+        var lost = await scenario.CommitAndLoseAckInChildAsync(CancellationToken.None);
         var outcomes = await scenario.CheckFailClosedMatrixAsync(CancellationToken.None);
 
         Assert.Contains(outcomes, item => item.Case == "cancelled" && !item.FenceReleased);
@@ -109,5 +108,7 @@ public sealed class Vps03UnknownRecoveryAcceptanceTests
         Assert.Contains(outcomes, item => item.Case == "target-mismatch" && !item.FenceReleased);
         Assert.Contains(outcomes, item => item.Case == "contract-mismatch" && !item.FenceReleased);
         Assert.All(outcomes, item => Assert.Equal("UNKNOWN", item.State));
+        Assert.Equal(lost.OperationId, scenario.PendingOperationId);
+        Assert.Equal(scenario.AfterCommitSnapshot, await scenario.SnapshotAsync(CancellationToken.None));
     }
 }

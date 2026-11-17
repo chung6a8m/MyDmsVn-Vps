@@ -283,7 +283,7 @@ internal sealed class Vps03RecoveryScenario : IAsyncDisposable
             _warehouseId, _productId, _receiptId, _saleId, token);
 
     internal Task<IReadOnlyList<Vps03FailClosedResult>> CheckFailClosedMatrixAsync(CancellationToken token) =>
-        Vps03FailClosedMatrix.RunAsync(token);
+        Vps03FailClosedMatrix.RunAsync(_environment, _actor, Store(), token);
 
     public async ValueTask DisposeAsync()
     {

@@ -9,113 +9,121 @@ using System.Threading.Tasks;
 using MyDmsVn.Contracts;
 using MyDmsVn.Desktop.Application;
 using MyDmsVn.Desktop.Infrastructure.Http;
-using Newtonsoft.Json.Linq;
 
 namespace MyDmsVn.Vps03.Acceptance.Tests;
 
 internal static class Vps03FailClosedMatrix
 {
-    private const string Origin = "https://issue7-matrix.invalid";
-    private const string Epoch = "11111111-2222-4333-8444-555555555555";
-
-    internal static async Task<IReadOnlyList<Vps03FailClosedResult>> RunAsync(CancellationToken token)
+    internal static readonly string[] Cases =
     {
-        var cases = new[]
-        {
-            "cancelled", "timeout", "missing", "expired", "unavailable", "indeterminate",
-            "http-404", "http-500", "http-503", "actor-mismatch", "epoch-mismatch",
-            "operation-mismatch", "fingerprint-mismatch", "kind-mismatch", "method-mismatch",
-            "scope-mismatch", "target-mismatch", "contract-mismatch",
-        };
-        var results = new List<Vps03FailClosedResult>(cases.Length);
-        foreach (var @case in cases)
-            results.Add(await RunCaseAsync(@case, token).ConfigureAwait(false));
+        "cancelled", "timeout", "missing", "expired", "unavailable", "indeterminate",
+        "http-404", "http-500", "http-503", "actor-mismatch", "epoch-mismatch",
+        "operation-mismatch", "fingerprint-mismatch", "kind-mismatch", "method-mismatch",
+        "scope-mismatch", "target-mismatch", "contract-mismatch",
+    };
+
+    internal static async Task<IReadOnlyList<Vps03FailClosedResult>> RunAsync(
+        Vps03OwnedEnvironment environment, Vps03RecoveryActor actor,
+        WindowsHttpPendingWriteStore store, CancellationToken token)
+    {
+        var results = new List<Vps03FailClosedResult>(Cases.Length);
+        foreach (var @case in Cases)
+            results.Add(await RunCaseAsync(environment, actor, store, @case, token)
+                .ConfigureAwait(false));
         return results;
     }
 
-    private static async Task<Vps03FailClosedResult> RunCaseAsync(string @case, CancellationToken token)
+    private static async Task<Vps03FailClosedResult> RunCaseAsync(
+        Vps03OwnedEnvironment environment, Vps03RecoveryActor actor,
+        WindowsHttpPendingWriteStore store, string @case, CancellationToken token)
     {
-        var store = new Store(Record());
+        var record = store.Load() ?? throw new InvalidOperationException("VPS03.MatrixFenceMissing");
         var session = new HttpDesktopSession(DesktopSessionOptions.Default, new Clock());
-        using var transport = new HttpDesktopTransport(new HttpDesktopOptions(Origin), session,
-            new Handler((request, cancellation) => Reply(@case, store.Record, request, cancellation)));
+        using var handler = new ResolutionMutationHandler(environment.Origin, @case, record);
+        using var transport = new HttpDesktopTransport(
+            new HttpDesktopOptions(environment.Origin.GetLeftPart(UriPartial.Authority)), session, handler);
         var operations = new HttpDesktopOperations(transport, session,
             new HttpDesktopOperationSettings(HttpDesktopOperationMode.Web5), store);
-        var login = await transport.LoginAsync(new LoginRequest("actor", "bounded"), token)
+        var login = await transport.LoginAsync(new LoginRequest(actor.Username, actor.Password), token)
             .ConfigureAwait(false);
-        if (!login.IsSuccess) throw new InvalidOperationException("VPS03.MatrixLoginFailed");
+        if (!login.IsSuccess || login.Data?.UserId != actor.UserId)
+            throw new InvalidOperationException("VPS03.MatrixLiveLoginFailed");
         DesktopWriteRecoveryResult result;
         try { result = await operations.CheckAsync(token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (@case == "cancelled")
         { result = new DesktopWriteRecoveryResult("UNKNOWN", "Cancellation retained the fence."); }
-        if (store.Load() == null || result.FenceReleased)
+        catch (HttpRequestException) when (@case == "timeout")
+        { result = new DesktopWriteRecoveryResult("UNKNOWN", "Transport failure retained the fence."); }
+        var retained = store.Load();
+        if (handler.UpstreamResolutionRequests == 0 || retained == null ||
+            retained.OperationId != record.OperationId || retained.Fingerprint != record.Fingerprint ||
+            result.FenceReleased)
             throw new InvalidOperationException("VPS03.MatrixFenceReleased:" + @case);
         return new Vps03FailClosedResult(@case, "UNKNOWN", false);
     }
 
-    private static Task<HttpResponseMessage> Reply(string @case, HttpPendingWriteRecord record,
-        HttpRequestMessage request, CancellationToken token)
+    private sealed class ResolutionMutationHandler : DelegatingHandler
     {
-        if (request.RequestUri!.AbsolutePath == "/api/v1/auth/login")
-            return Task.FromResult(Json(HttpStatusCode.OK,
-                "{\"data\":{\"accessToken\":\"test.token.value\",\"expiresAtUtc\":\"2099-01-01T00:00:00Z\",\"user\":{\"userId\":7303,\"username\":\"actor\",\"displayName\":\"Actor\"}}}"));
-        if (@case == "cancelled") throw new OperationCanceledException(token);
-        if (@case == "timeout") throw new HttpRequestException("deterministic timeout");
-        if (@case == "missing" || @case == "http-404")
-            return Task.FromResult(Json(HttpStatusCode.NotFound, Error("Operation.NotObserved")));
-        if (@case == "http-500") return Task.FromResult(Json(HttpStatusCode.InternalServerError, Error("Server.Error")));
-        if (@case == "http-503") return Task.FromResult(Json(HttpStatusCode.ServiceUnavailable, Error("Server.Unavailable")));
-        var state = @case == "expired" ? "RESULT_EXPIRED" :
-            @case == "unavailable" ? "RESULT_UNAVAILABLE" : "INDETERMINATE";
-        var actor = @case == "actor-mismatch" ? 7304 : record.ActorUserId;
-        var epoch = @case == "epoch-mismatch" ? Guid.NewGuid().ToString("D") : record.DeploymentEpoch;
-        var operation = @case == "operation-mismatch" ? Guid.NewGuid().ToString("D") : record.OperationId;
-        var fingerprint = @case == "fingerprint-mismatch" ? new string('b', 64) : record.Fingerprint;
-        var kind = @case == "kind-mismatch" ? "Receipt.Post" : record.Kind;
-        var method = @case == "method-mismatch" ? "PUT" : record.Method;
-        var scope = @case == "scope-mismatch" ? "/api/v1/receipts/{saleId}/post" :
-            "/api/v1/sales-receipts/{saleId}/post";
-        var target = @case == "target-mismatch" ? "7304" : "7303";
-        var contract = @case == "contract-mismatch" ? "web5-resolution-v2" : "web5-resolution-v1";
-        var body = "{\"data\":{\"contractVersion\":\"" + contract + "\",\"actorUserId\":" +
-            actor.ToString(CultureInfo.InvariantCulture) + ",\"deploymentEpoch\":\"" + epoch +
-            "\",\"operationId\":\"" + operation + "\",\"operationKind\":\"" + kind +
-            "\",\"method\":\"" + method + "\",\"routeScope\":\"" + scope + "\"," +
-            "\"requestTargetId\":\"" + target + "\",\"requestFingerprint\":\"" + fingerprint +
-            "\",\"state\":\"" + state + "\",\"outcome\":null,\"terminal\":null}}";
-        return Task.FromResult(Json(HttpStatusCode.OK, body));
-    }
+        private readonly string _case;
+        private readonly HttpPendingWriteRecord _record;
+        private readonly string _route;
+        private int _upstreamResolutionRequests;
 
-    private static string Error(string code) =>
-        "{\"error\":{\"code\":\"" + code + "\",\"message\":\"Unavailable\",\"details\":[]}}";
+        internal ResolutionMutationHandler(Uri origin, string @case, HttpPendingWriteRecord record)
+            : base(Vps03LostAckProxy.CreatePassThrough())
+        {
+            if (origin.Scheme != Uri.UriSchemeHttps) throw new ArgumentException(nameof(origin));
+            _case = @case;
+            _record = record;
+            _route = "/api/v2/operations/" + record.OperationId + "/resolution";
+        }
 
-    private static HttpResponseMessage Json(HttpStatusCode status, string body) =>
-        new(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+        internal int UpstreamResolutionRequests => Volatile.Read(ref _upstreamResolutionRequests);
 
-    private static HttpPendingWriteRecord Record() => new()
-    {
-        OperationId = Guid.NewGuid().ToString("D"), ActorUserId = 7303,
-        Protocol = "web5", Kind = "Sales.Post", Method = "POST",
-        Route = "/api/v1/sales-receipts/7303/post", TargetId = 7303,
-        DeploymentEpoch = Epoch, Fingerprint = new string('a', 64), CreatedUtc = DateTime.UtcNow,
-    };
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(request.RequestUri?.AbsolutePath, _route, StringComparison.Ordinal))
+                return response;
+            Interlocked.Increment(ref _upstreamResolutionRequests);
+            response.Dispose();
+            if (_case == "cancelled") throw new OperationCanceledException(cancellationToken);
+            if (_case == "timeout") throw new HttpRequestException("VPS03 deterministic post-upstream timeout.");
+            if (_case == "missing" || _case == "http-404")
+                return Json(HttpStatusCode.NotFound, Error("Operation.NotObserved"));
+            if (_case == "http-500")
+                return Json(HttpStatusCode.InternalServerError, Error("Server.Error"));
+            if (_case == "http-503")
+                return Json(HttpStatusCode.ServiceUnavailable, Error("Server.Unavailable"));
 
-    private sealed class Store : IHttpPendingWriteStore
-    {
-        private HttpPendingWriteRecord? _record;
-        internal Store(HttpPendingWriteRecord record) => _record = record;
-        internal HttpPendingWriteRecord Record => _record!;
-        public HttpPendingWriteRecord? Load() => _record;
-        public void Save(HttpPendingWriteRecord record) => throw new InvalidOperationException();
-        public void Clear(HttpPendingWriteRecord expected) => _record = null;
-    }
+            var state = _case == "expired" ? "RESULT_EXPIRED" :
+                _case == "unavailable" ? "RESULT_UNAVAILABLE" : "INDETERMINATE";
+            var actor = _case == "actor-mismatch" ? _record.ActorUserId + 1 : _record.ActorUserId;
+            var epoch = _case == "epoch-mismatch" ? Guid.NewGuid().ToString("D") : _record.DeploymentEpoch;
+            var operation = _case == "operation-mismatch" ? Guid.NewGuid().ToString("D") : _record.OperationId;
+            var fingerprint = _case == "fingerprint-mismatch" ? new string('b', 64) : _record.Fingerprint;
+            var kind = _case == "kind-mismatch" ? "Receipt.Post" : _record.Kind;
+            var method = _case == "method-mismatch" ? "PUT" : _record.Method;
+            var scope = _case == "scope-mismatch" ? "/api/v1/receipts/{saleId}/post" :
+                "/api/v1/sales-receipts/{saleId}/post";
+            var target = _case == "target-mismatch" ? (_record.TargetId!.Value + 1).ToString(CultureInfo.InvariantCulture) :
+                _record.TargetId!.Value.ToString(CultureInfo.InvariantCulture);
+            var contract = _case == "contract-mismatch" ? "web5-resolution-v2" : "web5-resolution-v1";
+            var body = "{\"data\":{\"contractVersion\":\"" + contract + "\",\"actorUserId\":" +
+                actor.ToString(CultureInfo.InvariantCulture) + ",\"deploymentEpoch\":\"" + epoch +
+                "\",\"operationId\":\"" + operation + "\",\"operationKind\":\"" + kind +
+                "\",\"method\":\"" + method + "\",\"routeScope\":\"" + scope + "\"," +
+                "\"requestTargetId\":\"" + target + "\",\"requestFingerprint\":\"" + fingerprint +
+                "\",\"state\":\"" + state + "\",\"outcome\":null,\"terminal\":null}}";
+            return Json(HttpStatusCode.OK, body);
+        }
 
-    private sealed class Handler : HttpMessageHandler
-    {
-        private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _reply;
-        internal Handler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> reply) => _reply = reply;
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            _reply(request, cancellationToken);
+        private static string Error(string code) =>
+            "{\"error\":{\"code\":\"" + code + "\",\"message\":\"Unavailable\",\"details\":[]}}";
+
+        private static HttpResponseMessage Json(HttpStatusCode status, string body) =>
+            new(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
     }
 
     private sealed class Clock : IMonotonicClock { public TimeSpan Elapsed => TimeSpan.Zero; }

@@ -12,6 +12,7 @@ using MyDmsVn.Server.DbMigrator;
 using MyDmsVn.Server.Infrastructure.Identity;
 using MyDmsVn.Server.Infrastructure.IntegrationTests;
 using MyDmsVn.Server.Infrastructure.Operations;
+using Newtonsoft.Json;
 
 namespace MyDmsVn.Vps03.Acceptance.Tests;
 
@@ -214,7 +215,13 @@ IF @@ROWCOUNT<>1 THROW 51992,'VPS-03 recovery grant row missing.',1;";
     {
         if (_disposed) return;
         var failures = new List<Exception>();
-        try { await _host.StopAndVerifyAbsentAsync(CancellationToken.None).ConfigureAwait(false); }
+        var hostAbsent = false;
+        var sqlAbsent = false;
+        try
+        {
+            await _host.StopAndVerifyAbsentAsync(CancellationToken.None).ConfigureAwait(false);
+            hostAbsent = true;
+        }
         catch (Exception error) { failures.Add(error); }
         _desktopServices.Dispose();
         SqlConnection.ClearAllPools();
@@ -222,11 +229,34 @@ IF @@ROWCOUNT<>1 THROW 51992,'VPS-03 recovery grant row missing.',1;";
         {
             await CleanupSqlAsync(_options.SqlConnectionString, _databaseName, databaseCreated: true,
                 _loginName, _loginSid, loginCreated: true, CancellationToken.None).ConfigureAwait(false);
+            sqlAbsent = true;
         }
         catch (Exception error) { failures.Add(error); }
-        _disposed = failures.Count == 0;
-        var cleanup = Vps03OwnedCleanup.Complete(_disposed, _disposed, _diagnosticDirectory);
+        WriteCleanupLedger(hostAbsent, sqlAbsent);
+        _disposed = hostAbsent && sqlAbsent && failures.Count == 0;
+        var cleanup = Vps03OwnedCleanup.Complete(hostAbsent, sqlAbsent, _diagnosticDirectory);
         if (!cleanup.Verified) throw new AggregateException("VPS-03 owned cleanup was not verified; diagnostics retained.", failures);
+    }
+
+    private void WriteCleanupLedger(bool hostAbsent, bool sqlAbsent)
+    {
+        var runId = Environment.GetEnvironmentVariable("MYDMSVN_VPS03_CLEANUP_RUN_ID");
+        if (string.IsNullOrWhiteSpace(runId)) return;
+        if (!Guid.TryParseExact(runId, "N", out _))
+            throw new InvalidOperationException("VPS03.CleanupRunIdInvalid");
+        var directory = Path.Combine(_options.ResultsDirectory, "cleanup-ledgers", runId);
+        Directory.CreateDirectory(directory);
+        var target = Path.Combine(directory, Guid.NewGuid().ToString("N") + ".json");
+        var temp = target + ".tmp";
+        var record = new
+        {
+            schemaVersion = 1,
+            headSha = HeadSha,
+            hostAbsent,
+            sqlAbsent,
+        };
+        File.WriteAllText(temp, JsonConvert.SerializeObject(record, Formatting.None));
+        File.Move(temp, target);
     }
 
     internal static string ModeForSchema(int schema) => schema switch
