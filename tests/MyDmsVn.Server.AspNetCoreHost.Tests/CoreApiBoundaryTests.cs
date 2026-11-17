@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -237,6 +241,94 @@ public sealed class CoreApiBoundaryTests
         using var message = await Net10RouteTable.CreateMessage(context);
         Assert.Equal("/api/v1/sales-receipts/a%3Fb%23c", message.RequestUri!.AbsolutePath);
         Assert.Equal("?feature=sales", message.RequestUri.Query);
+    }
+
+    [Fact]
+    public void RouteOrderAndDedicatedMethodMissEndpointsRemainExplicit()
+    {
+        using var app = WebApplication.CreateBuilder().Build();
+        Net10RouteTable.Map(app);
+        var endpoints = ((IEndpointRouteBuilder)app).DataSources
+            .SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
+        var valid = endpoints.Where(e => e.Order < int.MaxValue - 1).ToArray();
+        var misses = endpoints.Where(e => e.Order == int.MaxValue - 1).ToArray();
+        Assert.Equal(57, valid.Length);
+        Assert.Equal(valid.Select(e => e.RoutePattern.RawText).Distinct().Count(), misses.Length);
+        Assert.Contains(valid, e => e.RoutePattern.RawText == "/api/v3/operations/{operationId}/resend-eligibility" &&
+            e.Order == 2);
+        Assert.Contains(misses, e => e.RoutePattern.RawText == "/api/v1/catalog/products");
+    }
+
+    [Fact]
+    public async Task MethodMissSerializesLegacyJson405AndAllowedVerbs()
+    {
+        var context = NewRequest("PATCH", "/api/v1/catalog/products");
+        context.RequestServices.GetRequiredService<RequestIdentityAdmission>().BeginCorrelation("method_01");
+        await Net10RouteTable.MethodNotAllowedAsync(context, new[] { "GET", "POST" });
+        Assert.Equal(405, context.Response.StatusCode);
+        Assert.Equal("GET, POST", context.Response.Headers.Allow.ToString());
+        Assert.StartsWith("application/json", context.Response.ContentType!);
+        using var document = JsonDocument.Parse(((MemoryStream)context.Response.Body).ToArray());
+        Assert.Contains("Request.Invalid", document.RootElement.GetRawText());
+        Assert.Contains("method_01", document.RootElement.GetRawText());
+    }
+
+    [Fact]
+    public async Task NativeHttpRouterDistinguishesKnownMethodMissFromUnknownPathWithoutSql()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = "Production"
+        });
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Services.AddSingleton(new WebHostOptions(
+            publicOrigin: "https://localhost",
+            issuer: "https://localhost",
+            audience: "routing-only-test",
+            activeKeyId: "routing-test-key",
+            validationKeys: new Dictionary<string, byte[]>
+            {
+                ["routing-test-key"] = Enumerable.Repeat((byte)0x5A, 32).ToArray()
+            }));
+        builder.Services.AddSingleton<AuthAttemptLimiter>();
+        builder.Services.AddScoped<RequestIdentityAdmission>();
+        await using var app = builder.Build();
+        // Isolate routing, error envelopes and verb constraints from the
+        // SQL-dependent security/session admission exercised in later gates.
+        app.Use(async (context, next) =>
+        {
+            context.RequestServices.GetRequiredService<RequestIdentityAdmission>()
+                .BeginCorrelation("routing_01");
+            await next().ConfigureAwait(false);
+        });
+        Net10RouteTable.Map(app);
+        Net10RouteTable.MapFallback(app);
+        await app.StartAsync();
+        try
+        {
+            var addresses = app.Services.GetRequiredService<IServer>()
+                .Features.Get<IServerAddressesFeature>()?.Addresses;
+            var address = Assert.Single(addresses!);
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+
+            using var wrongVerb = await client.SendAsync(new HttpRequestMessage(
+                HttpMethod.Delete, address + "/api/v1/health"));
+            Assert.Equal(405, (int)wrongVerb.StatusCode);
+            Assert.Contains("GET", wrongVerb.Headers.Allow.Select(method => method.Method));
+            Assert.Contains("Request.Invalid", await wrongVerb.Content.ReadAsStringAsync());
+
+            using var unknown = await client.GetAsync(address + "/api/v1/unknown.json");
+            Assert.Equal(404, (int)unknown.StatusCode);
+            Assert.Contains("NotFound", await unknown.Content.ReadAsStringAsync());
+
+            using var health = await client.GetAsync(address + "/api/v1/health");
+            Assert.Equal(200, (int)health.StatusCode);
+            Assert.Contains("ok", await health.Content.ReadAsStringAsync());
+        }
+        finally
+        {
+            await app.StopAsync();
+        }
     }
 
     [Fact]

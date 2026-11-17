@@ -34,10 +34,29 @@ internal static class Net10RouteTable
     {
         foreach (var route in Routes)
         {
-            // ASP.NET Core routing chooses literals over parameters, independently of enumeration order.
+            // Preserve Web API 2 Route.Order as well as template precedence.
             app.MapMethods(route.Path, new[] { route.Verb },
-                context => Dispatch(context, route));
+                context => Dispatch(context, route)).WithOrder(route.Order);
         }
+
+        // A global catch-all route otherwise turns a known path with an unsupported HTTP
+        // method into a 404 instead of Web API 2's JSON 405. Register one method-miss
+        // endpoint per distinct pattern, behind every valid verb but ahead of the 404.
+        foreach (var group in Routes.GroupBy(route => route.Path, StringComparer.Ordinal))
+        {
+            var accepted = group.Select(route => route.Verb)
+                .Distinct(StringComparer.Ordinal).OrderBy(verb => verb, StringComparer.Ordinal).ToArray();
+            app.Map(group.Key, (HttpContext context) => MethodNotAllowedAsync(context, accepted))
+                .WithOrder(int.MaxValue - 1);
+        }
+    }
+
+    internal static async Task MethodNotAllowedAsync(HttpContext context, IReadOnlyList<string> allowed)
+    {
+        context.Response.Headers.Allow = string.Join(", ", allowed);
+        using var response = HttpJson.Error(405, "Request.Invalid", "The request is invalid.",
+            context.RequestServices.GetRequiredService<RequestIdentityAdmission>().CorrelationId);
+        await WriteAsync(context, response).ConfigureAwait(false);
     }
 
     internal static void MapFallback(WebApplication app)

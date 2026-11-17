@@ -9,7 +9,8 @@ root = Path(__file__).resolve().parents[1]
 manifest = root / "docs" / "contracts"
 old = json.loads((manifest / "vps-01-route-inventory.json").read_text(encoding="utf-8-sig"))
 add = json.loads((manifest / "vps-02-route-additions.json").read_text(encoding="utf-8-sig"))
-expected = {(e["httpMethod"], e["path"]) for e in old["endpoints"] + add["endpoints"]}
+expected = {(e["httpMethod"], e["path"], e["controller"], e["action"])
+            for e in old["endpoints"] + add["endpoints"]}
 assert len(expected) == 57, "Frozen HTTP source inventory drift"
 
 project = (root / "src/MyDmsVn.Server.AspNetCoreHost/MyDmsVn.Server.AspNetCoreHost.csproj").read_text()
@@ -37,9 +38,9 @@ for name in ("Server.Application", "Server.AspNetCoreHost"):
 if len(sys.argv) != 2:
     raise SystemExit("Usage: verify-vps-04a.py COMPILED_ROUTES.json")
 actual_routes = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8-sig"))
-actual = {(e["httpMethod"], e["path"]) for e in actual_routes}
-assert len(actual_routes) == 57 and len(actual) == 57, "Missing/duplicate compiled net10 routes"
+actual = {(e["httpMethod"], e["path"], e["controller"], e["action"]) for e in actual_routes}
+assert len(actual_routes) == 57 and len(actual) == 57, "Missing/duplicate compiled net10 routes/actions"
 assert expected == actual, (
-    f"HTTP parity mismatch; missing={sorted(expected - actual)} extra={sorted(actual - expected)}"
+    f"HTTP controller/action parity mismatch; missing={sorted(expected - actual)} extra={sorted(actual - expected)}"
 )
 print("PASS: net10 compiled route map 57/57; not a live SQL/HTTP or production acceptance")

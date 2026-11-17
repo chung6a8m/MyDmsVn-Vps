@@ -9,7 +9,7 @@ Work branch: `codex/vps-04a-net10-aspnetcore`. **Status: IN PROGRESS; no accepta
 - Server Contracts, SharedKernel, Domain, Application, Infrastructure use `-p:Vps04Server=true` for `net10.0` while their ordinary Windows/legacy path remains unchanged `net48`. This is a **transition mechanism**, not the final TFMs.
 - Source-links the existing WEB2-WEB6 controllers, token validation, strict wire parsing and DTO codecs. `Newtonsoft.Json`, `MediatR` and DbUp remain unchanged. Native ASP.NET Core endpoint registration emits exactly 57 source-frozen route signatures, with a fail-closed count/duplicate check.
 - Kestrel request-scoped DI; TLS origin and forwarded-header boundary checks, strict Origin/CSRF checks, 1 MiB bounded read, correlation, Bearer JWT plus SQL session admission, JSON error envelope and HttpResponseMessage write-back. Startup performs the same SQL schema, principal and superuser validation before listening.
-- New Linux CI workflow for `net10.0` locked restore/Release build, 363 Server.Application xUnit v3 regressions, initially 17 native ASP.NET Core HTTP boundary regressions (review fixes add 4 more), and compiled 57-route contract inventory. Existing net48 test/build workflows remain independent.
+- New Linux CI workflow for `net10.0` locked restore/Release build, 363 Server.Application xUnit v3 regressions, initially 17 native ASP.NET Core HTTP boundary regressions (review rounds add at least 7 more), and compiled 57-route contract inventory. Existing net48 test/build workflows remain independent.
 
 ## Deliberate temporary boundaries
 
@@ -47,20 +47,26 @@ python3 scripts/verify-vps-04a.py vps04a-routes.json
 - **R4 / P2 — outdated evidence ledger:** Four workflows completed successfully on the pre-review candidate `a1e1e415`: Linux net10, Windows legacy foundation, VPS-01 discovery, and VPS-03 publish. Earlier narrative still requested those checks at `9006843c`. The new review-fix HEAD requires a separate exact-SHA rerun.
 - These are **code/structural gates** only; they do not supply the missing live Linux HTTPS/SQL, 178 JSON corpus, JWT/session, or idempotency acceptance. No merge or production approval is inferred.
 
+## Independent review — round 2 (2026-11-17)
+
+- **R5 / P1 — wrong HTTP method returned a 404:** The catch-all API fallback matches unknown verbs even when the URL belongs to a registered route, whereas the original Web API 2 error boundary returns JSON 405 `Request.Invalid`. The new ASP.NET Core host registers a lower-priority method-miss handler for each known route template, with `Allow` header and legacy JSON envelope. Tests check endpoint registration, 405 serialization, and live loopback Kestrel routing for 200/404/405 without SQL.
+- **R6 / P2 — ignored `Route.Order` and weak parity inventory:** The bridge recorded Web API 2 route priority but dropped it during `MapMethods`, and the 57-route CI comparison checked only verb/path, not controller/action identity. Registered endpoint order now matches the source attribute; the compiler inventory gate compares exact verb/path/controller/action tuples.
+- These additions remain SQL-free routing and source-identity checks. They do **not** discharge the separately required live Linux HTTPS/SQL, session/authorization, 178 frozen payload and idempotency/concurrency acceptance.
+
 ## Evidence and remaining acceptance gates
 
 - Source/graph build and Linux locked-restore PASS at commit `67b7f5db` ([run #44040119428](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44040119428)), including exact compiler and xUnit TRX counts.
-- Windows net48 source/build/discovery on that revision: VPS-01 discovery PASS and VPS-03 publish PASS; foundation 7/8 jobs PASS but Architecture smoke 13/15 (2 failures), due to not-yet-extended source project/lock policy. Commit `9006843c` updates the policy with explicit native-host reference boundaries and validates both lock graphs; a new Windows run on this commit or later is required.
+- Windows net48 baseline history: an early architecture smoke failure was corrected at `9006843c`. Four workflows then passed on the round-1 review HEAD `c3055e65`: [Linux net10](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44043184676), [Windows foundation 8/8](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44043184610), [xUnit v3 discovery 10/10](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44043184707), [Desktop publish](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44043184614). Any later code change requires its own HEAD-specific CI.
 - The new HTTP boundary tests are SQL-free unit-level requests; no real Linux Kestrel/API/SQL or payload/idempotency oracle is claimed.
 
 
 | Gate | Status | Required evidence |
 | --- | --- | --- |
-| Independent net48 CI + xUnit v3 smoke/discovery | PASS on pre-review `a1e1e415`; review-fix HEAD rerun required | Full Windows CI and discovery all PASS on review-fix HEAD |
-| Linux SDK 10.0.404 server graph / ASP.NET Core build | PASS on pre-review `a1e1e415`; review-fix HEAD rerun required | [Linux run #44040635663](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44040635663) |
-| Native compiled 57/57 route map | PASS on pre-review `a1e1e415`; review-fix HEAD rerun required | Runner-generated JSON + immutable 29+28 manifest comparison |
-| Net10 packages locked | PASS on pre-review `a1e1e415`; review-fix HEAD rerun required | Eight versioned net10 locks, `--locked-mode`, no NuGet audit downgrade |
-| Net10 xUnit v3 regressions / HTTP perimeter | PASS on pre-review `a1e1e415`; review-fix HEAD rerun required | Server.Application 363/363; native boundary floor raised from 17 to 21, no failed/skipped |
+| Independent net48 CI + xUnit v3 smoke/discovery | PASS at round-1 `c3055e65`; round-2 HEAD must be checked separately | Full Windows CI and discovery all PASS on latest HEAD |
+| Linux SDK 10.0.404 server graph / ASP.NET Core build | PASS at round-1 `c3055e65`; round-2 HEAD must be checked separately | [Linux run #44043184676](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44043184676) |
+| Native compiled 57/57 route map | PASS at round-1 `c3055e65`; round-2 adds controller/action parity | Runner-generated JSON + immutable 29+28 manifest comparison |
+| Net10 packages locked | PASS at round-1 `c3055e65`; round-2 HEAD must be checked separately | Eight versioned net10 locks, `--locked-mode`, no NuGet audit downgrade |
+| Net10 xUnit v3 regressions / HTTP perimeter | PASS at round-1 `c3055e65`; round-2 HEAD must be checked separately | Server.Application 363/363; native boundary floor raised to 24 with SQL-free loopback HTTP, no failed/skipped |
 | Live Linux Kestrel HTTPS with approved SQL schema | NOT RUN | Real SQL and HTTP tests, exact revision |
 | JWT/login/refresh/logout/authorization/idempotency & 178 frozen JSON corpora | NOT RUN on net10 | Independent Linux HTTP/SQL oracle |
 | VPS-04B portable audit and deployment security | OUT OF SCOPE | Separate increment |
