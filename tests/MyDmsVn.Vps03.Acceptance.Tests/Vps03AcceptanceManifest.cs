@@ -9,7 +9,7 @@ namespace MyDmsVn.Vps03.Acceptance.Tests;
 internal sealed class Vps03AcceptanceCase
 {
     internal Vps03AcceptanceCase(string caseId, string kind, string interfaceName, string method,
-        string httpMethod, string path, string executor)
+        string httpMethod, string path, string executor, string group)
     {
         CaseId = caseId;
         Kind = kind;
@@ -18,6 +18,7 @@ internal sealed class Vps03AcceptanceCase
         HttpMethod = httpMethod;
         Path = path;
         Executor = executor;
+        Group = group;
     }
 
     internal string CaseId { get; }
@@ -27,6 +28,7 @@ internal sealed class Vps03AcceptanceCase
     internal string HttpMethod { get; }
     internal string Path { get; }
     internal string Executor { get; }
+    internal string Group { get; }
     internal string MethodIdentity => string.Join("|", new[] { Interface, Method, HttpMethod, Path });
 }
 
@@ -44,8 +46,26 @@ internal sealed class Vps03AcceptanceManifest
         var cases = rows.Children<JObject>().Select(row => new Vps03AcceptanceCase(
             Required(row, "caseId"), Required(row, "kind"), Optional(row, "interface"),
             Optional(row, "method"), Optional(row, "httpMethod"), Optional(row, "path"),
-            Optional(row, "executor"))).ToArray();
+            Optional(row, "executor"), Optional(row, "group"))).ToArray();
         return new Vps03AcceptanceManifest(cases);
+    }
+
+    internal void ValidateIssue7(IReadOnlyCollection<string> requiredGroups,
+        IReadOnlyCollection<string> requiredCaseIds)
+    {
+        if (Cases.Count == 0) throw new InvalidDataException("VPS-03 Issue #7 manifest is empty.");
+        if (Cases.GroupBy(item => item.CaseId, StringComparer.Ordinal).Any(group => group.Count() != 1))
+            throw new InvalidDataException("VPS-03 Issue #7 case IDs must be unique.");
+        if (Cases.Any(item => item.Kind != "gate" || string.IsNullOrWhiteSpace(item.Executor) ||
+            string.IsNullOrWhiteSpace(item.Group)))
+            throw new InvalidDataException("VPS-03 Issue #7 cases require gate, group, and executor.");
+        var groups = Cases.Select(item => item.Group).ToHashSet(StringComparer.Ordinal);
+        if (!groups.SetEquals(requiredGroups) || requiredGroups.Any(group =>
+            !Cases.Any(item => item.Group == group)))
+            throw new InvalidDataException("VPS-03 Issue #7 groups are incomplete or unexpected.");
+        var ids = Cases.Select(item => item.CaseId).ToHashSet(StringComparer.Ordinal);
+        if (!ids.SetEquals(requiredCaseIds))
+            throw new InvalidDataException("VPS-03 Issue #7 stable cases are incomplete or unexpected.");
     }
 
     internal void Validate(JObject sourceMatrix)

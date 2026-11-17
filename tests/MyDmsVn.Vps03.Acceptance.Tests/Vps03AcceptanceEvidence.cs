@@ -90,6 +90,59 @@ internal static class Vps03EvidenceWriter
         return new Vps03EvidencePaths(jsonPath, markdownPath);
     }
 
+    internal static Vps03EvidencePaths WriteIssue7(string directory,
+        Vps03EvidenceRecord record, string expectedHead)
+    {
+        if (!Path.IsPathRooted(directory) || !Directory.Exists(directory))
+            throw new InvalidDataException("VPS-03 Issue #7 evidence directory must be an existing absolute directory.");
+        ValidateIssue7Evidence(record.Data, expectedHead);
+        ValidateEvidence(record.Data);
+        var jsonPath = Path.Combine(directory, "evidence.json");
+        var markdownPath = Path.Combine(directory, "evidence.md");
+        var json = record.Data.ToString(Newtonsoft.Json.Formatting.Indented);
+        File.WriteAllText(jsonPath, json, new UTF8Encoding(false));
+        File.WriteAllText(markdownPath, "# VPS-03 Issue #7 acceptance evidence\r\n\r\n```json\r\n" +
+            json.Replace("\n", "\r\n") + "\r\n```\r\n", new UTF8Encoding(false));
+        return new Vps03EvidencePaths(jsonPath, markdownPath);
+    }
+
+    private static void ValidateIssue7Evidence(JObject data, string expectedHead)
+    {
+        if (!Regex.IsMatch(expectedHead ?? string.Empty, "^[0-9a-f]{40}$") ||
+            (string?)data["headSha"] != expectedHead ||
+            !Regex.IsMatch((string?)data["baseSha"] ?? string.Empty, "^[0-9a-f]{40}$") ||
+            (int?)data["schemaVersion"] != 1 || (int?)data["issue"] != 7)
+            throw new InvalidDataException("VPS-03 Issue #7 evidence SHA/schema binding is invalid.");
+        if (data["commands"] is not JArray commands || commands.Count == 0 ||
+            commands.Any(command => string.IsNullOrWhiteSpace((string?)command)))
+            throw new InvalidDataException("VPS-03 Issue #7 evidence commands are absent.");
+        if (data["capabilities"] is not JObject || data["blockers"] is not JArray)
+            throw new InvalidDataException("VPS-03 Issue #7 capability/blocker evidence is absent.");
+        if (data["groups"] is not JArray groups)
+            throw new InvalidDataException("VPS-03 Issue #7 groups are absent.");
+        var required = new[] { "crash", "file-security", "live", "attended" };
+        var names = groups.Children<JObject>().Select(group => (string?)group["name"] ?? string.Empty)
+            .ToArray();
+        if (names.Distinct(StringComparer.Ordinal).Count() != names.Length ||
+            !names.ToHashSet(StringComparer.Ordinal).SetEquals(required))
+            throw new InvalidDataException("VPS-03 Issue #7 evidence groups are incomplete or duplicated.");
+        foreach (var group in groups.Children<JObject>())
+        {
+            var total = (int?)group["total"] ?? -1;
+            var executed = (int?)group["executed"] ?? -1;
+            var passed = (int?)group["passed"] ?? -1;
+            var failed = (int?)group["failed"] ?? -1;
+            var skipped = (int?)group["skipped"] ?? -1;
+            if (total <= 0 || executed != total || passed != total || failed != 0 || skipped != 0)
+                throw new InvalidDataException("VPS-03 Issue #7 evidence group is empty, incomplete, skipped, or failed.");
+        }
+        if (data["cleanup"] is not JObject cleanup || new[]
+        {
+            "childAbsent", "iisAbsent", "sqlAbsent", "intentAbsent",
+        }.Any(name => (bool?)cleanup[name] != true))
+            throw new InvalidDataException("VPS-03 Issue #7 cleanup evidence is incomplete.");
+    }
+
     private static int Counter(XmlNode counters, string name)
     {
         var value = counters.Attributes?[name]?.Value;

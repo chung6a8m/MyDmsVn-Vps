@@ -16,6 +16,29 @@ Canonical WEB2–WEB6 request/response test fixtures are local in [contracts cor
 
 GUI/native/125%-scale scenarios require attended Windows evidence. Headless GitHub Actions compile/tests cannot substitute. Do not run destructive SQL integration against a production instance. See the test policy for focused examples and detailed rules.
 
+## VPS-03 Issue #7 acceptance runner
+
+`scripts/Invoke-Vps03Issue7Acceptance.ps1` is the only aggregate Issue #7
+runner. It requires a clean 40-hex HEAD and writes only beneath
+`TestResults/vps03-issue7/<HEAD>`. Its modes are:
+
+- `-PreflightOnly`: validate the clean HEAD, Windows/net48 capability, and the
+  15-case Issue #7 manifest without executing acceptance cases.
+- `-CrashOnly`: execute the non-empty crash (2) and file-security (4) groups;
+  each TRX must have exact totals and zero failed/skipped/not-executed cases.
+- `-LiveOnly`: require the operator-approved SQL/TLS environment, publish exact
+  Desktop/host packages, and execute the seven live authority cases.
+- `-AttendedOnly`: publish the same exact packages and execute the single Native
+  walkthrough, including `VPS03.GUI.UNKNOWN-RECOVERY`.
+- With no mode switch, execute the SQL-free groups and aggregate exact-HEAD
+  `-LiveResult` and `-AttendedResult` records into sanitized JSON/Markdown.
+
+Full PASS also requires child/IIS/SQL/intent cleanup facts and matching package
+hashes. A missing external gate, SHA mismatch, empty group, skip, failure,
+unresolved owned intent, or uncertain cleanup is an error, never PASS. Never
+place connection strings, passwords, tokens, cookies, JWTs, request bodies, or
+raw errors in the evidence directory.
+
 ## VPS-01 commands and nonempty gates
 
 `python3 scripts/verify-vps-01.py` checks package/project topology and pinned HTTP route metadata on Linux (static only).

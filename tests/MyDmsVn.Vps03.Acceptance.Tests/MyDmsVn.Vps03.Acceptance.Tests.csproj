@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <None Update="vps03-issue8-case-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="vps03-issue7-case-manifest.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>

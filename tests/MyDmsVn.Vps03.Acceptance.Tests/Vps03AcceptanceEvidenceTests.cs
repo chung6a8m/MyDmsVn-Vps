@@ -89,6 +89,72 @@ public sealed class Vps03AcceptanceEvidenceTests
         Assert.Empty(Directory.GetFiles(fixture.Root));
     }
 
+    [Fact]
+    public void Issue7_evidence_requires_exact_head_complete_groups_and_cleanup()
+    {
+        using var fixture = EvidenceFixture.Create();
+        const string head = "0123456789abcdef0123456789abcdef01234567";
+        var record = Issue7Record(head);
+
+        var paths = Vps03EvidenceWriter.WriteIssue7(fixture.Root,
+            new Vps03EvidenceRecord(record), head);
+
+        Assert.Contains("Issue #7", File.ReadAllText(paths.MarkdownPath), StringComparison.Ordinal);
+        record["headSha"] = new string('f', 40);
+        Assert.Throws<InvalidDataException>(() => Vps03EvidenceWriter.WriteIssue7(
+            fixture.Root, new Vps03EvidenceRecord(record), head));
+    }
+
+    [Fact]
+    public void Issue7_evidence_rejects_skips_incomplete_cleanup_and_missing_groups()
+    {
+        using var fixture = EvidenceFixture.Create();
+        const string head = "0123456789abcdef0123456789abcdef01234567";
+        var record = Issue7Record(head);
+        ((JObject)((JArray)record["groups"]!)[0]!)["skipped"] = 1;
+        Assert.Throws<InvalidDataException>(() => Vps03EvidenceWriter.WriteIssue7(
+            fixture.Root, new Vps03EvidenceRecord(record), head));
+
+        record = Issue7Record(head);
+        ((JObject)record["cleanup"]!)["intentAbsent"] = false;
+        Assert.Throws<InvalidDataException>(() => Vps03EvidenceWriter.WriteIssue7(
+            fixture.Root, new Vps03EvidenceRecord(record), head));
+
+        record = Issue7Record(head);
+        ((JArray)record["groups"]!).RemoveAt(0);
+        Assert.Throws<InvalidDataException>(() => Vps03EvidenceWriter.WriteIssue7(
+            fixture.Root, new Vps03EvidenceRecord(record), head));
+    }
+
+    private static JObject Issue7Record(string head) => new()
+    {
+        ["schemaVersion"] = 1,
+        ["issue"] = 7,
+        ["baseSha"] = new string('a', 40),
+        ["headSha"] = head,
+        ["commands"] = new JArray("dotnet test exact-filter"),
+        ["capabilities"] = new JObject
+        {
+            ["windows"] = true, ["dotnetFramework48"] = true,
+            ["iisExpress"] = true, ["sql"] = true,
+        },
+        ["groups"] = new JArray(
+            Group("crash", 2), Group("file-security", 4), Group("live", 7),
+            Group("attended", 1)),
+        ["cleanup"] = new JObject
+        {
+            ["childAbsent"] = true, ["iisAbsent"] = true,
+            ["sqlAbsent"] = true, ["intentAbsent"] = true,
+        },
+        ["blockers"] = new JArray(),
+    };
+
+    private static JObject Group(string name, int total) => new()
+    {
+        ["name"] = name, ["total"] = total, ["executed"] = total,
+        ["passed"] = total, ["failed"] = 0, ["skipped"] = 0,
+    };
+
     private sealed class EvidenceFixture : IDisposable
     {
         private EvidenceFixture(string root) => Root = root;

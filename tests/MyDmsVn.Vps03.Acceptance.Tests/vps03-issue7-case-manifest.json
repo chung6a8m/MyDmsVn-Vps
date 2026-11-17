@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "issue": 7,
+  "cases": [
+    {"caseId":"VPS03.ISSUE7.CRASH.BEFORE-SAVE","kind":"gate","group":"crash","executor":"pending-store-crash-before-save"},
+    {"caseId":"VPS03.ISSUE7.CRASH.AFTER-SAVE","kind":"gate","group":"crash","executor":"pending-store-crash-after-save"},
+    {"caseId":"VPS03.ISSUE7.FILE.CORRUPT","kind":"gate","group":"file-security","executor":"pending-store-corruption"},
+    {"caseId":"VPS03.ISSUE7.FILE.ACL","kind":"gate","group":"file-security","executor":"pending-store-acl"},
+    {"caseId":"VPS03.ISSUE7.FILE.ORIGIN","kind":"gate","group":"file-security","executor":"pending-store-origin-binding"},
+    {"caseId":"VPS03.ISSUE7.FILE.EXACT-CLEAR","kind":"gate","group":"file-security","executor":"pending-store-exact-clear"},
+    {"caseId":"VPS03.ISSUE7.LIVE.RESTART","kind":"gate","group":"live","executor":"restart-recovery"},
+    {"caseId":"VPS03.ISSUE7.LIVE.AUTHORITY","kind":"gate","group":"live","executor":"actor-grant-terminal-authority"},
+    {"caseId":"VPS03.ISSUE7.LIVE.SESSION","kind":"gate","group":"live","executor":"session-rotation"},
+    {"caseId":"VPS03.ISSUE7.LIVE.FAIL-CLOSED","kind":"gate","group":"live","executor":"terminal-mismatch-fail-closed"},
+    {"caseId":"VPS03.ISSUE7.LIVE.OPERATOR-RACE","kind":"gate","group":"live","executor":"operator-race"},
+    {"caseId":"VPS03.ISSUE7.LIVE.RUNTIME-DENIED","kind":"gate","group":"live","executor":"runtime-operator-denied"},
+    {"caseId":"VPS03.ISSUE7.LIVE.UNJOURNALLED","kind":"gate","group":"live","executor":"catalog-security-permanent-fence"},
+    {"caseId":"VPS03.GUI.UNKNOWN-RECOVERY","kind":"gate","group":"attended","executor":"native-unknown-recovery"},
+    {"caseId":"VPS03.ISSUE7.CLEANUP","kind":"gate","group":"cleanup","executor":"owned-resource-cleanup"}
+  ]
+}

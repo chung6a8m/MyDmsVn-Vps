@@ -9,6 +9,23 @@ namespace MyDmsVn.Vps03.Acceptance.Tests;
 
 public sealed class Vps03AcceptanceManifestTests
 {
+    private static readonly string[] RequiredIssue7Groups =
+    {
+        "crash", "file-security", "live", "attended", "cleanup",
+    };
+
+    private static readonly string[] RequiredIssue7Cases =
+    {
+        "VPS03.ISSUE7.CRASH.BEFORE-SAVE", "VPS03.ISSUE7.CRASH.AFTER-SAVE",
+        "VPS03.ISSUE7.FILE.CORRUPT", "VPS03.ISSUE7.FILE.ACL",
+        "VPS03.ISSUE7.FILE.ORIGIN", "VPS03.ISSUE7.FILE.EXACT-CLEAR",
+        "VPS03.ISSUE7.LIVE.RESTART", "VPS03.ISSUE7.LIVE.AUTHORITY",
+        "VPS03.ISSUE7.LIVE.SESSION", "VPS03.ISSUE7.LIVE.FAIL-CLOSED",
+        "VPS03.ISSUE7.LIVE.OPERATOR-RACE", "VPS03.ISSUE7.LIVE.RUNTIME-DENIED",
+        "VPS03.ISSUE7.LIVE.UNJOURNALLED", "VPS03.GUI.UNKNOWN-RECOVERY",
+        "VPS03.ISSUE7.CLEANUP",
+    };
+
     private static readonly string[] RequiredGates =
     {
         "package", "tls", "schema11", "schema12", "schema13", "auth", "permissions",
@@ -73,6 +90,17 @@ public sealed class Vps03AcceptanceManifestTests
         {
             if (File.Exists(path)) File.Delete(path);
         }
+    }
+
+    [Fact]
+    public void Issue7_manifest_has_stable_nonempty_strict_groups()
+    {
+        var manifest = Vps03AcceptanceManifest.Load(Path.Combine(
+            AppContext.BaseDirectory, "vps03-issue7-case-manifest.json"));
+        manifest.ValidateIssue7(RequiredIssue7Groups, RequiredIssue7Cases);
+
+        Assert.All(RequiredIssue7Groups, group =>
+            Assert.Contains(manifest.Cases, item => item.Group == group));
     }
 
     private static JObject MethodCase(string caseId, string executor) => new()
