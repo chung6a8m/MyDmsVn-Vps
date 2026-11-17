@@ -1,6 +1,6 @@
 # Issue #7 — UNKNOWN write recovery (VPS-03, operator runbook)
 
-**Status (17 November 2026):** code `4a16c3a` verified on Windows CI (18/18 jobs; 1,296/1,296 SQL-free tests). This is **not** production acceptance. **No automatic replay.** This runbook is scoped to this repository and the exact deployed origin, schema, and commit. Maintain PR #6 as Draft until independent Windows GUI + HTTPS + SQL evidence and an Owner decision on any exceptions.
+**Status (17 November 2026):** exact package SHA `40b7ebc` passed Issue #7 acceptance 14/14, four SQL-free suites 1,299/1,299, and nine Native checkpoints with verified cleanup. This is **not** production acceptance. **No automatic replay.** This runbook is scoped to this repository and the exact deployed origin, schema, and commit. Maintain PR #6 as Draft until final-HEAD CI, independent review, and merge.
 
 ## Durable owner boundary
 
@@ -66,4 +66,4 @@ The original request body is intentionally **not** persisted. Therefore client-o
 | Catalog/Security authoritative readback and denied permissions | Readback never alone releases UNKNOWN |
 | Two clients with real SQL, ledger/stock/COGS, operator terminal race | Single-posted SQL effects; independent cross-process and operator transaction evidence |
 
-Mock tests, compile/discovery and static published binary audit **do not** prove cross-process crash consistency or terminal authority for unjournalled writes. Issue #8 separately proved the exact published Desktop → HTTPS → SQL path, deterministic lost-ACK COMMITTED recovery, attended GUI and physical stock/COGS at `4c0b1be`; it did not execute process kills at Issue #7 file-save boundaries. Record each run's SHA, OS, DB fixture, timestamps, IDs and SQL oracles in `docs/evidence/`. Production remains gated until independent Issue #7 evidence and explicitly dated Owner exceptions, if any.
+Mock tests, compile/discovery and static published binary audit alone **do not** prove cross-process crash consistency. The exact package at `40b7ebc` separately passed process-kill, protected-store, live HTTPS/SQL/operator and attended Native Issue #7 gates; see [closeout evidence](../evidence/vps-03-issue-7-closeout.md). Catalog/Security still have no terminal release authority and can remain permanently UNKNOWN by design. Record each run's SHA, OS, DB fixture, timestamps, IDs and SQL oracles in `docs/evidence/`. Production remains gated by PR review/merge and later VPS-09 approval.
