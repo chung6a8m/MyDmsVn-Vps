@@ -16,7 +16,7 @@ Work branch: `codex/vps-04a-net10-aspnetcore`. **Status: IN PROGRESS; no accepta
 - `System.Web.Http` and `Microsoft.Owin` in the **new host source** are locally defined compile-time controller/request facades. The net10 project does **not** depend on those legacy runtime packages. They are removed in VPS-04B when routing, middleware, audit and hosting boundaries are finalized.
 - Protected WEB6 audit storage currently enforces Windows file ACL semantics. The new host **refuses startup** when that path is configured: WEB6 mode is not admitted on Linux. Portable durable audit is a separate VPS-04B gate.
 - No Linux reverse proxy trust, SPA static hosting, systemd, deployment, production readiness or live SQL runtime acceptance is claimed.
-- The net10 graph deliberately does not yet use locked package restore; original net48 lock files remain immutable for Windows CI. Create/validate separate net10 locks and switch Linux to `--locked-mode` before declaring VPS-04A complete.
+- The net10 graph uses separately located generated net10 lock files in `obj/vps04a.packages.lock.json` to avoid overwriting immutable net48 locks. Commit dedicated net10 lock snapshots, add a Linux `--locked-mode` gate and validate drift before declaring VPS-04A complete.
 - Existing SQL integration suites are `net48` and cannot be counted as Linux net10 test execution. The compiled 57-route check is structural parity, **not** a proof of response/session/wire behavior.
 
 ## Reproduce the current SQL-free gate
@@ -30,6 +30,10 @@ dotnet run --project MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -c
 cd ../..
 python3 scripts/verify-vps-04a.py vps04a-routes.json
 ```
+
+## CI findings and fixes
+
+- Initial Linux run #44038427435 failed restore (`NU1005` because an existing net48 lock conflicted with `RestorePackagesWithLockFile=false`), NuGet downgrade (`NU1109` for ProtectedData) and the audited PKCS vulnerability (`NU1902`, `NU1903`). The subsequent commit segregates generated lock paths by graph and conditionally pins patched PKCS `10.0.13` and ProtectedData `10.0.13` for the net10 graph only. Root legacy net48 pins remain unchanged. None of these fixes is counted as PASS until a new run confirms.
 
 ## Acceptance ledger (not yet fulfilled)
 

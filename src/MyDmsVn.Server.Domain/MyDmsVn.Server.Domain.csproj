@@ -3,7 +3,8 @@
     <TargetFramework Condition="'$(Vps04Server)' != 'true'">net48</TargetFramework>
     <TargetFramework Condition="'$(Vps04Server)' == 'true'">net10.0</TargetFramework>
     <!-- VPS-04A transitional graph: maintain the unchanged net48 lock while Linux targets net10. -->
-    <RestorePackagesWithLockFile Condition="'$(Vps04Server)' == 'true'">false</RestorePackagesWithLockFile>
+    <RestorePackagesWithLockFile Condition="'$(Vps04Server)' == 'true'">true</RestorePackagesWithLockFile>
+    <NuGetLockFilePath Condition="'$(Vps04Server)' == 'true'">$(MSBuildProjectDirectory)/obj/vps04a.packages.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Numerics" />
