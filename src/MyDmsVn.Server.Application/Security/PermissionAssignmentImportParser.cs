@@ -5,8 +5,12 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using MyDmsVn.Contracts.Security;
+#if NET10_0_OR_GREATER
+using System.Text.Json;
+#else
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+#endif
 
 namespace MyDmsVn.Server.Application.Security;
 
@@ -63,6 +67,9 @@ public sealed class PermissionAssignmentImportParser
             return PermissionAssignmentImportParseResult.Invalid("Import content is not valid UTF-8 text.");
         }
 
+#if NET10_0_OR_GREATER
+        return ParseNet10(json);
+#else
         try
         {
             using var text = new StringReader(json);
@@ -185,10 +192,107 @@ public sealed class PermissionAssignmentImportParser
         }
     }
 
+#endif
+
+#if NET10_0_OR_GREATER
+    private PermissionAssignmentImportParseResult ParseNet10(string json)
+    {
+        try
+        {
+            // Explicitly reject comments, trailing commas, trailing content,
+            // duplicate members and deep documents. All business rules below
+            // are identical to the legacy net48 path.
+            using var document = JsonDocument.Parse(StrictUtf8.GetBytes(json), new JsonDocumentOptions
+            {
+                AllowTrailingCommas = false,
+                CommentHandling = JsonCommentHandling.Disallow,
+                MaxDepth = 16
+            });
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+                return PermissionAssignmentImportParseResult.Invalid("Import must be one JSON object without comments or trailing content.");
+            if (!HasExactProperties(root, "schemaVersion", "targetType", "targetId", "entries"))
+                return PermissionAssignmentImportParseResult.Invalid("Import fields do not match schema version 1.");
+
+            if (!root.GetProperty("schemaVersion").TryGetInt64(out var version) ||
+                root.GetProperty("schemaVersion").ValueKind != JsonValueKind.Number ||
+                version != CurrentSchemaVersion)
+                return PermissionAssignmentImportParseResult.Invalid("Unsupported or missing import schema version.");
+
+            var target = root.GetProperty("targetType");
+            if (target.ValueKind != JsonValueKind.String)
+                return PermissionAssignmentImportParseResult.Invalid("Import target type is required.");
+
+            PermissionImportTargetTypeDto targetType;
+            switch (target.GetString())
+            {
+                case "User": targetType = PermissionImportTargetTypeDto.User; break;
+                case "Role": targetType = PermissionImportTargetTypeDto.Role; break;
+                default: return PermissionAssignmentImportParseResult.Invalid("Import target type must be User or Role.");
+            }
+
+            var id = root.GetProperty("targetId");
+            if (id.ValueKind != JsonValueKind.Number || !id.TryGetInt32(out var targetId) || targetId <= 0)
+                return PermissionAssignmentImportParseResult.Invalid("Import target ID must be a positive integer.");
+
+            var array = root.GetProperty("entries");
+            if (array.ValueKind != JsonValueKind.Array)
+                return PermissionAssignmentImportParseResult.Invalid("Import entries must be an array.");
+            if (array.GetArrayLength() > MaximumEntries)
+                return PermissionAssignmentImportParseResult.Invalid("Import cannot contain more than 5,000 entries.");
+
+            var entries = new List<PermissionAssignmentImportEntryDto>(array.GetArrayLength());
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var item in array.EnumerateArray())
+            {
+                if (!HasExactProperties(item, "permissionKey", "decision"))
+                    return PermissionAssignmentImportParseResult.Invalid("Each entry must contain exactly permissionKey and decision.");
+
+                var permission = item.GetProperty("permissionKey");
+                var disposition = item.GetProperty("decision");
+                if (permission.ValueKind != JsonValueKind.String || disposition.ValueKind != JsonValueKind.String)
+                    return PermissionAssignmentImportParseResult.Invalid("Permission key and decision must be strings.");
+
+                var key = permission.GetString()!;
+                if (string.IsNullOrWhiteSpace(key) || !string.Equals(key, key.Trim(), StringComparison.Ordinal) ||
+                    !_registry.TryGet(key, out var definition) || definition.LifecycleStatus != PermissionLifecycleStatus.Active)
+                    return PermissionAssignmentImportParseResult.Invalid("Import contains an unknown, deprecated, or noncanonical permission key.");
+                if (!seen.Add(key))
+                    return PermissionAssignmentImportParseResult.Invalid("Import contains duplicate permission entries.");
+
+                var decision = disposition.GetString();
+                bool granted;
+                if (decision == "Allow") granted = true;
+                else if (decision == "Deny" && targetType == PermissionImportTargetTypeDto.User) granted = false;
+                else
+                    return PermissionAssignmentImportParseResult.Invalid("Decision must be Allow; direct user imports may also use Deny.");
+                entries.Add(new PermissionAssignmentImportEntryDto(key, granted));
+            }
+
+            return PermissionAssignmentImportParseResult.Success(new ParsedPermissionAssignmentImportDto(
+                CurrentSchemaVersion, targetType, targetId,
+                new ReadOnlyCollection<PermissionAssignmentImportEntryDto>(entries)));
+        }
+        catch (Exception error) when (error is JsonException || error is FormatException ||
+                                      error is OverflowException || error is ArgumentException)
+        {
+            return PermissionAssignmentImportParseResult.Invalid("Import JSON is malformed or exceeds parser limits.");
+        }
+    }
+
+    private static bool HasExactProperties(JsonElement value, params string[] names)
+    {
+        if (value.ValueKind != JsonValueKind.Object) return false;
+        var actual = value.EnumerateObject().Select(property => property.Name).ToArray();
+        return actual.Length == names.Length && names.All(name =>
+            actual.Count(candidate => string.Equals(candidate, name, StringComparison.Ordinal)) == 1);
+    }
+#else
     private static bool HasExactProperties(JObject value, params string[] names)
     {
         var actual = value.Properties().Select(property => property.Name).ToArray();
         return actual.Length == names.Length && names.All(name =>
             actual.Count(candidate => string.Equals(candidate, name, StringComparison.Ordinal)) == 1);
     }
+#endif
 }
