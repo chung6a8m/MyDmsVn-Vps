@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Windows.Automation;
+using System.Windows.Forms;
 
 namespace MyDmsVn.Vps03.Acceptance.Tests;
 
@@ -64,9 +65,13 @@ internal sealed class Vps03RemoteGuiProbe : IDisposable
     private static void Invoke(AutomationElement window, string name)
     {
         var element = Find(window, name);
-        if (!element.TryGetCurrentPattern(InvokePattern.Pattern, out var pattern))
-            throw new InvalidOperationException("VPS03 attended action does not support InvokePattern: " + name);
-        ((InvokePattern)pattern).Invoke();
+        if (element.TryGetCurrentPattern(InvokePattern.Pattern, out var invoke))
+        {
+            ((InvokePattern)invoke).Invoke();
+            return;
+        }
+        element.SetFocus();
+        SendKeys.SendWait("{ENTER}");
     }
 
     private static AutomationElement Find(AutomationElement window, string name) =>
