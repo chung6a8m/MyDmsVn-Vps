@@ -2,7 +2,7 @@
 
 **Repository:** `chung6a8m/MyDmsVn-Vps` · **Issue:** [#15](https://github.com/chung6a8m/MyDmsVn-Vps/issues/15) · **Implementation PR:** [#16](https://github.com/chung6a8m/MyDmsVn-Vps/pull/16)
 **Baseline:** `main` `2a629ca76d9330cc66fac251dabee6b084b58410` (VPS-05A merged).
-**Status:** IMPLEMENTED / CI CODE CHECKPOINT PASS / INDEPENDENT REVIEW PENDING — **NOT MERGED, NOT VPS-05 ACCEPTED**.
+**Status:** IMPLEMENTED / INDEPENDENT CODE, SECURITY AND CONTRACT REVIEW COMPLETE at `c9d0c38` / DOCUMENTATION-HEAD CI + MERGE GATED — **VPS-05 overall NOT ACCEPTED**.
 
 ## Verified implementation boundary
 
@@ -27,9 +27,25 @@ Code checkpoint: **`2e050dbba5834e7286598f9bcebc93221599a608`**. Each workflow b
 
 **Commit consistency:** this evidence update is a documentation-only commit following the above checked code SHA; the PR's final merged HEAD must independently rerun all five workflows and have the **same exact SHA across the final results**. Record final CI URLs in PR #16; do not treat the previously checked code checkpoint as final-head verification after this documentation commit.
 
+## Independent review and final code-HEAD CI (2026-11-18)
+
+Independent review covered all 30 changed files, the original linked net48 wire decoders and controllers, the STJ-backed `WireDom` tree, JWT/WEB6 signatures, strict request grammar, six WEB4 SHA256 vectors, operation journal codec and recovery, cursor, permission import and explicit date metadata. No blocking **code-level** finding was identified for the bounded VPS-05B contract. Documentation finding **R16-D01**: the evidence and roadmap described a stale checkpoint and review-pending state; remediated in this documentation-only closeout commit. VPS-05C gates are not promoted to PASS.
+
+Five independently checked GitHub Actions runs on exact code-review SHA `c9d0c38b2ced07e90e0a4b4953990c01c9228956`, all SUCCESS:
+
+| Gate | Result | Final code-HEAD link |
+| --- | --- | --- |
+| Ubuntu SDK 10.0.404, warning-as-error build, native tests and 57 routes | **366/366** Application + **248/248** Host, 0 failed/skipped; **57/57** route ledger | [run #44136470027](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44136470027) |
+| Disposable SQL Server 2022, real HTTPS/TLS | **15/15** SQL facts, **24** WEB2–WEB6 expected/actual/diff scenarios (WEB6 disabled), and **3/3** separately enabled WEB6 security/recovery | [run #44136470103](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44136470103) |
+| Legacy Windows net48 build and SQL-free smoke | **8/8** workflow jobs successful | [run #44136470088](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44136470088) |
+| Windows Desktop publish/dependency boundary | **SUCCESS**; not attended GUI/SQL E2E | [run #44136470053](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44136470053) |
+| Windows xUnit v3 compile and discovery | **10/10** jobs successful; discovery is not SQL E2E | [run #44136470044](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44136470044) |
+
+**Merge gate:** the documentation-only commit containing this review record changes PR HEAD. The same five workflows must run on that *new* exact SHA, with no required failure or skip, before PR #16 may be marked ready and merged. Preserve the final-HEAD URLs in the PR conversation.
+
 ## Explicitly not claimed
 
-- Independent code/security/contract review of PR #16 has **not** been completed. No merge authorization has been given.
+- No Owner acceptance for VPS-05 as a whole is asserted. PR #16 remains merge-gated on the final documentation-HEAD workflows and GitHub merge state.
 - VPS-05C: exhaustive response/headers differential across all 57 route variants and **zero Newtonsoft in the produced net10 runtime `.deps.json`** remain OPEN. The transitive/legacy dependency is intentionally not eliminated by 05B.
 - VPS-08 protected real staging and VPS-09 integrated Owner release approval remain **NOT VERIFIED**. Disposable CI SQL is not production/PREPROD and route-map reachability is not exhaustive API coverage.
 - Historical fixture files and test oracles were not rewritten to fit the new serializer; only test call sites now pass the STJ-native net10 DOM while the legacy fixtures remain untouched.
