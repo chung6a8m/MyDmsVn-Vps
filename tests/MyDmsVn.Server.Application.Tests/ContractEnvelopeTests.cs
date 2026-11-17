@@ -4,6 +4,7 @@ using ErrorOr;
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace MyDmsVn.Server.Application.Tests
@@ -299,12 +300,16 @@ namespace MyDmsVn.Server.Application.Tests
                 Array.Empty<GoodsReceiptLineDto>());
             var settings = ApiJson.CreateSerializerSettings();
 
-            Assert.Equal(
-                "{\"receiptId\":42,\"expectedVersion\":\"AQIDBAUGBwg=\",\"receiptDate\":\"2026-10-10\",\"warehouseId\":2,\"employeeId\":3,\"note\":\"updated\",\"lines\":[{\"productId\":7,\"quantity\":2.5000,\"unitCost\":19.9900}]}",
-                JsonConvert.SerializeObject(updateRequest, settings));
-            Assert.Equal(
-                "{\"receiptId\":42,\"expectedVersion\":\"AQIDBAUGBwg=\"}",
-                JsonConvert.SerializeObject(postRequest, settings));
+            Assert.True(
+                JToken.DeepEquals(
+                    JObject.Parse("{\"receiptId\":42,\"expectedVersion\":\"AQIDBAUGBwg=\",\"receiptDate\":\"2026-10-10\",\"warehouseId\":2,\"employeeId\":3,\"note\":\"updated\",\"lines\":[{\"productId\":7,\"quantity\":2.5000,\"unitCost\":19.9900}]}"),
+                    JObject.Parse(JsonConvert.SerializeObject(updateRequest, settings))),
+                "Update request JSON must preserve its fields and values regardless of reflection property order.");
+            Assert.True(
+                JToken.DeepEquals(
+                    JObject.Parse("{\"receiptId\":42,\"expectedVersion\":\"AQIDBAUGBwg=\"}"),
+                    JObject.Parse(JsonConvert.SerializeObject(postRequest, settings))),
+                "Post request JSON must preserve its fields and values regardless of reflection property order.");
             Assert.Contains("\"version\":\"AQIDBAUGBwg=\"", JsonConvert.SerializeObject(receipt, settings));
         }
 
