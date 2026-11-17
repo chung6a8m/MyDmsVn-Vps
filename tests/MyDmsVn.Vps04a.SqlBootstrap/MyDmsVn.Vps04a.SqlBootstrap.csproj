@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Vps04Server>true</Vps04Server>
+    <IsPackable>false</IsPackable>
+    <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.vps04a.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="dbup-sqlserver" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <ProjectReference Include="../../src/MyDmsVn.Server.Infrastructure/MyDmsVn.Server.Infrastructure.csproj">
+      <AdditionalProperties>Vps04Server=true</AdditionalProperties>
+    </ProjectReference>
+  </ItemGroup>
+  <!-- Reuse the *existing* migration engine/lock/preflight, not a hand-made journal
+       or a second SQL runner that could silently diverge from exact13. -->
+  <ItemGroup>
+    <Compile Include="../../src/MyDmsVn.Server.DbMigrator/DatabaseMigrationRunner.cs" Link="Original/DatabaseMigrationRunner.cs"/>
+    <Compile Include="../../src/MyDmsVn.Server.DbMigrator/MigrationConnectionManager.cs" Link="Original/MigrationConnectionManager.cs"/>
+    <Compile Include="../../src/MyDmsVn.Server.DbMigrator/Schema9MaintenanceValidator.cs" Link="Original/Schema9MaintenanceValidator.cs"/>
+    <Compile Include="../../src/MyDmsVn.Server.DbMigrator/Schema10WebMaintenanceValidator.cs" Link="Original/Schema10WebMaintenanceValidator.cs"/>
+    <Compile Include="../../src/MyDmsVn.Server.DbMigrator/Schema11WebMaintenanceValidator.cs" Link="Original/Schema11WebMaintenanceValidator.cs"/>
+    <EmbeddedResource Include="../../src/MyDmsVn.Server.DbMigrator/Scripts/*.sql">
+      <LogicalName>MyDmsVn.Server.DbMigrator.Scripts.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>
