@@ -1,0 +1,46 @@
+name: VPS-04A — ASP.NET Core 10 Linux build and frozen route gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps-04a-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-net10:
+    name: Ubuntu SDK 10.0.404 restore/build and 57-route inventory (SQL-free)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.404'
+      - name: Pin nested server SDK
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: test "$(dotnet --version)" = "10.0.404"
+      - name: Restore and compile ASP.NET Core host / Server net10 graph
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -v minimal
+          dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -c Release -f net10.0 --no-restore -warnaserror -v minimal
+      - name: Reflect compiled ASP.NET Core endpoint inventory
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet run --project MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true --no-build -c Release -- --list-routes > "$GITHUB_WORKSPACE/vps04a-routes.json"
+      - name: Compare native endpoint mapping with immutable WEB2-6 and Desktop API routes
+        run: python3 scripts/verify-vps-04a.py vps04a-routes.json
+      - name: Preserve route evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps04a-net10-route-inventory
+          path: vps04a-routes.json
+          if-no-files-found: warn
