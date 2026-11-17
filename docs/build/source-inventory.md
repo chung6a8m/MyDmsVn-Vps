@@ -40,4 +40,4 @@ No sibling checkout of MyDmsVn, WinFormsKit or SourceGrid is required as an MSBu
 
 ## VPS-03 incremental inventory
 
-The VPS-00B table above is intentionally historical. VPS-03 adds one net48 Desktop.Infrastructure.Http project (src/ now 12 and repository total 45). Production Desktop.App now references Http + WinForms instead of Local + Server; actual Windows locked restore and published package audit remain pending.
+The VPS-00B table above is intentionally historical. VPS-03 adds the net48 Desktop.Infrastructure.Http production project and the net48 MyDmsVn.Vps03.Acceptance.Tests project (src/ now 12, tests/ now 14 and repository total 46). Production Desktop.App references Http + WinForms instead of Local + Server. The automated published-package audit is implemented; attended Windows GUI/package acceptance remains open under Issue #8.
