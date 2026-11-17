@@ -160,8 +160,8 @@ public sealed class Vps05bJsonIngressParityTests
         // through the native net10 admission middleware.
         static string Segment(string text) => Convert.ToBase64String(Utf8.GetBytes(text))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        var token = Segment("{\\"alg\\":42,\\"kid\\":\\"key01\\"}") + "." +
-            Segment("{\\"iss\\":\\"https://example.test\\"}") + "." + Segment("signature");
+        var token = Segment("""{"alg":42,"kid":"key01"}""") + "." +
+            Segment("""{"iss":"https://example.test"}""") + "." + Segment("signature");
         Assert.Null(new BearerTokenValidator(options, new FrozenClock()).Validate(token));
     }
 
