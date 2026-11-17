@@ -26,20 +26,9 @@ internal static class Vps03FailClosedMatrix
         Vps03OwnedEnvironment environment, Vps03RecoveryActor actor,
         WindowsHttpPendingWriteStore store, CancellationToken token)
     {
-        var results = new List<Vps03FailClosedResult>(Cases.Length);
-        foreach (var @case in Cases)
-            results.Add(await RunCaseAsync(environment, actor, store, @case, token)
-                .ConfigureAwait(false));
-        return results;
-    }
-
-    private static async Task<Vps03FailClosedResult> RunCaseAsync(
-        Vps03OwnedEnvironment environment, Vps03RecoveryActor actor,
-        WindowsHttpPendingWriteStore store, string @case, CancellationToken token)
-    {
         var record = store.Load() ?? throw new InvalidOperationException("VPS03.MatrixFenceMissing");
         var session = new HttpDesktopSession(DesktopSessionOptions.Default, new Clock());
-        using var handler = new ResolutionMutationHandler(environment.Origin, @case, record);
+        using var handler = new ResolutionMutationHandler(environment.Origin, record);
         using var transport = new HttpDesktopTransport(
             new HttpDesktopOptions(environment.Origin.GetLeftPart(UriPartial.Authority)), session, handler);
         var operations = new HttpDesktopOperations(transport, session,
@@ -47,7 +36,21 @@ internal static class Vps03FailClosedMatrix
         var login = await transport.LoginAsync(new LoginRequest(actor.Username, actor.Password), token)
             .ConfigureAwait(false);
         if (!login.IsSuccess || login.Data?.UserId != actor.UserId)
-            throw new InvalidOperationException("VPS03.MatrixLiveLoginFailed");
+            throw new InvalidOperationException("VPS03.MatrixLiveLoginFailed:" +
+                (login.Error?.Code ?? "success-with-wrong-actor"));
+        var results = new List<Vps03FailClosedResult>(Cases.Length);
+        foreach (var @case in Cases)
+            results.Add(await RunCaseAsync(operations, handler, store, record, @case, token)
+                .ConfigureAwait(false));
+        return results;
+    }
+
+    private static async Task<Vps03FailClosedResult> RunCaseAsync(
+        HttpDesktopOperations operations, ResolutionMutationHandler handler,
+        WindowsHttpPendingWriteStore store, HttpPendingWriteRecord record,
+        string @case, CancellationToken token)
+    {
+        handler.BeginCase(@case);
         DesktopWriteRecoveryResult result;
         try { result = await operations.CheckAsync(token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (@case == "cancelled")
@@ -64,21 +67,26 @@ internal static class Vps03FailClosedMatrix
 
     private sealed class ResolutionMutationHandler : DelegatingHandler
     {
-        private readonly string _case;
+        private string _case = string.Empty;
         private readonly HttpPendingWriteRecord _record;
         private readonly string _route;
         private int _upstreamResolutionRequests;
 
-        internal ResolutionMutationHandler(Uri origin, string @case, HttpPendingWriteRecord record)
+        internal ResolutionMutationHandler(Uri origin, HttpPendingWriteRecord record)
             : base(Vps03LostAckProxy.CreatePassThrough())
         {
             if (origin.Scheme != Uri.UriSchemeHttps) throw new ArgumentException(nameof(origin));
-            _case = @case;
             _record = record;
             _route = "/api/v2/operations/" + record.OperationId + "/resolution";
         }
 
         internal int UpstreamResolutionRequests => Volatile.Read(ref _upstreamResolutionRequests);
+
+        internal void BeginCase(string @case)
+        {
+            _case = @case;
+            Interlocked.Exchange(ref _upstreamResolutionRequests, 0);
+        }
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
