@@ -198,7 +198,10 @@ SELECT CASE WHEN
   )
 THEN 1 ELSE 0 END;", connection);
                 if (Convert.ToInt32(await probe.ExecuteScalarAsync(), CultureInfo.InvariantCulture) != 0)
+                {
+                    _stage = "oracle-denied:" + await DiagnoseOracleAsync(connection);
                     throw new InvalidOperationException("Oracle exceeds the nine explicit CI-only read tables.");
+                }
             }
 
             _stage = "emit-owned-run-configuration";
@@ -230,6 +233,28 @@ THEN 1 ELSE 0 END;", connection);
                 "; readiness inner type: " + _sqlInnerType + ". No acceptance is claimed.");
             return 1;
         }
+    }
+
+    private static async Task<string> DiagnoseOracleAsync(SqlConnection connection)
+    {
+        // The only visible output is a truncated database-object identifier and
+        // operation name; no SQL text, login, connection string or row contents.
+        using var command = new SqlCommand(@"
+SELECT TOP 1 CONCAT(OBJECT_SCHEMA_NAME(o.object_id),N'_',o.name,N'_',p.permission_name)
+FROM sys.objects o
+CROSS APPLY sys.fn_my_permissions(
+    QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.'+QUOTENAME(o.name),N'OBJECT') p
+WHERE o.is_ms_shipped=0 AND p.permission_name IN
+  (N'SELECT',N'INSERT',N'UPDATE',N'DELETE',N'EXECUTE',N'ALTER',N'CONTROL')
+  AND NOT (p.permission_name=N'SELECT' AND OBJECT_SCHEMA_NAME(o.object_id)=N'dbo'
+    AND o.name IN(N'WebAuthSessions',N'WebOperationJournal',N'SalesReceipts',
+      N'SalesReceiptLines',N'GoodsReceipts',N'GoodsReceiptLines',
+      N'StockLedger',N'StockValuationEntries',N'StockBalances'))
+ORDER BY o.name,p.permission_name;", connection);
+        var result=Convert.ToString(await command.ExecuteScalarAsync(),CultureInfo.InvariantCulture);
+        if (!string.IsNullOrEmpty(result))
+            return "object:" + Regex.Replace(result,"[^A-Za-z0-9_]","").Substring(0,Math.Min(result.Length,80));
+        return "non-object-permission";
     }
 
     // Fault injection is a distinct privileged *CI-only* phase, never a host
