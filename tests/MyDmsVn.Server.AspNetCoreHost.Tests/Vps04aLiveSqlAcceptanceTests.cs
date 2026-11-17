@@ -235,12 +235,13 @@ public sealed class Vps04aLiveSqlAcceptanceTests
 
         var requests = Enumerable.Range(0, 3).Select(_ => gateway.SendAsync(HttpMethod.Post,
             "/api/v1/sales-receipts", body, session.AccessToken, epoch: epoch, key: operation.ToString("D")));
-        using var first = await Task.WhenAll(requests);
+        var first = await Task.WhenAll(requests);
         var texts = new List<string>();
         foreach (var response in first)
         {
-            using var json = await AssertJsonAsync(response, 200);
-            texts.Add(json.RootElement.GetRawText());
+            using (response)
+            using (var json = await AssertJsonAsync(response, 200))
+                texts.Add(json.RootElement.GetRawText());
         }
         Assert.All(texts, text => Assert.Equal(texts[0], text));
         using var parsed = JsonDocument.Parse(texts[0]);
