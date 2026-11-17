@@ -31,7 +31,6 @@ internal sealed class PortableProtectedSecurityAuditSink : ISecurityAuditSink
     private const int NoFollow = 0x20000;
     private const int CloseOnExec = 0x80000;
     private const int LockExclusive = 2;
-    private const int LockUnlock = 8;
     private const uint StatxBasicStats = 0x7ff;
     private const uint StatxRequired = 0x10f; // TYPE, MODE, NLINK, UID, INO
     private const int TypeMask = 0xf000;
@@ -134,22 +133,17 @@ internal sealed class PortableProtectedSecurityAuditSink : ISecurityAuditSink
 
                 if (Flock(file.DangerousGetHandle().ToInt32(), LockExclusive) != 0)
                     throw new IOException();
-                try
                 {
                     token.ThrowIfCancellationRequested();
                     // The opened O_APPEND descriptor is locked across processes and
                     // fsync'd before an admitted audit write can be acknowledged.
                     using (var stream = new FileStream(file, FileAccess.Write, bufferSize: 4096,
-                        isAsync: false, ownsHandle: false))
+                        isAsync: false))
                     {
                         if (line != null) stream.Write(line);
                         stream.Flush(flushToDisk: true);
                     }
                     CheckSameFile(opened, ReadMetadata(current, _components[^1]), owner);
-                }
-                finally
-                {
-                    _ = Flock(file.DangerousGetHandle().ToInt32(), LockUnlock);
                 }
             }
             finally

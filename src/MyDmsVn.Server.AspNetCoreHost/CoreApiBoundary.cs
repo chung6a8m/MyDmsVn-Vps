@@ -12,8 +12,7 @@ using MyDmsVn.Server.Application.Identity;
 
 namespace MyDmsVn.Server.HttpHost;
 
-// Preserves WEB2-WEB6 HTTP perimeter while the ASP.NET Core middleware/DI conversion
-// is reviewed separately in VPS-04B. Never install a permissive fallback on startup failure.
+// Native ASP.NET Core admission boundary. Never install a permissive fallback on startup failure.
 internal static class CoreApiBoundary
 {
     internal static async Task HandleAsync(HttpContext context, Func<Task> next)
@@ -85,6 +84,19 @@ internal static class CoreApiBoundary
             }
 
             identity.Admit(actor, sessionId);
+            if (HttpMethods.IsGet(context.Request.Method) &&
+                path.Equals("/api/v1/health", StringComparison.OrdinalIgnoreCase))
+            {
+                var audit = context.RequestServices.GetRequiredService<ISecurityAuditReadiness>().Snapshot;
+                if (audit.Status == SecurityAuditReadinessStatus.Degraded)
+                {
+                    using var unavailable = HttpJson.Error(503,
+                        SecurityAuditReadinessSnapshot.PersistenceFailureReason,
+                        "Required security audit persistence is unavailable.", correlation);
+                    await Net10RouteTable.WriteAsync(context, unavailable).ConfigureAwait(false);
+                    return;
+                }
+            }
             await next().ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
@@ -215,4 +227,10 @@ internal static class CoreApiBoundary
             "The request is too large.", correlation);
         await Net10RouteTable.WriteAsync(context, response).ConfigureAwait(false);
     }
+}
+
+internal sealed class CoreApiAdmissionMiddleware : IMiddleware
+{
+    public Task InvokeAsync(HttpContext context, RequestDelegate next) =>
+        CoreApiBoundary.HandleAsync(context, () => next(context));
 }
