@@ -26,7 +26,7 @@ blocked_exact = {
     "system.web", "system.security.accesscontrol",
     "system.security.principal.windows", "system.io.filesystem.accesscontrol",
     "system.io.pipes.accesscontrol", "system.threading.accesscontrol",
-    "microsoft.aspnetcore.owin", "owin",
+    "microsoft.aspnetcore.owin", "owin", "newtonsoft.json",
 }
 blocked_prefixes = ("microsoft.owin", "microsoft.aspnet.webapi", "system.web.")
 bad = sorted(
@@ -35,6 +35,12 @@ bad = sorted(
         or any(p.startswith(prefix) for prefix in blocked_prefixes))
 )
 assert not bad, f"Disallowed runtime dependency in net10 Linux host: {bad}"
+# The runtime targets may contain framework/runtime assets that are absent
+# from top-level 'libraries'. Both sections must be clean.
+for target, entries in document.get("targets", {}).items():
+    assert not any(name.split("/", 1)[0].lower() == "newtonsoft.json" for name in entries), (
+        f"Disallowed Newtonsoft runtime asset under {target}"
+    )
 
 root = ET.parse(PROJECT).getroot()
 linked = [
@@ -52,6 +58,6 @@ for filename in (
     )
 print(
     f"PASS VPS-04B: {len(libraries)} net10 host runtime libraries, "
-    "zero OWIN/System.Web/Windows ACL dependencies; Windows-only "
+    "zero Newtonsoft/OWIN/System.Web/Windows ACL dependencies; Windows-only "
     "legacy host source excluded"
 )
