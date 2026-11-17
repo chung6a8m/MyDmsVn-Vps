@@ -119,7 +119,8 @@ public sealed class Vps04aCiGroupWireParitySqlAcceptanceTests
     {
         // Both SQL identifiers must be hard-coded within this allowlist: the
         // Oracle is prohibited from reading catalog/user/security tables.
-        Assert.True((table, idColumn) is ("SalesReceipts", "SaleId") or ("GoodsReceipts", "ReceiptId"));
+        Assert.True((table == "SalesReceipts" && idColumn == "SaleId") ||
+                    (table == "GoodsReceipts" && idColumn == "ReceiptId"));
         using var connection = Oracle();
         await connection.OpenAsync();
         using var command = new SqlCommand(
@@ -208,6 +209,28 @@ WHERE l.WarehouseId=@wh AND l.ProductId=@product;", sql);
         var element = document.RootElement;
         foreach (var key in path) element = element.GetProperty(key);
         return Keys(element);
+    }
+
+    private static string FixtureArrayItemKeys(string family, string filename)
+    {
+        var root = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (root != null && !File.Exists(Path.Combine(root.FullName, "docs", "contracts", "corpus-blobs.sha1")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        using var document = JsonDocument.Parse(File.ReadAllBytes(
+            Path.Combine(root!.FullName, "docs", "contracts", family, filename)));
+        return Keys(document.RootElement.GetProperty("data").GetProperty("items")[0]);
+    }
+
+    private static string FixtureLookupRowKeys(string family, string filename)
+    {
+        var root = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (root != null && !File.Exists(Path.Combine(root.FullName, "docs", "contracts", "corpus-blobs.sha1")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        using var document = JsonDocument.Parse(File.ReadAllBytes(
+            Path.Combine(root!.FullName, "docs", "contracts", family, filename)));
+        return Keys(document.RootElement.GetProperty("data")[0]);
     }
 
     private static string Code(Reply reply) =>
@@ -319,11 +342,9 @@ WHERE l.WarehouseId=@wh AND l.ProductId=@product;", sql);
             report.Record("catalog-products", "GET /api/v1/catalog/products/lookup?limit=25",
                 "web2-v1/catalog-products-response.json", "StockBalances.ProductId provenance (catalog table not Oracle-readable)",
                 new { status = 200, seededProductMatched = 1, seededStockKeysPresent = true,
-                    rowFields = FixtureKeys("web2-v1", "catalog-products-response.json", "data").Length > 0
-                        ? FixtureKeys("web2-v1", "catalog-products-response.json", "data") : "" },
+                    rowFields = FixtureLookupRowKeys("web2-v1", "catalog-products-response.json") },
                 new { status = lookup.Status, seededProductMatched = matched.Length, seededStockKeysPresent = stockKeys > 0,
-                    rowFields = FixtureKeys("web2-v1", "catalog-products-response.json", "data").Length > 0
-                        ? FixtureKeys("web2-v1", "catalog-products-response.json", "data") : "" });
+                    rowFields = matched.Length == 1 ? Keys(matched[0]) : "(missing)" });
         }
 
         var sqlCount = await ScalarIntAsync("SELECT COUNT(*) FROM dbo.SalesReceipts;");
@@ -396,9 +417,9 @@ WHERE l.WarehouseId=@wh AND l.ProductId=@product;", sql);
                 "web3-v1/balances-response.json", "StockBalances(Quantity,InventoryValue)",
                 new { status = 200, quantity = balance.Quantity.ToString("F4", CultureInfo.InvariantCulture),
                     value = balance.Value.ToString("F4", CultureInfo.InvariantCulture),
-                    rowFields = FixtureKeys("web3-v1", "balances-response.json", "data", "items") },
+                    rowFields = FixtureArrayItemKeys("web3-v1", "balances-response.json") },
                 new { status = balances.Status, quantity = S(row, "quantity"), value = S(row, "inventoryValue"),
-                    rowFields = FixtureKeys("web3-v1", "balances-response.json", "data", "items") });
+                    rowFields = Keys(row) });
         }
         var ledger = await StockCardAsync(wh, product);
         using (var card = await http.GetAsync(
