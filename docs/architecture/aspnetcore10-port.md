@@ -5,7 +5,7 @@ This path ports the existing Web API 2 HTTP surface to a native Kestrel endpoint
 ## Repository topology
 
 - `src/MyDmsVn.Server.AspNetCoreHost`: new ASP.NET Core 10 Web SDK host, source-linked existing JSON/wire/controller code; explicitly excludes legacy `Startup`, `Web2Pipeline`, `SpaAssets`, `RequestServices` and Windows ACL-backed audit implementation.
-- `CoreApiBoundary`: per-request checks (HTTPS/Origin/Host, denial of untrusted proxy headers, body size, correlation, anonymous allowlist, JWT+SQL session).
+- `CoreApiBoundary`: per-request checks (HTTPS/Origin/Host, denial of untrusted proxy headers, body size, correlation, anonymous allowlist, JWT+SQL session), including fail-closed cleanup of staged headers before writing an unexpected-error 500.
 - `Net10RouteTable`: reflects controller route attributes, rejects count/duplicate drift, maps ASP.NET Core endpoints preserving `Route.Order`, and protects known-path HTTP method misses with JSON 405 ahead of the catch-all JSON 404. Compiled parity compares verb/path/controller/action, while preserving raw wire parser/response codec semantics.
 - `CompatWebApi`: temporary facade for the small fraction of legacy controller surface relying on Web API 2/OWIN types. It is **not** an OWIN runtime.
 - `CoreRequestServices`: maps request identity/correlation to ASP.NET Core request scopes.

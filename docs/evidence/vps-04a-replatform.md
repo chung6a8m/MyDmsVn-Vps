@@ -58,6 +58,11 @@ python3 scripts/verify-vps-04a.py vps04a-routes.json
 - Initial round-2 Linux run ([#44044860855](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44044860855), `e5fa09bc`) compiled the ASP.NET Core host and passed 363 Application tests, but native tests did not compile because `HttpResponseHeaders.Allow` does not exist.
 - The next run ([#44045089585](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44045089585), `fa5de225`) compiled and executed 24 native tests: 23 passed, and the real Kestrel method-miss test reached the expected HTTP 405 before its `GetValues("Allow")` assertion failed because .NET `HttpClient` classifies `Allow` under `HttpContentHeaders`. The test now uses `wrongVerb.Content.Headers.Allow` as documented. These were test-harness findings; neither run proves live HTTPS/SQL application parity. Latest-HEAD rerun is required.
 
+## Independent review — round 3 (2026-11-17)
+
+- **R7 / P1 — stale response headers on exception:** The native boundary writes a JSON 500 if a downstream controller fails before the response starts, but previously retained pre-staged headers such as `Set-Cookie` and `Location`. A failed refresh or login action could therefore emit a credential/redirect header inconsistent with its failed outcome. The catch handler now clears all uncommitted headers and restores safe correlation/no-cache/security headers before serializing the sanitized 500. A regression proves staged cookie/redirect removal and no exception detail leakage.
+- This is a SQL-free fail-closed boundary regression, not proof of database transaction or lost-ACK safety. Exact review-fix HEAD CI rerun remains mandatory.
+
 ## Evidence and remaining acceptance gates
 
 - Source/graph build and Linux locked-restore PASS at commit `67b7f5db` ([run #44040119428](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44040119428)), including exact compiler and xUnit TRX counts.
@@ -71,7 +76,7 @@ python3 scripts/verify-vps-04a.py vps04a-routes.json
 | Linux SDK 10.0.404 server graph / ASP.NET Core build | PASS at round-1 `c3055e65`; round-2 HEAD must be checked separately | [Linux run #44043184676](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44043184676) |
 | Native compiled 57/57 route map | PASS at round-1 `c3055e65`; round-2 adds controller/action parity | Runner-generated JSON + immutable 29+28 manifest comparison |
 | Net10 packages locked | PASS at round-1 `c3055e65`; round-2 HEAD must be checked separately | Eight versioned net10 locks, `--locked-mode`, no NuGet audit downgrade |
-| Net10 xUnit v3 regressions / HTTP perimeter | PASS at round-1 `c3055e65`; round-2 HEAD must be checked separately | Server.Application 363/363; native boundary floor raised to 24 with SQL-free loopback HTTP, no failed/skipped |
+| Net10 xUnit v3 regressions / HTTP perimeter | PASS at round-1 `c3055e65`; round-2 HEAD must be checked separately | Server.Application 363/363; native boundary floor raised to 25 with sanitized failure/header regression and SQL-free loopback HTTP, no failed/skipped |
 | Live Linux Kestrel HTTPS with approved SQL schema | NOT RUN | Real SQL and HTTP tests, exact revision |
 | JWT/login/refresh/logout/authorization/idempotency & 178 frozen JSON corpora | NOT RUN on net10 | Independent Linux HTTP/SQL oracle |
 | VPS-04B portable audit and deployment security | OUT OF SCOPE | Separate increment |

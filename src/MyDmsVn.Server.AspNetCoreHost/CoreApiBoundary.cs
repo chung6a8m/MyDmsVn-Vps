@@ -94,6 +94,11 @@ internal static class CoreApiBoundary
         catch (Exception)
         {
             if (context.Response.HasStarted) throw;
+            // A downstream failure can occur after a handler added Set-Cookie, Location or
+            // other response headers but before headers were sent. Never send them with a
+            // new 500 envelope: an unadmitted refresh cookie would misrepresent success.
+            context.Response.Headers.Clear();
+            SetHeaders(context, correlation);
             // SQL errors, key material, claims and tokens must not enter the error response.
             using var failure = HttpJson.Error(500, "InternalError",
                 "An unexpected error occurred.", correlation);

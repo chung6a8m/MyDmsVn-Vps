@@ -69,7 +69,7 @@ jobs:
           counters=doc.find('./t:ResultSummary/t:Counters',ns)
           assert counters is not None, 'Missing native boundary TRX counters'
           counts={k:int(v) for k,v in counters.attrib.items() if k in ('total','passed','failed','executed','notExecuted')}
-          assert counts['total']>=24 and counts['executed']>=24, counts
+          assert counts['total']>=25 and counts['executed']>=25, counts
           assert counts['failed']==0 and counts['notExecuted']==0 and counts['passed']==counts['total'], counts
           print(f"PASS net10 HTTP boundary: {counts}")
           PY

@@ -177,6 +177,33 @@ public sealed class CoreApiBoundaryTests
     }
 
     [Fact]
+    public async Task FailureBeforeResponseStartsCannotCommitStaleCookiesOrHeaders()
+    {
+        var context = NewRequest();
+        context.Request.Headers["X-Correlation-ID"] = "failure_01";
+        await CoreApiBoundary.HandleAsync(context, () =>
+        {
+            // Simulate a handler that staged a refresh cookie, then threw before
+            // the HTTP response started. The failure envelope must be authoritative.
+            context.Response.Headers["Set-Cookie"] = "__Host-mydmsvn-rt=unadmitted; Secure; HttpOnly";
+            context.Response.Headers["Location"] = "https://untrusted.test/";
+            context.Response.ContentType = "text/plain";
+            context.Response.ContentLength = 3;
+            throw new InvalidOperationException("secret-sql-cause");
+        });
+        Assert.Equal(500, context.Response.StatusCode);
+        Assert.False(context.Response.Headers.ContainsKey("Set-Cookie"));
+        Assert.False(context.Response.Headers.ContainsKey("Location"));
+        Assert.StartsWith("application/json", context.Response.ContentType!);
+        Assert.Equal("no-store", context.Response.Headers["Cache-Control"].ToString());
+        Assert.Equal("failure_01", context.Response.Headers["X-Correlation-ID"].ToString());
+        var body = System.Text.Encoding.UTF8.GetString(((MemoryStream)context.Response.Body).ToArray());
+        Assert.Contains("InternalError", body);
+        Assert.DoesNotContain("secret-sql-cause", body);
+        Assert.DoesNotContain("unadmitted", body);
+    }
+
+    [Fact]
     public async Task MultipleCorrelationValuesCannotInjectResponseHeaders()
     {
         var context = NewRequest();
