@@ -364,6 +364,115 @@ jobs:
                 'WEB6 fail-closed only; no implied enabled WEB6 parity')
           PY
 
+          # VPS-04B executes separately from the historical WEB6-disabled
+          # assertions above. Exact SQL13, seeded journal and verified HTTPS
+          # remain in this disposable GitHub-hosted Linux job only.
+          echo "VPS-04B: enabling WEB6 with pre-provisioned Linux audit."
+          kill "$server_pid"
+          wait "$server_pid" 2>/dev/null || true
+          server_pid=""
+          mkdir -m 0700 "$work/audit"
+          (umask 077; : > "$work/audit/audit.jsonl")
+          chmod 0600 "$work/audit/audit.jsonl"
+          export MYDMSVN_WEB6_RESEND_ELIGIBILITY=receipt-v1
+          export MYDMSVN_WEB6_CANDIDATE_ID=vps04b-ci
+          export MYDMSVN_WEB6_CANDIDATE_ROOT="$work/audit"
+          export MYDMSVN_WEB_SECURITY_AUDIT_PATH="$work/audit/audit.jsonl"
+
+          dotnet src/MyDmsVn.Server.AspNetCoreHost/bin/Release/net10.0/MyDmsVn.Server.AspNetCoreHost.dll \
+            >"$work/host-web6.log" 2>&1 &
+          server_pid="$!"
+          web6_ready=0
+          for attempt in $(seq 1 60); do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "::error::Linux WEB6 host rejected a pre-provisioned private audit file."
+              exit 1
+            fi
+            if curl --silent --fail --max-time 3 https://localhost:50443/api/v1/health >/dev/null; then
+              web6_ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$web6_ready" = 1 || { echo "::error::WEB6 host never became HTTPS ready."; exit 1; }
+
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps04bWeb6LiveSqlTests.EnabledWeb6ContextReceiptEligibilityAndSessionRevocationWithRealSql' \
+            --logger 'trx;LogFileName=vps04b-web6-live.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps04bWeb6LiveSqlTests.RuntimeAuditWriteRefusalDegradesHealthWithoutLeakingPathOrSecrets' \
+            --logger 'trx;LogFileName=vps04b-web6-degraded.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
+          # Force a real worker stop and ensure insecure permissions PREVENT
+          # fresh startup, rather than silently falling back to TraceSource.
+          kill "$server_pid"
+          wait "$server_pid" 2>/dev/null || true
+          server_pid=""
+          chmod 0644 "$work/audit/audit.jsonl"
+          dotnet src/MyDmsVn.Server.AspNetCoreHost/bin/Release/net10.0/MyDmsVn.Server.AspNetCoreHost.dll \
+            >"$work/host-web6-rejected.log" 2>&1 &
+          refused_pid="$!"
+          sleep 4
+          if kill -0 "$refused_pid" 2>/dev/null; then
+            kill "$refused_pid" 2>/dev/null || true
+            wait "$refused_pid" 2>/dev/null || true
+            echo "::error::A broadly readable WEB6 audit file was admitted on Linux."
+            exit 1
+          fi
+          if wait "$refused_pid"; then
+            echo "::error::Startup refusal returned a successful process exit."
+            exit 1
+          fi
+          chmod 0600 "$work/audit/audit.jsonl"
+
+          # Audit lines must survive a real new Kestrel process without
+          # truncation or automatic permissions repair.
+          dotnet src/MyDmsVn.Server.AspNetCoreHost/bin/Release/net10.0/MyDmsVn.Server.AspNetCoreHost.dll \
+            >"$work/host-web6-restarted.log" 2>&1 &
+          server_pid="$!"
+          recovered=0
+          for attempt in $(seq 1 60); do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "::error::WEB6 restart refused correctly restored protected audit."
+              exit 1
+            fi
+            if curl --silent --fail --max-time 3 https://localhost:50443/api/v1/health >/dev/null; then
+              recovered=1
+              break
+            fi
+            sleep 2
+          done
+          test "$recovered" = 1 || { echo "::error::WEB6 restart recovery was not healthy."; exit 1; }
+
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps04bWeb6LiveSqlTests.NewLinuxHostRecoversHealthyAndKeepsPriorAuditAfterRestart' \
+            --logger 'trx;LogFileName=vps04b-web6-restart.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          results=Path('vps04a-ci-trx')
+          names=['vps04b-web6-live.trx','vps04b-web6-degraded.trx','vps04b-web6-restart.trx']
+          ns={'t':'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          for name in names:
+            file=results/name
+            assert file.is_file(),f'Missing WEB6 Linux SQL result: {name}'
+            counters=ET.parse(file).getroot().find('./t:ResultSummary/t:Counters',ns)
+            assert counters is not None,name
+            counts={k:int(counters.attrib[k]) for k in
+                    ('total','executed','passed','failed','notExecuted')}
+            assert counts=={'total':1,'executed':1,'passed':1,'failed':0,'notExecuted':0},(name,counts)
+          print('VPS-04B Linux protected audit WEB6: 3/3 real HTTPS-SQL facts, zero failure/skip; '
+                'pre-provisioned mode guard rejects startup; prior 15/15 SQL13 remain separate.')
+          PY
+
       - name: Upload only safe WEB2-WEB6 expected actual diff projections
         if: always()
         uses: actions/upload-artifact@v6
