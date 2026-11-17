@@ -52,6 +52,9 @@ internal static class Program
         {
             if (args.Length != 1 || args[0] != "provision-isolated-ci")
                 throw new InvalidOperationException("No operator or production mode is available.");
+            // The CLI runs under the pinned .NET10 host SDK directory, but all
+            // source SQL scripts must be loaded from the exact checked-out repo.
+            Directory.SetCurrentDirectory(Require("GITHUB_WORKSPACE"));
             var admin = new SqlConnectionStringBuilder(Require("VPS04A_CI_SQL_ADMIN_CONNECTION_STRING"));
             Admit(admin);
             var runtimePassword = Password("VPS04A_CI_SQL_RUNTIME_PASSWORD");
