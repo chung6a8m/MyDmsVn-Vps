@@ -19,6 +19,9 @@ EXPLICIT = {
     "GET /api/v1/auth/me",
     "GET /api/v1/auth/capabilities",
     "GET /api/v1/catalog/products/lookup",
+    "GET /api/v1/catalog/customers/lookup",
+    "GET /api/v1/catalog/warehouses/lookup",
+    "GET /api/v1/catalog/employees/lookup",
     "GET /api/v1/sales-receipts",
     "GET /api/v1/sales-receipts/{saleId}",
     "GET /api/v1/goods-receipts",
@@ -100,11 +103,11 @@ def main() -> None:
         if actual.get(key) != expected:
             raise SystemExit(f"FAIL: {full_key}: {actual.get(key)} != {expected}")
         counts[state] += 1
-    if counts != {"GROUP_EAD_SQL": 13, "PRIOR_LIVE_BOUNDED": 10,
-                  "DISABLED_404": 3, "ROUTE_ONLY": 31}:
+    if counts != {"GROUP_EAD_SQL": 16, "PRIOR_LIVE_BOUNDED": 10,
+                  "DISABLED_404": 3, "ROUTE_ONLY": 28}:
         raise SystemExit("FAIL: unexpected coverage counts")
-    print("PASS: 57/57 ledger; 13 new bounded live, 10 prior bounded, "
-          "3 WEB6 disabled, 31 route-only. No exhaustive response claim.")
+    print("PASS: 57/57 ledger; 16 new bounded live, 10 prior bounded, "
+          "3 WEB6 disabled, 28 route-only. No exhaustive response claim.")
 
 
 if __name__ == "__main__":

@@ -13,15 +13,15 @@
 
 | Group | Frozen routes | New live expected/actual/diff | Previous bounded live | Disabled 404 (WEB6) | Route-only / still open |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| WEB2 | 15 | 5 | 7 | 0 | 3 |
+| WEB2 | 15 | 8 | 7 | 0 | 0 |
 | WEB3 | 7 | 4 | 3 | 0 | 0 |
 | WEB4 | 2 | 2 | 0 | 0 | 0 |
 | WEB5 | 2 | 2 | 0 | 0 | 0 |
 | WEB6 | 3 | 0 | 0 | 3 | 0 |
 | VPS-02 | 28 | 0 | 0 | 0 | 28 |
-| **TOTAL** | **57** | **13** | **10** | **3** | **31** |
+| **TOTAL** | **57** | **16** | **10** | **3** | **28** |
 
-**Scenario evidence:** the new suite executes **21 scenarios (WEB2 6, WEB3 5, WEB4 4, WEB5 3, WEB6 3)** across 13 enabled-response routes and 3 deliberately disabled WEB6 routes; the SQL CI runs 5 new xUnit facts plus 10 previously proven cases (**15/15**). Multiple scenarios may share a route. Do not equate 21 scenarios, 57 compiled routes or 178 frozen corpus files with 178 runnable payload replays.
+**Scenario evidence:** the new suite executes **24 scenarios (WEB2 9, WEB3 5, WEB4 4, WEB5 3, WEB6 3)** across 16 enabled-response routes and 3 deliberately disabled WEB6 routes; the SQL CI runs 5 new xUnit facts plus 10 previously proven cases (**15/15**). Multiple scenarios may share a route. Do not equate 21 scenarios, 57 compiled routes or 178 frozen corpus files with 178 runnable payload replays.
 
 **Safe artifacts:** `vps04a-ci-group-parity` contains `WEB2.json` through `WEB6.json`, each with `group`, `scope`, `mode`, `cases[].{id,route,fixture,sqlOracle,expected,actual,diff}`. The validator rejects any missing group, scenario, field or nonempty diff. These are **allowlisted projections** only, not raw HTTP responses, JWTs or cookies.
 
@@ -41,9 +41,9 @@
 | WEB2 | `PUT /api/v1/sales-receipts/{saleId}/draft` | `SalesReceiptsController.Update` | `PRIOR_LIVE_BOUNDED` |
 | WEB2 | `POST /api/v1/sales-receipts/{saleId}/post` | `SalesReceiptsController.Post` | `PRIOR_LIVE_BOUNDED` |
 | WEB2 | `GET /api/v1/catalog/products/lookup` | `CatalogLookupController.Products` | `GROUP_EAD_SQL` |
-| WEB2 | `GET /api/v1/catalog/customers/lookup` | `CatalogLookupController.Customers` | `ROUTE_ONLY` |
-| WEB2 | `GET /api/v1/catalog/warehouses/lookup` | `CatalogLookupController.Warehouses` | `ROUTE_ONLY` |
-| WEB2 | `GET /api/v1/catalog/employees/lookup` | `CatalogLookupController.Employees` | `ROUTE_ONLY` |
+| WEB2 | `GET /api/v1/catalog/customers/lookup` | `CatalogLookupController.Customers` | `GROUP_EAD_SQL` |
+| WEB2 | `GET /api/v1/catalog/warehouses/lookup` | `CatalogLookupController.Warehouses` | `GROUP_EAD_SQL` |
+| WEB2 | `GET /api/v1/catalog/employees/lookup` | `CatalogLookupController.Employees` | `GROUP_EAD_SQL` |
 | WEB3 | `GET /api/v1/goods-receipts` | `GoodsReceiptsController.List` | `GROUP_EAD_SQL` |
 | WEB3 | `GET /api/v1/goods-receipts/{receiptId}` | `GoodsReceiptsController.Get` | `GROUP_EAD_SQL` |
 | WEB3 | `POST /api/v1/goods-receipts` | `GoodsReceiptsController.Create` | `PRIOR_LIVE_BOUNDED` |
