@@ -60,7 +60,7 @@ function Invoke-TestGroup([string]$name, [string]$filter, [int]$expected,
     if (Test-Path -LiteralPath $trx) { Remove-Item -LiteralPath $trx -Force }
     dotnet test tests/MyDmsVn.Vps03.Acceptance.Tests/MyDmsVn.Vps03.Acceptance.Tests.csproj `
         -c $Configuration -f net48 --no-restore --filter $filter `
-        --logger "trx;LogFileName=$name.trx" --results-directory $resultsDirectory
+        --logger "trx;LogFileName=$name.trx" --results-directory $resultsDirectory | Out-Host
     Assert-Succeeded "VPS03.Issue7.GroupFailed:$name"
     $counts = Get-Counters $trx $expected
     Assert-NoOwnedChild
@@ -93,15 +93,15 @@ function Publish-Packages([string]$head, [string]$resultRoot) {
     $hostStaging = Join-Path $resultRoot 'host-staging'
     New-Item -ItemType Directory -Force -Path $desktop,$hostPackage,$hostStaging | Out-Null
 
-    dotnet restore src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj --locked-mode -v minimal
+    dotnet restore src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj --locked-mode -v minimal | Out-Host
     Assert-Succeeded 'VPS03.Issue7.DesktopRestoreFailed'
     dotnet publish src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj -c $Configuration `
-        -f net48 --no-restore -p:PlatformTarget=x86 -o $desktop
+        -f net48 --no-restore -p:PlatformTarget=x86 -o $desktop | Out-Host
     Assert-Succeeded 'VPS03.Issue7.DesktopPublishFailed'
-    dotnet restore src/MyDmsVn.Server.HttpHost/MyDmsVn.Server.HttpHost.csproj --locked-mode -v minimal
+    dotnet restore src/MyDmsVn.Server.HttpHost/MyDmsVn.Server.HttpHost.csproj --locked-mode -v minimal | Out-Host
     Assert-Succeeded 'VPS03.Issue7.HostRestoreFailed'
     dotnet publish src/MyDmsVn.Server.HttpHost/MyDmsVn.Server.HttpHost.csproj -c $Configuration `
-        -f net48 --no-restore -o $hostStaging
+        -f net48 --no-restore -o $hostStaging | Out-Host
     Assert-Succeeded 'VPS03.Issue7.HostPublishFailed'
     $hostBin = Join-Path $hostPackage 'bin'
     New-Item -ItemType Directory -Force -Path $hostBin | Out-Null
