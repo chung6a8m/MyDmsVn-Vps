@@ -98,14 +98,18 @@ def configure(reviewer: str) -> None:
     if LABEL not in {item.get("name") for item in labels}:
         gh("label", "create", LABEL, "--repo", REPO, "--color", "B60205",
            "--description", "Explicitly approved isolated SQL13 live acceptance trigger")
-    verify(require_secrets=False)
-    print("Protected environment and exact branch/reviewer policy: VERIFIED")
+    # GitHub's documented environment PUT does not expose the admin-bypass toggle.
+    # A separate Settings UI operation must disable it before 'verify' can pass.
+    print("Required reviewer and exact deployment-branch policy configured.")
+    print("DISABLE admin bypass in Settings > Environments before verification.")
     print("Set environment-scoped secrets/variables privately, then run verify and trigger.")
 
 
 def verify(require_secrets: bool = True) -> str:
     sha = ensure_pr_head()
     environment = api_json(ENV_API)
+    if environment.get("can_admins_bypass") is not False:
+        raise AdmissionError("Disable admin bypass in Environment Settings; no label can be applied.")
     policy = environment.get("deployment_branch_policy") or {}
     if policy.get("protected_branches") is not False or policy.get("custom_branch_policies") is not True:
         raise AdmissionError("Environment must enforce a custom deployment branch restriction.")
