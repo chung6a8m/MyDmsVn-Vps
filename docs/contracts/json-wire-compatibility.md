@@ -1,6 +1,6 @@
 # JSON wire compatibility — contract freeze plan
 
-**Stage:** VPS-01 owns immutable golden-master fixtures. VPS-05A ([merged PR #14](https://github.com/chung6a8m/MyDmsVn-Vps/pull/14)) introduced a net10-only System.Text.Json **response writer**. VPS-05B ([draft PR #16](https://github.com/chung6a8m/MyDmsVn-Vps/pull/16)) converts net10 strict ingress, JSON DOM projections, Application cursor/import parsing and explicit calendar metadata while keeping net48 Json.NET. VPS-05C still owns exhaustive compatibility and zero Newtonsoft in the produced net10 runtime graph. VPS-05 overall remains **IN PROGRESS / NOT ACCEPTED**.
+**Stage:** VPS-01 owns immutable golden-master fixtures. VPS-05A ([merged PR #14](https://github.com/chung6a8m/MyDmsVn-Vps/pull/14)) introduced a net10-only System.Text.Json **response writer**. VPS-05B ([implementation PR #16](https://github.com/chung6a8m/MyDmsVn-Vps/pull/16)) converts net10 strict ingress, JSON DOM projections, Application cursor/import parsing and explicit calendar metadata while keeping net48 Json.NET. VPS-05C still owns exhaustive compatibility and zero Newtonsoft in the produced net10 runtime graph. VPS-05 overall remains **IN PROGRESS / NOT ACCEPTED**.
 
 Baseline Desktop/Server DTOs use Newtonsoft.Json converters and attributes. Changing Server.HttpHost to System.Text.Json may affect:
 
