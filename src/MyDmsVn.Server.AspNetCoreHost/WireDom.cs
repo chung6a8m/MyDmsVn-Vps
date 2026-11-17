@@ -3,6 +3,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
@@ -57,9 +58,11 @@ public abstract class WireToken
         throw new InvalidOperationException("Unsupported JSON scalar conversion.");
     }
 
-    public static explicit operator string(WireToken value)
+    [return: NotNullIfNotNull(nameof(value))]
+    public static explicit operator string?(WireToken? value)
     {
-        if (value is null || value.Type != WireTokenType.String)
+        if (value is null) return null;
+        if (value.Type != WireTokenType.String)
             throw new InvalidOperationException("Expected JSON string.");
         return value.Node!.GetValue<string>();
     }
