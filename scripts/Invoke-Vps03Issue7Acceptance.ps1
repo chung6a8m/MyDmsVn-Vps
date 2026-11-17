@@ -171,8 +171,8 @@ function Read-AttendedResult([string]$path, [string]$head) {
     return $record
 }
 
-$selectedModes = @($PreflightOnly, $CrashOnly, $LiveOnly, $AttendedOnly) |
-    Where-Object { $_.IsPresent }
+$selectedModes = @(@($PreflightOnly, $CrashOnly, $LiveOnly, $AttendedOnly) |
+    Where-Object { $_.IsPresent })
 if ($selectedModes.Count -gt 1) { throw 'VPS03.Issue7.ModeConflict' }
 
 $status = @(git status --porcelain)
