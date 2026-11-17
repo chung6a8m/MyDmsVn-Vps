@@ -79,6 +79,30 @@ jobs:
           dotnet run --project MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true --no-build -c Release -- --list-routes > "$GITHUB_WORKSPACE/vps04a-routes.json"
       - name: Compare native endpoint mapping with immutable WEB2-6 and Desktop API routes
         run: python3 scripts/verify-vps-04a.py vps04a-routes.json
+      - name: Capture deterministic net10 package lock snapshots for review
+        run: |
+          python3 - <<'PY'
+          import base64
+          from pathlib import Path
+          paths=[
+              Path('src/MyDmsVn.Contracts/obj/vps04a.packages.lock.json'),
+              Path('src/MyDmsVn.SharedKernel/obj/vps04a.packages.lock.json'),
+              Path('src/MyDmsVn.Server.Domain/obj/vps04a.packages.lock.json'),
+              Path('src/MyDmsVn.Server.Application/obj/vps04a.packages.lock.json'),
+              Path('src/MyDmsVn.Server.Infrastructure/obj/vps04a.packages.lock.json'),
+              Path('src/MyDmsVn.Server.AspNetCoreHost/obj/vps04a.packages.lock.json'),
+              Path('tests/MyDmsVn.Server.Application.Tests/obj/vps04a.packages.lock.json'),
+              Path('tests/MyDmsVn.Server.AspNetCoreHost.Tests/obj/vps04a.packages.lock.json'),
+          ]
+          for path in paths:
+              if not path.is_file():
+                  raise RuntimeError(f'Missing generated net10 lock: {path}')
+              print(f'VPS04A_LOCK_BEGIN {path.as_posix()}',flush=True)
+              data=base64.b64encode(path.read_bytes()).decode('ascii')
+              for i in range(0,len(data),3000):
+                  print(data[i:i+3000],flush=True)
+              print(f'VPS04A_LOCK_END {path.as_posix()}',flush=True)
+          PY
       - name: Preserve route evidence
         if: always()
         uses: actions/upload-artifact@v6
