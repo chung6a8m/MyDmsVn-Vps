@@ -231,6 +231,21 @@ namespace MyDmsVn.Desktop.Session.Tests
             Assert.Null(first.Load());
         }
 
+        [Theory]
+        [InlineData("kind")]
+        [InlineData("route")]
+        [InlineData("fingerprint")]
+        public void Pending_record_rejects_metadata_outside_its_bounded_identity(string field)
+        {
+            var record = PendingStore.Record();
+            if (field == "kind") record.Kind = new string('A', 65);
+            else if (field == "route") record.Route = "/api/v1/" + new string('a', 249);
+            else record.Fingerprint = new string('A', 64);
+
+            var error = Assert.Throws<InvalidOperationException>(() => record.Validate());
+            Assert.Equal("Desktop.PendingIntentInvalid", error.Message);
+        }
+
         private static bool IsLogin(HttpRequestMessage request) =>
             request.RequestUri!.AbsolutePath == "/api/v1/auth/login";
 

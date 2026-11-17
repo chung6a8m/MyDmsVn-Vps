@@ -89,7 +89,7 @@ internal sealed class Vps03PendingStoreProcess : IDisposable
             RedirectStandardError = true,
         };
         var process = Process.Start(start) ?? throw new InvalidOperationException("VPS03.PendingChildStartFailed");
-        return new Vps03PendingStoreProcess(process, origin, exchangeDirectory, IntentPath(origin));
+        return new Vps03PendingStoreProcess(process, origin, exchangeDirectory, IntentPathFor(origin));
     }
 
     internal void WaitForStage(string expected, TimeSpan timeout)
@@ -150,7 +150,7 @@ internal sealed class Vps03PendingStoreProcess : IDisposable
     {
         _ = new HttpDesktopOptions(origin);
         ValidateExchange(exchangeDirectory);
-        var intent = IntentPath(origin);
+        var intent = IntentPathFor(origin);
         if (File.Exists(intent)) new WindowsHttpPendingWriteStore(new HttpDesktopOptions(origin)).Clear(record);
         if (Directory.GetFiles(exchangeDirectory, "*", SearchOption.AllDirectories).Length > 5)
             throw new InvalidDataException("VPS03.PendingCleanupFileCount");
@@ -203,7 +203,7 @@ internal sealed class Vps03PendingStoreProcess : IDisposable
         return path;
     }
 
-    private static string IntentPath(string origin)
+    internal static string IntentPathFor(string origin)
     {
         string owner;
         using (var identity = WindowsIdentity.GetCurrent())
@@ -217,7 +217,7 @@ internal sealed class Vps03PendingStoreProcess : IDisposable
             "MyDmsVn-Vps", "PendingWrites", file);
     }
 
-    private static void ValidateExchange(string path)
+    internal static void ValidateExchange(string path)
     {
         if (!Path.IsPathRooted(path) || !Directory.Exists(path))
             throw new InvalidDataException("VPS03.PendingExchangeMissing");
@@ -229,7 +229,7 @@ internal sealed class Vps03PendingStoreProcess : IDisposable
             throw new InvalidDataException("VPS03.PendingExchangeUnsafe");
     }
 
-    private static string RepositoryRoot()
+    internal static string RepositoryRoot()
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);
         while (current != null)
