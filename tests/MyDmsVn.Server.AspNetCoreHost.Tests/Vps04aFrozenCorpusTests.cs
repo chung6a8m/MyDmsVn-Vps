@@ -86,7 +86,11 @@ public sealed class Vps04aFrozenCorpusTests
     [MemberData(nameof(FrozenFiles))]
     public void EachFrozenFileMatchesItsOriginalGitBlobAndJsonGrammar(string relativePath)
     {
-        var data = File.ReadAllBytes(Path.Combine(RepoRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        var checkoutBytes = File.ReadAllBytes(Path.Combine(RepoRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        // Root .gitattributes checks out most WEB2 JSON as CRLF; the pinned Git
+        // object is the canonical LF-cleaned blob. Do not rewrite the fixture.
+        var checkoutText = new UTF8Encoding(false, true).GetString(checkoutBytes);
+        var data = Encoding.UTF8.GetBytes(checkoutText.Replace("\r\n", "\n", StringComparison.Ordinal));
         var prefix = Encoding.ASCII.GetBytes("blob " + data.Length.ToString(CultureInfo.InvariantCulture) + "\0");
         var buffer = new byte[prefix.Length + data.Length];
         Buffer.BlockCopy(prefix, 0, buffer, 0, prefix.Length);
@@ -107,7 +111,7 @@ public sealed class Vps04aFrozenCorpusTests
         var file = Path.Combine(RepoRoot(), "docs", "contracts", "web4-v1", "fingerprint-vectors.json");
         using var vectors = JsonDocument.Parse(File.ReadAllBytes(file));
         var count = 0;
-        foreach (var vector in vectors.RootElement.EnumerateArray())
+        foreach (var vector in vectors.RootElement.GetProperty("vectors").EnumerateArray())
         {
             var intent = vector.GetProperty("intent");
             var kind = WebOperationWireInput.ParseKind(intent.GetProperty("operationKind").GetString()!);
