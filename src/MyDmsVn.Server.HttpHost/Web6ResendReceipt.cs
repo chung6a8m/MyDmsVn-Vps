@@ -10,8 +10,21 @@ using System.Text.RegularExpressions;
 using Microsoft.IdentityModel.Tokens;
 using MyDmsVn.Server.Application.Identity;
 using MyDmsVn.Server.Application.Operations;
+#if VPS05_STJ_INGRESS
+using JsonException = System.Text.Json.JsonException;
+#else
 using Newtonsoft.Json;
+#endif
+#if VPS05_STJ_INGRESS
+using JObject = MyDmsVn.Server.HttpHost.WireObject;
+using JArray = MyDmsVn.Server.HttpHost.WireArray;
+using JToken = MyDmsVn.Server.HttpHost.WireToken;
+using JValue = MyDmsVn.Server.HttpHost.WireValue;
+using JProperty = MyDmsVn.Server.HttpHost.WireProperty;
+using JTokenType = MyDmsVn.Server.HttpHost.WireTokenType;
+#else
 using Newtonsoft.Json.Linq;
+#endif
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -194,10 +207,14 @@ internal sealed class Web6ResendReceiptCodec
     private static JObject ReadObject(string encoded)
     {
         var json = Utf8.GetString(Base64UrlEncoder.DecodeBytes(encoded));
+#if VPS05_STJ_INGRESS
+        return WireObject.Parse(new UTF8Encoding(false, true).GetBytes(json), 8);
+#else
         using var reader = new JsonTextReader(new StringReader(json)) { DateParseHandling = DateParseHandling.None, MaxDepth = 8 };
         var value = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
         if (reader.Read()) throw new JsonReaderException();
         return value;
+#endif
     }
 
     private static void ExactProperties(JObject value, IEnumerable<string> expected)

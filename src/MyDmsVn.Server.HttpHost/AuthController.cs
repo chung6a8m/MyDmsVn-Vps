@@ -14,8 +14,21 @@ using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application;
 using MyDmsVn.Server.Application.Identity;
 using MyDmsVn.Server.Application.Security;
+#if VPS05_STJ_INGRESS
+using JsonException = System.Text.Json.JsonException;
+#else
 using Newtonsoft.Json;
+#endif
+#if VPS05_STJ_INGRESS
+using JObject = MyDmsVn.Server.HttpHost.WireObject;
+using JArray = MyDmsVn.Server.HttpHost.WireArray;
+using JToken = MyDmsVn.Server.HttpHost.WireToken;
+using JValue = MyDmsVn.Server.HttpHost.WireValue;
+using JProperty = MyDmsVn.Server.HttpHost.WireProperty;
+using JTokenType = MyDmsVn.Server.HttpHost.WireTokenType;
+#else
 using Newtonsoft.Json.Linq;
+#endif
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -121,8 +134,12 @@ public sealed class AuthController : ApiController
         {
             var json = new UTF8Encoding(false, true).GetString(await Request.Content.ReadAsByteArrayAsync().ConfigureAwait(false));
             if (!LoginGrammar.IsMatch(json)) return null;
+#if VPS05_STJ_INGRESS
+            var value = WireObject.Parse(new UTF8Encoding(false, true).GetBytes(json), 2);
+#else
             using var reader = new JsonTextReader(new StringReader(json)) { DateParseHandling = DateParseHandling.None, MaxDepth = 2 };
             var value = JObject.Load(reader, new JsonLoadSettings { DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error });
+#endif
             if (value.Count != 2 || value["username"]?.Type != JTokenType.String || value["password"]?.Type != JTokenType.String) return null;
             var username = (string)value["username"]!;
             var password = (string)value["password"]!;
