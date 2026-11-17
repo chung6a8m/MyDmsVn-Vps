@@ -6,10 +6,14 @@ import xml.etree.ElementTree as ET
 
 root = Path(__file__).resolve().parents[1]
 projects = sorted((root / "tests").glob("*/*.csproj"))
-suites = [p for p in projects if p.parent.name != "MyDmsVn.WebOperation.CrashHost"]
-assert len(projects) == 14 and len(suites) == 13, "Test project inventory drift"
+project_docs = {path: ET.parse(path).getroot() for path in projects}
+helpers = [path for path, doc in project_docs.items()
+           if any(node.text == "false" for node in doc.iter("IsTestProject"))]
+suites = [path for path in projects if path not in helpers]
+assert len(projects) == 16 and len(helpers) == 3 and len(suites) == 13, \
+    "Test project inventory drift"
 for path in suites:
-    doc = ET.parse(path).getroot()
+    doc = project_docs[path]
     props = lambda key: [n.text for n in doc.iter(key) if n.text]
     refs = {n.attrib["Include"] for n in doc.iter("PackageReference")}
     assert props("TargetFramework") == ["net48"], path
