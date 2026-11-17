@@ -62,7 +62,11 @@ if ($LASTEXITCODE -ne 0) { throw 'VPS03.HostPublishFailed' }
 $hostBin = Join-Path $hostPackage 'bin'
 New-Item -ItemType Directory -Force -Path $hostBin | Out-Null
 Copy-Item -Path (Join-Path $hostStaging '*') -Destination $hostBin -Recurse -Force
-Copy-Item -LiteralPath 'src/MyDmsVn.Server.HttpHost/Web.config' -Destination (Join-Path $hostPackage 'Web.config') -Force
+[xml]$webConfig = Get-Content -LiteralPath 'src/MyDmsVn.Server.HttpHost/Web.config' -Raw
+[xml]$bindingConfig = Get-Content -LiteralPath (Join-Path $hostStaging 'MyDmsVn.Server.HttpHost.dll.config') -Raw
+$runtime = $webConfig.ImportNode($bindingConfig.configuration.runtime, $true)
+[void]$webConfig.configuration.ReplaceChild($runtime, $webConfig.configuration.runtime)
+$webConfig.Save((Join-Path $hostPackage 'Web.config'))
 Copy-Item -LiteralPath 'src/MyDmsVn.Server.HttpHost/wwwroot' -Destination (Join-Path $hostPackage 'wwwroot') -Recurse -Force
 
 $provenance = @{ headSha = $head } | ConvertTo-Json -Compress
