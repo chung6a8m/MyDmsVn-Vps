@@ -10,7 +10,6 @@
     <DefineConstants>$(DefineConstants);VPS05_STJ_EGRESS;VPS05_STJ_INGRESS</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
   </ItemGroup>
   <ItemGroup>
