@@ -103,10 +103,10 @@ namespace System.Net.Http
     {
         private const string Key = "mydmsvn.aspnetcore.context";
         public static Microsoft.Owin.IOwinContext GetOwinContext(this HttpRequestMessage request) =>
-            request.Properties.TryGetValue(Key, out var value) && value is Microsoft.Owin.IOwinContext context
+            request.Options.TryGetValue(new HttpRequestOptionsKey<Microsoft.Owin.IOwinContext>(Key), out var context)
                 ? context : throw new InvalidOperationException("HTTP request context is unavailable.");
 
         internal static void AttachContext(HttpRequestMessage request, Microsoft.Owin.IOwinContext context) =>
-            request.Properties.Add(Key, context);
+            request.Options.Set(new HttpRequestOptionsKey<Microsoft.Owin.IOwinContext>(Key), context);
     }
 }

@@ -29,7 +29,7 @@ internal static class CoreApiBoundary
         try
         {
             var options = context.RequestServices.GetRequiredService<WebHostOptions>();
-            using var guard = CheckTransport(context, options);
+            using var guard = CheckTransport(context, options, correlation);
             if (guard != null)
             {
                 await Net10RouteTable.WriteAsync(context, guard).ConfigureAwait(false);
@@ -134,7 +134,7 @@ internal static class CoreApiBoundary
             route.Equals("/api/v1/auth/logout", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static HttpResponseMessage? CheckTransport(HttpContext context, WebHostOptions options)
+    private static HttpResponseMessage? CheckTransport(HttpContext context, WebHostOptions options, string correlation)
     {
         var request = context.Request;
         var originAuthority = new Uri(options.PublicOrigin).Authority;
@@ -143,7 +143,7 @@ internal static class CoreApiBoundary
                 key.StartsWith("X-Forwarded-", StringComparison.OrdinalIgnoreCase)))
         {
             return HttpJson.Error(400, "Request.InvalidTransport",
-                "The request transport is invalid.", SafeCorrelation(HeaderValues(context, "X-Correlation-ID")));
+                "The request transport is invalid.", correlation);
         }
 
         var origins = HeaderValues(context, "Origin");
@@ -153,14 +153,14 @@ internal static class CoreApiBoundary
             origins != null && (origins.Count != 1 || origins[0] != options.PublicOrigin) ||
             !safe && sites != null && (sites.Count != 1 || sites[0] != "same-origin"))
             return HttpJson.Error(403, "Auth.Forbidden", "Access is denied.",
-                SafeCorrelation(HeaderValues(context, "X-Correlation-ID")));
+                correlation);
 
         if (HttpMethods.IsPost(request.Method) && IsCookieEndpoint(request.Path.Value ?? string.Empty))
         {
             var requested = HeaderValues(context, "X-Requested-With");
             if (requested == null || requested.Count != 1 || requested[0] != "XMLHttpRequest")
                 return HttpJson.Error(403, "Auth.Forbidden", "Access is denied.",
-                    SafeCorrelation(HeaderValues(context, "X-Correlation-ID")));
+                    correlation);
         }
         return null;
     }
