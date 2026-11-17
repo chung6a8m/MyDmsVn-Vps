@@ -68,7 +68,9 @@ $env:MYDMSVN_VPS03_DESKTOP_PACKAGE = $desktop
 $env:MYDMSVN_VPS03_HOST_PACKAGE = $hostPackage
 $env:MYDMSVN_VPS03_HEAD_SHA = $head
 $env:MYDMSVN_VPS03_RESULTS_DIRECTORY = $results
-dotnet test tests/MyDmsVn.Vps03.Acceptance.Tests/MyDmsVn.Vps03.Acceptance.Tests.csproj -c $Configuration --locked-mode --logger "trx;LogFileName=vps03-issue8.trx" --results-directory $results
+dotnet restore tests/MyDmsVn.Vps03.Acceptance.Tests/MyDmsVn.Vps03.Acceptance.Tests.csproj --locked-mode -v minimal
+if ($LASTEXITCODE -ne 0) { throw 'VPS03.AcceptanceRestoreFailed' }
+dotnet test tests/MyDmsVn.Vps03.Acceptance.Tests/MyDmsVn.Vps03.Acceptance.Tests.csproj -c $Configuration --no-restore --logger "trx;LogFileName=vps03-issue8.trx" --results-directory $results
 if ($LASTEXITCODE -ne 0) { throw 'VPS03.AcceptanceFailed' }
 
 $trx = Join-Path $results 'vps03-issue8.trx'
