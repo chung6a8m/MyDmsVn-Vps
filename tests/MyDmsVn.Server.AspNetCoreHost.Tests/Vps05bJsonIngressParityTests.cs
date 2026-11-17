@@ -143,7 +143,7 @@ public sealed class Vps05bJsonIngressParityTests
         var parser = new PermissionAssignmentImportParser(PermissionRegistryComposition.CreateDefault());
         const string valid = "{\"schemaVersion\":1,\"targetType\":\"User\",\"targetId\":7,\"entries\":[{\"permissionKey\":\"Security.Users.Manage\",\"decision\":\"Deny\"}]}";
         Assert.True(parser.Parse(valid).IsValid);
-        Assert.False(parser.Parse(valid.Replace("\"targetType\"", "\"targetType\":\"User\",\"\\u0074argetType\"")).IsValid);
+        Assert.False(parser.Parse(valid.Replace("\"targetType\":\"User\"", "\"targetType\":\"User\",\"\\u0074argetType\":\"User\"")).IsValid);
         Assert.False(parser.Parse(valid.Replace("\"decision\":\"Deny\"", "\"decision\":\"Deny\",\"decision\":\"Allow\"")).IsValid);
         Assert.False(parser.Parse(valid + "{}").IsValid);
         Assert.False(parser.Parse(valid.Replace("\"schemaVersion\":1", "\"schemaVersion\":1.0")).IsValid);
