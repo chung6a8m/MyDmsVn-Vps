@@ -29,6 +29,9 @@ for path in suites:
     lock = path.parent / "packages.lock.json"
     if path.name != "MyDmsVn.Server.AspNetCoreHost.Tests.csproj":
         assert lock.exists() and '"xunit.v3"' in lock.read_text(encoding="utf-8-sig"), f"Missing locked xunit.v3: {path}"
+    else:
+        net10_lock=path.parent / "packages.vps04a.lock.json"
+        assert net10_lock.exists() and '"xunit.v3"' in net10_lock.read_text(encoding="utf-8-sig"), f"Missing locked net10 xunit.v3: {path}"
 
 packages = (root / "Directory.Packages.props").read_text(encoding="utf-8-sig")
 assert 'PackageVersion Include="xunit.v3" Version="3.2.2"' in packages

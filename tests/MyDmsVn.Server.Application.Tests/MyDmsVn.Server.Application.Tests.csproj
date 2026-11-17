@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework Condition="'$(Vps04Server)' != 'true'">net48</TargetFramework>
     <TargetFramework Condition="'$(Vps04Server)' == 'true'">net10.0</TargetFramework>
-    <NuGetLockFilePath Condition="'$(Vps04Server)' == 'true'">$(MSBuildProjectDirectory)/obj/vps04a.packages.lock.json</NuGetLockFilePath>
+    <NuGetLockFilePath Condition="'$(Vps04Server)' == 'true'">$(MSBuildProjectDirectory)/packages.vps04a.lock.json</NuGetLockFilePath>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>

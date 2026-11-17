@@ -6,7 +6,7 @@
     <Vps04Server>true</Vps04Server>
     <!-- The transitional net10 graph needs its own lock snapshots before locked-mode is enabled. -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <NuGetLockFilePath>$(MSBuildProjectDirectory)/obj/vps04a.packages.lock.json</NuGetLockFilePath>
+    <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.vps04a.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" />

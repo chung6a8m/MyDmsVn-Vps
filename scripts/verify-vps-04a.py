@@ -24,6 +24,15 @@ for project_name in ("Contracts", "SharedKernel", "Server.Domain", "Server.Appli
     source = path.read_text(encoding="utf-8-sig")
     assert "Vps04Server" in source and "net10.0" in source, path
     assert "net48" in source, f"Legacy net48 test graph removed: {path}"
+    lock = path.parent / "packages.vps04a.lock.json"
+    assert lock.exists() and '"net10.0"' in lock.read_text(), f"Missing pinned net10 package graph: {path}"
+
+for name in ("Server.AspNetCoreHost",):
+    lock = root / f"src/MyDmsVn.{name}/packages.vps04a.lock.json"
+    assert lock.exists(), f"Missing pinned ASP.NET Core package lock: {lock}"
+for name in ("Server.Application", "Server.AspNetCoreHost"):
+    lock = root / f"tests/MyDmsVn.{name}.Tests/packages.vps04a.lock.json"
+    assert lock.exists(), f"Missing net10 test lock: {lock}"
 
 if len(sys.argv) != 2:
     raise SystemExit("Usage: verify-vps-04a.py COMPILED_ROUTES.json")
