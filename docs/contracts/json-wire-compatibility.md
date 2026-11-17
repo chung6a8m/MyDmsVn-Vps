@@ -1,6 +1,6 @@
 # JSON wire compatibility — contract freeze plan
 
-**Stage:** VPS-01 inventories golden-master fixtures; VPS-05 performs serializer migration. None of the following is a current PASS claim.
+**Stage:** VPS-01 owns immutable golden-master fixtures; VPS-05A (PR #14) introduces a net10-only System.Text.Json **response writer** with differential tests. VPS-05 as a whole remains IN PROGRESS / NOT ACCEPTED until ingress, contracts, dependency removal and live parity are proven.
 
 Baseline Desktop/Server DTOs use Newtonsoft.Json converters and attributes. Changing Server.HttpHost to System.Text.Json may affect:
 

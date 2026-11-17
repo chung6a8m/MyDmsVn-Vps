@@ -31,7 +31,13 @@ public sealed class WebOperationResultCodec : IWebOperationResultCodec
                 _ => throw Unavailable()
             };
             // Exactly the same envelope, serializer and wire projections as the original HTTP success.
+            #if VPS05_STJ_EGRESS
+            // Server-only writer. The net48 legacy codec keeps Newtonsoft and its immutable behavior.
+            // Operation fingerprints are still computed from the original strict request source.
+            var bytes = Utf8.GetBytes(Net10WireJson.SerializeEnvelope(ApiResponse<object>.Success(projected)));
+#else
             var bytes = Utf8.GetBytes(JsonConvert.SerializeObject(ApiResponse<object>.Success(projected), ApiJson.CreateSerializerSettings()));
+#endif
             DecodeEnvelope(kind, bytes);
             return bytes;
         }
