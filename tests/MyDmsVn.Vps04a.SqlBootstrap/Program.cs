@@ -134,9 +134,17 @@ internal static class Program
                 InitialCatalog = Database, UserID = OracleLogin, Password = oraclePassword, Pooling = false
             }.ConnectionString;
             _stage = "independent-runtime-principal-admission";
-            await new SqlWebRuntimePrincipalValidator(
-                requireJournal: true, requireResolution: true, requireDesktopApi: true)
-                .ValidateAsync(runtime, CancellationToken.None);
+            try
+            {
+                await new SqlWebRuntimePrincipalValidator(
+                    requireJournal: true, requireResolution: true, requireDesktopApi: true)
+                    .ValidateAsync(runtime, CancellationToken.None);
+            }
+            catch (DesktopStartupException error) when (error.Code == "Security.WebRuntimePrincipalOverprivileged")
+            {
+                _stage = "runtime-overpriv:" + await DiagnoseOverprivilegeAsync(runtime);
+                throw;
+            }
             _stage = "superuser-binding";
             await new SqlSuperuserBindingValidator()
                 .ValidateAsync(runtime, Writer, CancellationToken.None);
@@ -192,6 +200,78 @@ THEN 1 ELSE 0 END;", connection);
                 "; SQL readiness number: " + _sqlErrorNumber.ToString(CultureInfo.InvariantCulture) +
                 "; readiness inner type: " + _sqlInnerType + ". No acceptance is claimed.");
             return 1;
+        }
+    }
+
+    // This forensic probe only runs on denied CI admission, never as an alternate
+    // authorization decision. Reports an allowlisted category/object name only.
+    private static async Task<string> DiagnoseOverprivilegeAsync(string runtime)
+    {
+        try
+        {
+            using var connection = new SqlConnection(runtime);
+            await connection.OpenAsync();
+            async Task<string?> FirstAsync(string sql)
+            {
+                using var query = new SqlCommand(sql, connection) { CommandTimeout = 10 };
+                return Convert.ToString(await query.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+            }
+
+            var identity = await FirstAsync("SELECT ORIGINAL_LOGIN();");
+            if (identity != RuntimeLogin) return "unexpected-login";
+
+            var database = await FirstAsync(@"
+SELECT TOP 1 permission_name FROM sys.fn_my_permissions(NULL,N'DATABASE')
+WHERE permission_name NOT IN(N'CONNECT',N'VIEW DEFINITION',
+  N'VIEW ANY COLUMN ENCRYPTION KEY DEFINITION',N'VIEW ANY COLUMN MASTER KEY DEFINITION');");
+            if (database != null) return "database:" + database;
+
+            var schema = await FirstAsync(@"
+SELECT TOP 1 permission_name FROM sys.schemas s
+CROSS APPLY sys.fn_my_permissions(QUOTENAME(s.name),N'SCHEMA') p
+WHERE p.permission_name IN(N'SELECT',N'INSERT',N'UPDATE',N'DELETE',N'EXECUTE',N'REFERENCES');");
+            if (schema != null) return "schema:" + schema;
+
+            var unexpected = await FirstAsync(@"
+SELECT TOP 1 CONCAT(o.name,':',p.permission_name) FROM sys.objects o
+CROSS APPLY sys.fn_my_permissions(
+  QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.'+QUOTENAME(o.name),N'OBJECT') p
+WHERE o.is_ms_shipped=0 AND p.permission_name IN
+  (N'SELECT',N'INSERT',N'UPDATE',N'DELETE',N'EXECUTE',N'REFERENCES',N'ALTER',N'CONTROL',N'TAKE OWNERSHIP')
+  AND NOT (OBJECT_SCHEMA_NAME(o.object_id)=N'dbo' AND (
+    (p.permission_name=N'SELECT' AND o.name IN
+      (N'Users',N'Roles',N'UserRoles',N'RolePermissions',N'UserPermissions',
+       N'Products',N'Warehouses',N'Employees',N'Customers',N'GoodsReceipts',
+       N'GoodsReceiptLines',N'SalesReceipts',N'SalesReceiptLines',N'StockValuationEntries',
+       N'StockLedger',N'StockBalances',N'SchemaVersions',N'SystemSecuritySettings',
+       N'WebAuthSessions',N'WebRefreshTokens',N'WebDeploymentState',N'WebOperationJournal',
+       N'WebOperationTerminalAudit'))
+    OR (p.permission_name=N'INSERT' AND o.name IN
+      (N'Products',N'Warehouses',N'Employees',N'Customers',N'GoodsReceipts',
+       N'GoodsReceiptLines',N'SalesReceipts',N'SalesReceiptLines',N'StockValuationEntries',
+       N'StockLedger',N'StockBalances',N'WebAuthSessions',N'WebRefreshTokens',N'WebOperationJournal'))
+    OR (p.permission_name=N'UPDATE' AND o.name IN
+      (N'Products',N'Warehouses',N'Employees',N'Customers',N'Users',
+       N'GoodsReceipts',N'GoodsReceiptNumberSequence',N'SalesReceipts',N'SalesReceiptLines',
+       N'SalesReceiptNumberSequence',N'StockBalances',N'WebAuthSessions',N'WebRefreshTokens'))
+    OR (p.permission_name=N'DELETE' AND o.name IN(N'GoodsReceiptLines',N'SalesReceiptLines'))
+    OR (p.permission_name=N'EXECUTE' AND o.name IN
+      (N'ApplySecurityAdministration',N'ReadSecurityPermissionImportTarget',
+       N'ApplySecurityPermissionImport'))
+  )) ORDER BY o.name,p.permission_name;");
+            if (unexpected != null)
+                return "object:" + Regex.Replace(unexpected, "[^A-Za-z0-9_:]", "").Substring(0, Math.Min(unexpected.Length, 90));
+
+            var grant = await FirstAsync(
+                "SELECT TOP 1 N'grant-option' FROM sys.database_permissions p " +
+                "JOIN sys.user_token t ON t.principal_id=p.grantee_principal_id WHERE p.state='W';");
+            if (grant != null) return "grant-option";
+
+            return "other-restricted-grant";
+        }
+        catch
+        {
+            return "diagnostic-unavailable";
         }
     }
 
