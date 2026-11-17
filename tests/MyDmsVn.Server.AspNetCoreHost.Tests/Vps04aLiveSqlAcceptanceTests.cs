@@ -230,8 +230,7 @@ public sealed class Vps04aLiveSqlAcceptanceTests
             note = uniqueNote,
             lines = new[] { new { saleLineId = "0", productId = product, qty = "1.0000", unitPrice = "2.0000", isGift = false } }
         });
-        Assert.Equal(0, await CountAsync("SELECT COUNT(*) FROM dbo.WebOperationJournal WHERE ActorUserId=@actor AND OperationId='" +
-            operation.ToString("D") + "'", "@actor", session.UserId));
+        Assert.Equal(0, await CountAsync("SELECT COUNT(*) FROM dbo.WebOperationJournal WHERE OperationId=@id", "@id", operation));
 
         var requests = Enumerable.Range(0, 3).Select(_ => gateway.SendAsync(HttpMethod.Post,
             "/api/v1/sales-receipts", body, session.AccessToken, epoch: epoch, key: operation.ToString("D")));
