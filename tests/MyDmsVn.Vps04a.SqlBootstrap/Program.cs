@@ -26,6 +26,8 @@ internal static class Program
     private const string Writer = "vps04a_ci_writer";
     private const string Denied = "vps04a_ci_denied";
     private static string _stage = "admission";
+    private static int _sqlErrorNumber;
+    private static string _sqlInnerType = "none";
 
     private static string Require(string name) =>
         Environment.GetEnvironmentVariable(name) is { Length: > 0 } value
@@ -179,7 +181,9 @@ THEN 1 ELSE 0 END;", connection);
         {
             // Under no circumstances print SQL exception text, passwords, connection
             // strings, tokens, or the host's protected superuser credentials.
-            Console.Error.WriteLine("VPS04A-CI bootstrap REFUSED/FAILED at stage: " + _stage + ". No acceptance is claimed.");
+            Console.Error.WriteLine("VPS04A-CI bootstrap REFUSED/FAILED at stage: " + _stage +
+                "; SQL error number: " + _sqlErrorNumber.ToString(CultureInfo.InvariantCulture) +
+                "; inner type: " + _sqlInnerType + ". No acceptance is claimed.");
             return 1;
         }
     }
@@ -196,17 +200,21 @@ THEN 1 ELSE 0 END;", connection);
 
     private static async Task WaitForSqlAsync(string connection)
     {
-        for (var attempt = 0; attempt < 60; attempt++)
+        // Avoid a multi-minute silent stall on TLS or container startup failure.
+        for (var attempt = 0; attempt < 18; attempt++)
         {
             try
             {
                 using var sql = new SqlConnection(new SqlConnectionStringBuilder(connection)
-                    { ConnectTimeout = 4 }.ConnectionString);
+                    { ConnectTimeout = 3 }.ConnectionString);
                 await sql.OpenAsync();
                 return;
             }
-            catch (SqlException) when (attempt < 59)
+            catch (SqlException error)
             {
+                _sqlErrorNumber = error.Number; // numeric classifier only; no message/connection.
+                _sqlInnerType = error.InnerException?.GetType().Name ?? "none";
+                if (attempt == 17) break;
                 await Task.Delay(TimeSpan.FromSeconds(2));
             }
         }
