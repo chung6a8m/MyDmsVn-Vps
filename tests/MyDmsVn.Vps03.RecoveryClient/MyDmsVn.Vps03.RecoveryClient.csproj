@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <PlatformTarget>x86</PlatformTarget>
+    <Prefer32Bit>true</Prefer32Bit>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/MyDmsVn.Desktop.Application/MyDmsVn.Desktop.Application.csproj" />
+    <ProjectReference Include="../../src/MyDmsVn.Desktop.Infrastructure.Http/MyDmsVn.Desktop.Infrastructure.Http.csproj" />
+  </ItemGroup>
+</Project>

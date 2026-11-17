@@ -57,4 +57,53 @@ CONVERT(int,ISNULL(HAS_PERMS_BY_NAME(N'dbo.SchemaVersions',N'OBJECT',N'UPDATE'),
         if (!snapshot.HasDesktopRole || snapshot.IsSysAdmin || snapshot.IsDbOwner || snapshot.HasUnexpectedWrite)
             throw new InvalidDataException("VPS-03 HTTP runtime principal is missing its narrow role or has elevated permissions.");
     }
+
+    internal async Task<Vps03RecoverySnapshot> RecoverySnapshotAsync(int warehouseId, int productId,
+        long receiptId, long saleId, CancellationToken token)
+    {
+        using var connection = new SqlConnection(ConnectionString);
+        await connection.OpenAsync(token).ConfigureAwait(false);
+        using var command = connection.CreateCommand();
+        command.Parameters.AddWithValue("@warehouse", warehouseId);
+        command.Parameters.AddWithValue("@product", productId);
+        command.Parameters.AddWithValue("@receipt", receiptId);
+        command.Parameters.AddWithValue("@sale", saleId);
+        command.CommandText = @"SELECT
+(SELECT COUNT(*) FROM dbo.StockLedger WHERE WarehouseId=@warehouse AND ProductId=@product),
+(SELECT COUNT(*) FROM dbo.StockValuationEntries v JOIN dbo.StockLedger l ON l.LedgerId=v.LedgerId WHERE l.WarehouseId=@warehouse AND l.ProductId=@product),
+(SELECT Quantity FROM dbo.StockBalances WHERE WarehouseId=@warehouse AND ProductId=@product),
+(SELECT InventoryValue FROM dbo.StockBalances WHERE WarehouseId=@warehouse AND ProductId=@product),
+COALESCE((SELECT SUM(CostAmount) FROM dbo.SalesReceiptLines WHERE SaleId=@sale),0),
+(SELECT COUNT(*) FROM dbo.GoodsReceipts WHERE ReceiptId=@receipt AND Status=N'Posted'),
+(SELECT COUNT(*) FROM dbo.SalesReceipts WHERE SaleId=@sale AND Status=N'Posted');";
+        using var reader = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+        if (!await reader.ReadAsync(token).ConfigureAwait(false))
+            throw new InvalidDataException("VPS-03 recovery snapshot returned no row.");
+        return new Vps03RecoverySnapshot(reader.GetInt32(0), reader.GetInt32(1),
+            reader.GetDecimal(2), reader.GetDecimal(3), reader.GetDecimal(4),
+            reader.GetInt32(5), reader.GetInt32(6));
+    }
+}
+
+internal sealed class Vps03RecoverySnapshot : System.IEquatable<Vps03RecoverySnapshot>
+{
+    internal Vps03RecoverySnapshot(int ledger, int valuation, decimal quantity,
+        decimal value, decimal cogs, int postedReceipts, int postedSales)
+    { Ledger = ledger; Valuation = valuation; Quantity = quantity; Value = value;
+        Cogs = cogs; PostedReceipts = postedReceipts; PostedSales = postedSales; }
+    internal int Ledger { get; }
+    internal int Valuation { get; }
+    internal decimal Quantity { get; }
+    internal decimal Value { get; }
+    internal decimal Cogs { get; }
+    internal int PostedReceipts { get; }
+    internal int PostedSales { get; }
+    public bool Equals(Vps03RecoverySnapshot? other) => other != null &&
+        Ledger == other.Ledger && Valuation == other.Valuation && Quantity == other.Quantity &&
+        Value == other.Value && Cogs == other.Cogs && PostedReceipts == other.PostedReceipts &&
+        PostedSales == other.PostedSales;
+    public override bool Equals(object? obj) => Equals(obj as Vps03RecoverySnapshot);
+    public override int GetHashCode() => Ledger ^ Valuation ^ Quantity.GetHashCode() ^
+        Value.GetHashCode() ^ Cogs.GetHashCode() ^ PostedReceipts ^ PostedSales;
+    public override string ToString() => $"ledger={Ledger},valuation={Valuation},qty={Quantity},value={Value},cogs={Cogs},receipts={PostedReceipts},sales={PostedSales}";
 }

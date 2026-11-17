@@ -58,6 +58,44 @@ internal sealed class Vps03OwnedEnvironment
     internal string Username { get; }
     internal string Password { get; }
 
+    internal async Task<Vps03RecoveryActor> CreateRecoveryActorAsync(CancellationToken token)
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+        var username = "vps03.recovery." + suffix;
+        var password = "Vps03Recovery!" + suffix;
+        var hash = new BcryptPasswordHasher().Hash(password);
+        using var connection = new SqlConnection(OracleConnectionString);
+        await connection.OpenAsync(token).ConfigureAwait(false);
+        using var command = connection.CreateCommand();
+        command.Parameters.AddWithValue("@username", username);
+        command.Parameters.AddWithValue("@normalized", username.ToUpperInvariant());
+        command.Parameters.AddWithValue("@hash", hash);
+        command.Parameters.AddWithValue("@permission", "Sales.Receipts.Post");
+        command.CommandText = @"INSERT dbo.Users(Username,NormalizedUsername,DisplayName,Source,PasswordHash,PasswordSalt,PasswordAlgorithm)
+VALUES(@username,@normalized,N'VPS-03 Recovery Actor',N'Local',@hash,N'',N'BCrypt');
+DECLARE @id int=CONVERT(int,SCOPE_IDENTITY());
+INSERT dbo.UserPermissions(UserId,PermissionKey,Granted) VALUES(@id,@permission,1);
+SELECT @id;";
+        var actor = Convert.ToInt32(await command.ExecuteScalarAsync(token).ConfigureAwait(false));
+        return new Vps03RecoveryActor(actor, username, password);
+    }
+
+    internal async Task SetRecoveryPostGrantAsync(int actorUserId, bool granted, CancellationToken token)
+    {
+        using var connection = new SqlConnection(OracleConnectionString);
+        await connection.OpenAsync(token).ConfigureAwait(false);
+        using var command = connection.CreateCommand();
+        command.Parameters.AddWithValue("@actor", actorUserId);
+        command.Parameters.AddWithValue("@permission", "Sales.Receipts.Post");
+        command.Parameters.AddWithValue("@granted", granted);
+        command.CommandText = @"IF EXISTS(SELECT 1 FROM dbo.SystemSecuritySettings WHERE SuperuserUserId=@actor)
+THROW 51991,'VPS-03 refuses to change the superuser grant.',1;
+UPDATE dbo.UserPermissions SET Granted=@granted,UpdatedAtUtc=SYSUTCDATETIME()
+WHERE UserId=@actor AND PermissionKey=@permission;
+IF @@ROWCOUNT<>1 THROW 51992,'VPS-03 recovery grant row missing.',1;";
+        await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+    }
+
     internal ServiceProvider CreateDesktopServices() => new ServiceCollection()
         .AddHttpDesktopAdapter(new HttpDesktopOptions(Origin.GetLeftPart(UriPartial.Authority)),
             new HttpDesktopOperationSettings(OperationMode(13)))
@@ -326,6 +364,15 @@ SELECT 1,UserId,@normalized FROM dbo.Users WHERE NormalizedUsername=@normalized;
         key.IndexOf("TOKEN", StringComparison.OrdinalIgnoreCase) >= 0 ||
         key.IndexOf("SECRET", StringComparison.OrdinalIgnoreCase) >= 0;
 
+}
+
+internal sealed class Vps03RecoveryActor
+{
+    internal Vps03RecoveryActor(int userId, string username, string password)
+    { UserId = userId; Username = username; Password = password; }
+    internal int UserId { get; }
+    internal string Username { get; }
+    internal string Password { get; }
 }
 
 internal sealed class Vps03CleanupResult
