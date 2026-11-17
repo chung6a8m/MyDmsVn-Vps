@@ -1,16 +1,16 @@
 # VPS-04A — Live Linux HTTPS → isolated SQL Server acceptance
 
 **Increment:** VPS-04A / PR #9. **Gate owner:** independent acceptance operator.
-**Disposition as of 2026-11-17 (protected staging lane ONLY):** this separately approved staging live run remains **NOT RUN / NOT VERIFIED** until its protected, isolated SQL13 environment is supplied and its final-HEAD Actions run passes. **Automatic disposable SQL Server CI is separately VERIFIED 4/4 at code HEAD `30dddbcc`**; see [self-contained CI runbook](vps-04a-selfcontained-ci.md). This file does not approve release, production SQL access, VPS-04B, VPS-05, or VPS-07.
+**Disposition as of 2026-11-17 (protected staging lane ONLY):** this separately approved staging live run remains **NOT RUN / NOT VERIFIED** until its protected, isolated SQL13 environment is supplied and its final-HEAD Actions run passes. **Automatic disposable SQL Server CI is separately VERIFIED 8/8 (6 normal, 1 injected SQL rollback, 1 same-key recovery) at reviewed code HEAD `b080922d`**; see [self-contained CI runbook](vps-04a-selfcontained-ci.md). This file does not approve release, production SQL access, VPS-04B, VPS-05, or VPS-07.
 
 ## What the two acceptance lanes actually establish
 
 | Lane | Execution | Oracle | Disposition |
 | --- | --- | --- | --- |
-| Always-on Linux .NET SDK 10.0.404 | `.github/workflows/vps-04a-linux.yml` | 363 Application regression tests, 25 existing HTTP boundary tests, 57 compiled routes, **178 pinned corpus files** and frozen WEB4 canonical SHA-256 vectors | CI on final HEAD required |
+| Always-on Linux .NET SDK 10.0.404 | `.github/workflows/vps-04a-linux.yml` | 363 Application regression tests, 209 native HTTP/contract test cases (including 178 pinned corpus files and four query-compatibility regressions), 57 compiled routes and frozen WEB4 canonical SHA-256 vectors | CI on final HEAD required |
 | Explicit approved Linux HTTPS+SQL | `.github/workflows/vps-04a-live-acceptance.yml` | Four live acceptance facts, independent read-only SQL row/session/journal evidence | **NOT RUN** |
 | WEB2–WEB6 full live JSON parity | Dedicated request/response corpus replay with SQL-controlled dynamic identities | Every applicable request/response fixture in context; reject illegal/future fields, strict JSON and numeric/date fidelity | **NOT VERIFIED**; the source corpus contains non-JSON documents, scripts, manifests and illustrative IDs |
-| SQL fault injection/physical rollback, migration, Desktop/Linux cross-machine, WEB6 resend, reverse proxy and systemd | Later VPS-04B/VPS-07/VPS-08/VPS-09 and dedicated approved tests | Independent state and recovery oracles | **NOT VERIFIED** |
+| **Wider** SQL fault/rollback matrix, staged migration and Desktop/Linux cross-machine, WEB6 resend, reverse proxy and systemd | Later VPS-04B/VPS-07/VPS-08/VPS-09 and dedicated approved tests | Beyond the one disposable CI StockLedger injection + recovery and two-client COGS oracle already PASS | **NOT VERIFIED** |
 
 **Corpus terminology:** the historical `docs/contracts/corpus-blobs.sha1` pins **178 files** (34 WEB2 + 38 WEB3 + 48 WEB4 + 41 WEB5 + 17 WEB6), **not 178 HTTP JSON payloads**. Native `Vps04aFrozenCorpusTests` reads each checkout file, normalizes only Git `text eol` CRLF to LF for its **Git object hash** calculation, verifies original Git blob SHA-1, validates JSON grammar where applicable, rejects unpinned extra files and compares production NET10 `WebOperationWireInput.Canonicalize` output against independently authored WEB4 canonical/hash vectors. No frozen file, hash manifest or expectation was changed. This lane **does not** assert 178 live SQL responses or System.Text.Json parity (VPS-05).
 
