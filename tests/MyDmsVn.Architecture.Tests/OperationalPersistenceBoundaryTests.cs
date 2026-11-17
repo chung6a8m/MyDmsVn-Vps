@@ -39,9 +39,26 @@ public sealed class OperationalPersistenceBoundaryTests
                 "MyDmsVn.Server.AspNetCoreHost", StringComparison.OrdinalIgnoreCase) ||
                 Path.GetFileNameWithoutExtension(project).Equals(
                     "MyDmsVn.Server.AspNetCoreHost.Tests", StringComparison.OrdinalIgnoreCase);
-            // Legacy graph must remain locked; two new Linux-only projects use their
-            // own reviewed net10 lockfiles without introducing a net48 package graph.
-            Assert.True(File.Exists(legacyLock) || (newHost && File.Exists(net10Lock)));
+            // Legacy graph remains locked. The *single* ephemeral CI-only
+            // SQL13 bootstrap is not a shipping assembly: it compiles the original
+            // DbUp engine under net10 and generates a temporary restore lock in CI.
+            // Never apply this exception to another project or product assembly.
+            var ciSqlBootstrap = Path.GetFileNameWithoutExtension(project).Equals(
+                "MyDmsVn.Vps04a.SqlBootstrap", StringComparison.OrdinalIgnoreCase) &&
+                project.Contains(Path.DirectorySeparatorChar + "tests" + Path.DirectorySeparatorChar);
+            if (ciSqlBootstrap)
+            {
+                var xml = System.Xml.Linq.XDocument.Load(project);
+                Assert.Equal("net10.0", xml.Descendants("TargetFramework").Single().Value);
+                Assert.Equal("true", xml.Descendants("Vps04Server").Single().Value);
+                Assert.Equal("false", xml.Descendants("IsTestProject").Single().Value);
+                Assert.Contains(xml.Descendants("PackageReference"),
+                    entry => (string?)entry.Attribute("Include") == "dbup-sqlserver");
+                Assert.Contains(xml.Descendants("Compile"),
+                    entry => ((string?)entry.Attribute("Include"))?.EndsWith(
+                        "DatabaseMigrationRunner.cs", StringComparison.Ordinal) == true);
+            }
+            Assert.True(File.Exists(legacyLock) || (newHost && File.Exists(net10Lock)) || ciSqlBootstrap);
             if (newHost) Assert.True(File.Exists(net10Lock));
             foreach (var lockFile in new[] { legacyLock, net10Lock }.Where(File.Exists))
             {
