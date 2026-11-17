@@ -2,6 +2,7 @@
 param(
     [switch]$PreflightOnly,
     [switch]$CoreOnly,
+    [switch]$AttendedOnly,
     [string]$Configuration = 'Release',
     [string]$AttendedResult,
     [string]$LostAckResult
@@ -41,7 +42,7 @@ if ($PreflightOnly) {
 }
 
 foreach ($evidence in @(@{ Name = 'attended'; Path = $AttendedResult }, @{ Name = 'lost-ack'; Path = $LostAckResult })) {
-    if ($CoreOnly) { break }
+    if ($CoreOnly -or $AttendedOnly) { break }
     if ([string]::IsNullOrWhiteSpace($evidence.Path) -or -not (Test-Path -LiteralPath $evidence.Path)) {
         throw "VPS03.RequiredGateMissing:$($evidence.Name)"
     }
@@ -81,7 +82,9 @@ $env:MYDMSVN_VPS03_HEAD_SHA = $head
 $env:MYDMSVN_VPS03_RESULTS_DIRECTORY = $results
 dotnet restore tests/MyDmsVn.Vps03.Acceptance.Tests/MyDmsVn.Vps03.Acceptance.Tests.csproj --locked-mode -v minimal
 if ($LASTEXITCODE -ne 0) { throw 'VPS03.AcceptanceRestoreFailed' }
-dotnet test tests/MyDmsVn.Vps03.Acceptance.Tests/MyDmsVn.Vps03.Acceptance.Tests.csproj -c $Configuration --no-restore --logger "trx;LogFileName=vps03-issue8.trx" --results-directory $results
+$filter = if ($AttendedOnly) { 'Phase=Attended' } else { 'Phase!=Attended' }
+if ($AttendedOnly) { $env:MYDMSVN_VPS03_ATTENDED = 'approved' }
+dotnet test tests/MyDmsVn.Vps03.Acceptance.Tests/MyDmsVn.Vps03.Acceptance.Tests.csproj -c $Configuration --no-restore --filter $filter --logger "trx;LogFileName=vps03-issue8.trx" --results-directory $results
 if ($LASTEXITCODE -ne 0) { throw 'VPS03.AcceptanceFailed' }
 
 $trx = Join-Path $results 'vps03-issue8.trx'
@@ -91,5 +94,11 @@ $counters = $document.TestRun.ResultSummary.Counters
 if ([int]$counters.total -le 0 -or [int]$counters.executed -ne [int]$counters.total -or
     [int]$counters.passed -ne [int]$counters.total -or [int]$counters.failed -ne 0 -or
     [int]$counters.notExecuted -ne 0) { throw 'VPS03.EvidenceNotComplete' }
-$label = if ($CoreOnly) { 'PARTIAL CORE' } else { 'PASS' }
+$label = if ($AttendedOnly) { 'ATTENDED' } elseif ($CoreOnly) { 'PARTIAL CORE' } else { 'PASS' }
+if ($AttendedOnly) {
+    $attendedRecord = Join-Path $results 'attended\attended-result.json'
+    if (-not (Test-Path -LiteralPath $attendedRecord)) { throw 'VPS03.AttendedEvidenceMissing' }
+    $attended = Get-Content -LiteralPath $attendedRecord -Raw | ConvertFrom-Json
+    if ($attended.headSha -ne $head -or $attended.passed -ne $true) { throw 'VPS03.AttendedEvidenceNotPassed' }
+}
 Write-Host "$label head=$head total=$($counters.total) passed=$($counters.passed) failed=0 skipped=0 results=$resultRoot"

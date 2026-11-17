@@ -1,4 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace MyDmsVn.Vps03.Acceptance.Tests;
@@ -28,5 +32,62 @@ public sealed class Vps03AttendedGuiAcceptanceTests
         var accepted = new Dictionary<string, bool>();
         foreach (var id in Required) accepted[id] = true;
         Assert.True(new Vps03AttendedResult(new string('b', 40), accepted, true, true, true, aborted: false).Passed(Required));
+    }
+
+    [Vps03AcceptanceFact]
+    [Trait("Phase", "Attended")]
+    [Trait("CaseId", "VPS03.GATE.GUI")]
+    public async Task Exact_published_desktop_completes_attended_native_walkthrough()
+    {
+        var env = await Vps03OwnedEnvironment.CreateAsync(13, CancellationToken.None);
+        var directory = Path.Combine(Environment.GetEnvironmentVariable("MYDMSVN_VPS03_RESULTS_DIRECTORY")!, "attended");
+        Directory.CreateDirectory(directory);
+        var resultPath = Path.Combine(directory, "attended-result.json");
+        var desktopExited = false;
+        var hostAbsent = false;
+        var sqlAbsent = false;
+        var aborted = true;
+        IReadOnlyDictionary<string, bool> checkpoints = new Dictionary<string, bool>();
+        try
+        {
+            using var desktop = Vps03DesktopProcess.Start(env);
+            Assert.Equal(64, desktop.ExecutableHash.Length);
+            using var probe = new Vps03RemoteGuiProbe(desktop.Id);
+            probe.WaitForLogin(TimeSpan.FromSeconds(30));
+            Vps03AttendedExchange.WriteStage(directory, env.HeadSha, desktop.Id,
+                desktop.ExecutableHash, "login-ready");
+            await Vps03AttendedExchange.WaitForCheckpointAsync(directory, env.HeadSha,
+                "VPS03.GUI.LOGIN", TimeSpan.FromMinutes(10), CancellationToken.None);
+            probe.SubmitInvalidLogin(env.Username, env.Password, TimeSpan.FromSeconds(30));
+            Vps03AttendedExchange.WriteStage(directory, env.HeadSha, desktop.Id,
+                desktop.ExecutableHash, "error-ready");
+            await Vps03AttendedExchange.WaitForCheckpointAsync(directory, env.HeadSha,
+                "VPS03.GUI.ERRORS", TimeSpan.FromMinutes(10), CancellationToken.None);
+            probe.SubmitValidLogin(env.Username, env.Password, TimeSpan.FromSeconds(30));
+            Vps03AttendedExchange.WriteStage(directory, env.HeadSha, desktop.Id,
+                desktop.ExecutableHash, "shell-ready");
+            checkpoints = await Vps03AttendedExchange.WaitForDecisionAsync(directory,
+                env.HeadSha, Required, TimeSpan.FromMinutes(20), CancellationToken.None);
+            desktopExited = desktop.Stop(TimeSpan.FromSeconds(15));
+            Assert.True(desktopExited, "The attended Desktop did not exit cleanly.");
+            aborted = false;
+        }
+        finally
+        {
+            try
+            {
+                await env.DisposeAsync();
+                hostAbsent = true;
+                sqlAbsent = true;
+            }
+            finally
+            {
+                var result = new Vps03AttendedResult(env.HeadSha, checkpoints,
+                    desktopExited, hostAbsent, sqlAbsent, aborted);
+                Vps03AttendedExchange.WriteResult(resultPath, result, Required);
+            }
+        }
+        Assert.True(new Vps03AttendedResult(env.HeadSha, checkpoints,
+            desktopExited, hostAbsent, sqlAbsent, aborted).Passed(Required));
     }
 }
