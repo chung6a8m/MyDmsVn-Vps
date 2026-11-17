@@ -25,7 +25,7 @@ internal sealed class PortableProtectedSecurityAuditSink : ISecurityAuditSink
     private const int AtSymlinkNoFollow = 0x100;
     private const int ReadOnly = 0;
     private const int WriteOnly = 1;
-    private const int Append = 0x400;
+    private const int AppendFlag = 0x400;
     private const int NonBlock = 0x800;
     private const int DirectoryOnly = 0x10000;
     private const int NoFollow = 0x20000;
@@ -126,7 +126,7 @@ internal sealed class PortableProtectedSecurityAuditSink : ISecurityAuditSink
             try
             {
                 using var file = Open(current.DangerousGetHandle().ToInt32(), _components[^1],
-                    WriteOnly | Append | NonBlock | NoFollow | CloseOnExec);
+                    WriteOnly | AppendFlag | NonBlock | NoFollow | CloseOnExec);
                 var opened = ReadMetadata(file);
                 CheckFile(opened, owner);
                 CheckSameFile(opened, ReadMetadata(current, _components[^1]), owner);
