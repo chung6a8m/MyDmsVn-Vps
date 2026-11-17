@@ -368,4 +368,20 @@ public sealed class CoreApiBoundaryTests
             e.GetProperty("path").GetString()).Distinct(StringComparer.Ordinal).Count());
         Assert.Contains(values, e => e.GetProperty("path").GetString() == "/api/v1/health");
     }
+
+    [Theory]
+    [InlineData("", "")]
+    [InlineData("?limit=25", "limit=25")]
+    [InlineData("?search=abc%2Fdef&limit=25", "search=abc%2Fdef&limit=25")]
+    [InlineData("?limit=25&limit=50", "limit=25&limit=50")]
+    public void NativeQueryAdapterUsesFrozenOwinRawValueNotAspNetCoreQuestionMark(
+        string coreQuery, string expectedLegacyValue)
+    {
+        // WEB2/3 strict query grammar reads IOwinRequest.QueryString.Value,
+        // not HttpRequest.Query (which would silently lose duplicates).
+        var context = NewRequest(path: "/api/v1/catalog/products/lookup");
+        context.Request.QueryString = new QueryString(coreQuery);
+        var adapter = new Microsoft.Owin.CoreContextAdapter(context, null!, null!);
+        Assert.Equal(expectedLegacyValue, adapter.Request.QueryString.Value);
+    }
 }
