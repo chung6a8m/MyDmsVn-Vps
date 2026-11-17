@@ -1,6 +1,6 @@
 # VPS-04A — WEB2–WEB6 Linux HTTPS response coverage inventory (PR #9)
 
-**Scope:** frozen source route inventories `docs/contracts/vps-01-route-inventory.json` (29) and `docs/contracts/vps-02-route-additions.json` (28), **57 compiled signatures**. Generated for the exact review candidate `c165ede40e54d472cbb623fae3a167c4b78e41b2` (2026-11-17). This is a **coverage ledger**, not a claim of exhaustive live response parity. The canonical live roadmap status remains `docs/roadmap/README.md`.
+**Scope:** frozen source route inventories `docs/contracts/vps-01-route-inventory.json` (29) and `docs/contracts/vps-02-route-additions.json` (28), **57 compiled signatures**. Updated for code checkpoint `874cf87b15871e671bd4d72998cc97ca39b1d971` (2026-11-17); exact final documentation HEAD CI evidence will be recorded in PR #9. This is a **coverage ledger**, not a claim of exhaustive live response parity. The canonical live roadmap status remains `docs/roadmap/README.md`.
 
 ## Evidence definitions
 
