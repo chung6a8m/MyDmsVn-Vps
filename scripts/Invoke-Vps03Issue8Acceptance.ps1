@@ -65,7 +65,8 @@ Copy-Item -Path (Join-Path $hostStaging '*') -Destination $hostBin -Recurse -For
 [xml]$webConfig = Get-Content -LiteralPath 'src/MyDmsVn.Server.HttpHost/Web.config' -Raw
 [xml]$bindingConfig = Get-Content -LiteralPath (Join-Path $hostStaging 'MyDmsVn.Server.HttpHost.dll.config') -Raw
 $runtime = $webConfig.ImportNode($bindingConfig.configuration.runtime, $true)
-[void]$webConfig.configuration.ReplaceChild($runtime, $webConfig.configuration.runtime)
+$existingRuntime = $webConfig.SelectSingleNode('/configuration/runtime')
+[void]$webConfig.configuration.ReplaceChild($runtime, $existingRuntime)
 $webConfig.Save((Join-Path $hostPackage 'Web.config'))
 Copy-Item -LiteralPath 'src/MyDmsVn.Server.HttpHost/wwwroot' -Destination (Join-Path $hostPackage 'wwwroot') -Recurse -Force
 
