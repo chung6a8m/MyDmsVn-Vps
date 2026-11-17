@@ -40,6 +40,10 @@ jobs:
       - name: Pin nested server SDK
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: test "$(dotnet --version)" = "10.0.404"
+      - name: Validate GitHub Environment operator admission helper (no GitHub login)
+        run: |
+          python3 -m py_compile scripts/configure-vps04a-live-gate.py
+          python3 scripts/configure-vps04a-live-gate.py --help >/dev/null
       - name: Restore and compile ASP.NET Core host / Server net10 graph
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
