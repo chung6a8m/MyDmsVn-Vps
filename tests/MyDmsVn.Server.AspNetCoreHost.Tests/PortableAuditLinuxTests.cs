@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using Xunit;
 
 namespace MyDmsVn.Server.AspNetCoreHost.Tests;
 
+[SupportedOSPlatform("linux")]
 public sealed class PortableAuditLinuxTests
 {
     private static readonly UnixFileMode PrivateDirectory =
