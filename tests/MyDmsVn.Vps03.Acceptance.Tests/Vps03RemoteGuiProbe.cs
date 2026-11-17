@@ -1,13 +1,15 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Automation;
-using System.Windows.Forms;
 
 namespace MyDmsVn.Vps03.Acceptance.Tests;
 
 internal sealed class Vps03RemoteGuiProbe : IDisposable
 {
+    private const uint MouseEventLeftDown = 0x0002;
+    private const uint MouseEventLeftUp = 0x0004;
     private const string LoginTitle = "MyDmsVn — Đăng nhập";
     private readonly int _processId;
 
@@ -70,9 +72,38 @@ internal sealed class Vps03RemoteGuiProbe : IDisposable
             ((InvokePattern)invoke).Invoke();
             return;
         }
-        element.SetFocus();
-        SendKeys.SendWait("{ENTER}");
+        Click(window, element);
     }
+
+    private static void Click(AutomationElement window, AutomationElement element)
+    {
+        var point = element.GetClickablePoint();
+        GetCursorPos(out var original);
+        SetForegroundWindow(new IntPtr(window.Current.NativeWindowHandle));
+        SetCursorPos((int)point.X, (int)point.Y);
+        mouse_event(MouseEventLeftDown, 0, 0, 0, UIntPtr.Zero);
+        mouse_event(MouseEventLeftUp, 0, 0, 0, UIntPtr.Zero);
+        SetCursorPos(original.X, original.Y);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Point
+    {
+        internal int X;
+        internal int Y;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out Point point);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr windowHandle);
+
+    [DllImport("user32.dll")]
+    private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
 
     private static AutomationElement Find(AutomationElement window, string name) =>
         window.FindFirst(TreeScope.Descendants,
