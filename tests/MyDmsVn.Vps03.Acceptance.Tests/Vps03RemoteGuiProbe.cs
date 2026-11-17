@@ -58,10 +58,29 @@ internal sealed class Vps03RemoteGuiProbe : IDisposable
 
     private static void SetValue(AutomationElement window, string name, string value)
     {
-        var element = Find(window, name);
+        var element = FindInput(window, name);
         if (!element.TryGetCurrentPattern(ValuePattern.Pattern, out var pattern))
             throw new InvalidOperationException("VPS03 attended input does not support ValuePattern: " + name);
+        element.SetFocus();
         ((ValuePattern)pattern).SetValue(value);
+    }
+
+    private static AutomationElement FindInput(AutomationElement window, string name)
+    {
+        AutomationElement? editor = null;
+        var candidates = window.FindAll(TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.NameProperty, name));
+        foreach (AutomationElement candidate in candidates)
+        {
+            var type = candidate.Current.ControlType;
+            if (type != ControlType.Edit && type != ControlType.ComboBox && type != ControlType.Spinner) continue;
+            var inner = candidate.FindFirst(TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit)) ?? candidate;
+            if (editor != null && !Automation.Compare(editor, inner))
+                throw new InvalidOperationException("VPS03 attended input selector is ambiguous: " + name);
+            editor = inner;
+        }
+        return editor ?? throw new InvalidOperationException("VPS03 attended input was not found: " + name);
     }
 
     private static void Invoke(AutomationElement window, string name)
