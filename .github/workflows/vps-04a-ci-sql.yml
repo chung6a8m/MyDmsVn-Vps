@@ -84,7 +84,7 @@ jobs:
           CONF
           # SQL Server container runs as uid 10001; TLS private key must not be world-readable.
           sudo chown 10001:0 "$work/sql.key"
-          chmod 0400 "$work/sql.key"
+          sudo chmod 0400 "$work/sql.key"
           chmod 0444 "$work/sql.crt" "$work/mssql.conf"
           {
             echo "VPS04A_CI_TLS_DIR=$work"
