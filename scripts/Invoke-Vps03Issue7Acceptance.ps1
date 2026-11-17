@@ -309,5 +309,6 @@ $json = $evidence | ConvertTo-Json -Depth 10
 $markdown = "# VPS-03 Issue #7 acceptance evidence`r`n`r`n``````json`r`n" +
     $json.Replace("`n", "`r`n") + "`r`n```````r`n"
 [IO.File]::WriteAllText($markdownPath, $markdown, [Text.UTF8Encoding]::new($false))
-$total = ($groups | Measure-Object -Property total -Sum).Sum
+$total = 0
+foreach ($group in $groups) { $total += [int]$group['total'] }
 Write-Host "PASS head=$head total=$total failed=0 skipped=0 evidence=$jsonPath"
