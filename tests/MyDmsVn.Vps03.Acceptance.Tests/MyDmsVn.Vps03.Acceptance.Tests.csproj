@@ -27,6 +27,7 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\MyDmsVn.Vps03.PendingStore.CrashHost\MyDmsVn.Vps03.PendingStore.CrashHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\src\MyDmsVn.Desktop.Application\MyDmsVn.Desktop.Application.csproj" />
     <ProjectReference Include="..\..\src\MyDmsVn.Desktop.Infrastructure.Http\MyDmsVn.Desktop.Infrastructure.Http.csproj" />
     <ProjectReference Include="..\..\src\MyDmsVn.Server.DbMigrator\MyDmsVn.Server.DbMigrator.csproj" />
