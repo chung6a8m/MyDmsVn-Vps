@@ -1,6 +1,6 @@
 # VPS-05A — System.Text.Json net10 egress checkpoint
 
-**Repository:** `chung6a8m/MyDmsVn-Vps` · **PR:** [#14](https://github.com/chung6a8m/MyDmsVn-Vps/pull/14) · **base main:** `61e8a2126c8fe9844fd3aefb6724515e1dd80203` (PR #13 merged) · **review state:** DRAFT / PENDING CI.
+**Repository:** `chung6a8m/MyDmsVn-Vps` · **PR:** [#14](https://github.com/chung6a8m/MyDmsVn-Vps/pull/14) · **base main:** `61e8a2126c8fe9844fd3aefb6724515e1dd80203` (PR #13 merged) · **review state:** DRAFT; code checkpoint `e0fc2dbef8f010dce2bc58246eb070fe2d5ee2e5` 5/5 workflows PASS. Final documentary-HEAD run after this evidence update remains a distinct required check.
 
 ## Implemented (bounded)
 
@@ -14,10 +14,10 @@
 | Gate | Status | Evidence to record |
 | --- | --- | --- |
 | Source changes, independent repository scope | IMPLEMENTED at initial `ac18a62dc568bc193fa07b0eb171d41ff5996096` | PR #14 diff; no prior PASS is inherited |
-| Linux SDK 10.0.404 compile, locked restore and `--warnaserror` | NOT VERIFIED | CI on final review-fix HEAD; record run URL and SHA |
-| Six new xUnit tests, original 366 Application / existing native corpus and fingerprint tests | NOT VERIFIED | actual discovered/executed/failed/skipped TRX on final HEAD |
-| 57 native routes and 24 bounded WEB2–6 HTTPS→SQL projections | NOT VERIFIED at VPS-05A HEAD | re-run disposable SQL CI, compare expected/actual/diff; not staging |
-| Windows `net48` HttpHost/Desktop and xUnit foundation | NOT VERIFIED at VPS-05A HEAD | Windows final-HEAD CI, zero loss of test discovery |
+| Linux SDK 10.0.404 compile, locked restore and `--warnaserror` | **PASS at checkpoint `e0fc2db`** | [Linux net10 #44123450174](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44123450174), all required job steps successful |
+| Six new xUnit tests, original 366 Application / existing native corpus and fingerprint tests | **PASS at checkpoint `e0fc2db`** | [Linux net10 #44123450174](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44123450174): Application **366/366**, native HTTP **225/225** (includes six new parity tests), 0 failed, 0 skipped |
+| 57 native routes and 24 bounded WEB2–6 HTTPS→SQL projections | **PASS bounded disposable CI at `e0fc2db`** | [Linux SQL2022 #44123450126](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44123450126): 57/57 routes; DbUp SQL13 13/13; **15/15** HTTPS→SQL tests; **24/24** scoped expected/actual/diff; additional **3/3** WEB6 enabled live audit tests, zero fail/skip. WEB6 was disabled during its historical 24-case phase. Not staging or exhaustive |
+| Windows `net48` HttpHost/Desktop and xUnit foundation | **PASS at checkpoint `e0fc2db`** | [Windows net48 #44123450744](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44123450744) 8/8 jobs; [xUnit discovery #44123450609](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44123450609) 10/10 jobs; [Desktop publish #44123450301](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44123450301) PASS |
 | Native `net10` runtime graph with **zero Newtonsoft** | **NOT SATISFIED (by design)** | later VPS-05B+ refactor and produced `.deps.json` gate |
 | All 57 dynamic route/value/negative variants, protected staging, attended GUI | NOT VERIFIED | VPS-05B / VPS-09 / VPS-08 as applicable |
 
@@ -40,4 +40,4 @@ dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -c Release
 dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -c Release -f net10.0 --no-restore --logger trx
 ```
 
-Current execution environment has no `dotnet` executable or direct GitHub network access; GitHub connector PR/CI records are authoritative for any subsequent execution outcome.
+Current execution environment has no `dotnet` executable; CI runs in GitHub-hosted Linux/Windows. The five URLs above are **code-checkpoint** evidence at `e0fc2db`; do not transpose them to a later documentation or review-fix HEAD.
