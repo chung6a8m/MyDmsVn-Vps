@@ -215,6 +215,8 @@ THEN 1 ELSE 0 END;", connection);
                 "VPS04A_LIVE_WAREHOUSE_ID=" + ids.Warehouse.ToString(CultureInfo.InvariantCulture),
                 "VPS04A_LIVE_EMPLOYEE_ID=" + ids.Employee.ToString(CultureInfo.InvariantCulture),
                 "VPS04A_LIVE_PRODUCT_ID=" + ids.Product.ToString(CultureInfo.InvariantCulture),
+                "VPS04A_CI_FRACTIONAL_WAREHOUSE_A=" + ids.FractionalWarehouseA.ToString(CultureInfo.InvariantCulture),
+                "VPS04A_CI_FRACTIONAL_WAREHOUSE_B=" + ids.FractionalWarehouseB.ToString(CultureInfo.InvariantCulture),
             });
             Console.WriteLine("PASS: isolated SQL schema13 (13/13 DbUp), runtime principal, nine-table CI-only read-only oracle and active fixtures.");
             return 0;
@@ -433,7 +435,7 @@ WHERE o.is_ms_shipped=0 AND o.parent_object_id=0 AND p.permission_name IN
         await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task<(int Customer, int Warehouse, int Employee, int Product)> SeedAsync(
+    private static async Task<(int Customer, int Warehouse, int Employee, int Product, int FractionalWarehouseA, int FractionalWarehouseB)> SeedAsync(
         string connectionString, string writerPassword, string deniedPassword)
     {
         using var connection = new SqlConnection(connectionString);
@@ -461,10 +463,16 @@ WHERE o.is_ms_shipped=0 AND o.parent_object_id=0 AND p.permission_name IN
 
         var customer = await NewId("INSERT dbo.Customers(Code,Name) OUTPUT INSERTED.CustomerId VALUES (@code,N'CI Customer');", "CI-CUST");
         var warehouse = await NewId("INSERT dbo.Warehouses(Code,Name) OUTPUT INSERTED.WarehouseId VALUES (@code,N'CI Warehouse');", "CI-WH");
+        // Two additional independently seeded stock keys, never existing SQL
+        // rows: used only by the disposable multiwarehouse/fractional-cost oracle.
+        var fractionalWarehouseA = await NewId(
+            "INSERT dbo.Warehouses(Code,Name) OUTPUT INSERTED.WarehouseId VALUES (@code,N'CI Fractional A');", "CI-WH-A");
+        var fractionalWarehouseB = await NewId(
+            "INSERT dbo.Warehouses(Code,Name) OUTPUT INSERTED.WarehouseId VALUES (@code,N'CI Fractional B');", "CI-WH-B");
         var employee = await NewId("INSERT dbo.Employees(Code,Name) OUTPUT INSERTED.EmployeeId VALUES (@code,N'CI Employee');", "CI-EMP");
         var product = await NewId("INSERT dbo.Products(Code,Name,Unit) OUTPUT INSERTED.ProductId VALUES (@code,N'CI Product',N'EA');", "CI-PROD");
         transaction.Commit();
-        return (customer, warehouse, employee, product);
+        return (customer, warehouse, employee, product, fractionalWarehouseA, fractionalWarehouseB);
     }
 
     private static async Task<int> InsertUserAsync(SqlConnection connection, SqlTransaction transaction,
