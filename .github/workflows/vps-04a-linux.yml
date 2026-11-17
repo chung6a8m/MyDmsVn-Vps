@@ -52,6 +52,27 @@ jobs:
           assert counts['failed']==0 and counts['notExecuted']==0 and counts['passed']==counts['total'], counts
           print(f"PASS net10 Server.Application: {counts}")
           PY
+      - name: Run native ASP.NET Core boundary regressions without SQL
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -v minimal
+          dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -c Release -f net10.0 --no-restore -v minimal --logger "trx;LogFileName=vps04a-core-boundary.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+      - name: Require native boundary test execution, no failure or skip
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          files=list(Path('vps04a-trx').glob('vps04a-core-boundary.trx'))
+          assert len(files)==1, f'Expected one boundary TRX, found {len(files)}'
+          doc=ET.parse(files[0]).getroot()
+          ns={'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          counters=doc.find('./t:ResultSummary/t:Counters',ns)
+          assert counters is not None, 'Missing native boundary TRX counters'
+          counts={k:int(v) for k,v in counters.attrib.items() if k in ('total','passed','failed','executed','notExecuted')}
+          assert counts['total']>=15 and counts['executed']>=15, counts
+          assert counts['failed']==0 and counts['notExecuted']==0 and counts['passed']==counts['total'], counts
+          print(f"PASS net10 HTTP boundary: {counts}")
+          PY
       - name: Reflect compiled ASP.NET Core endpoint inventory
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
