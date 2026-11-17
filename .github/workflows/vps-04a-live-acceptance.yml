@@ -2,15 +2,10 @@ name: VPS-04A — approved Linux HTTPS to isolated SQL acceptance
 
 on:
   workflow_call:
-  workflow_dispatch:
-    inputs:
-      nonproduction_ack:
-        description: "Type approved-isolated-sql13 to authorize destructive, isolated SQL acceptance"
-        required: true
-        type: string
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: vps04a-live-${{ github.ref }}
@@ -18,15 +13,17 @@ concurrency:
 
 jobs:
   live-linux-https-sql:
-    # workflow_dispatch requires a default-branch workflow; the labeled, protected
-    # workflow_call path makes this executable on a DRAFT PR before merge.
+    # Only the reviewed PR #9 labeled event may enter the protected gate.
+    # PR GITHUB_REF is refs/pull/9/merge, not the source branch.
     if: >-
-      (github.event_name == 'workflow_dispatch' &&
-       github.event.inputs.nonproduction_ack == 'approved-isolated-sql13') ||
-      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
-       github.event.label.name == 'vps04a-live-approved' &&
-       github.event.pull_request.head.repo.full_name == github.repository &&
-       github.event.pull_request.head.ref == 'codex/vps-04a-net10-aspnetcore')
+      github.event_name == 'pull_request' &&
+      github.event.action == 'labeled' &&
+      github.ref == 'refs/pull/9/merge' &&
+      github.event.pull_request.number == 9 &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.label.name == 'vps04a-live-approved' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'codex/vps-04a-net10-aspnetcore'
     name: Linux Kestrel TLS + exact13 SQL + JWT + journal + concurrency
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -55,6 +52,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Default pull_request checkout uses synthetic merge SHA, not reviewed HEAD.
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.404"
@@ -80,6 +81,20 @@ jobs:
         run: |
           dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps04ALive=true --locked-mode
           dotnet build ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-restore -warnaserror
+      - name: Refuse moved PR HEAD or synthetic checkout before SQL mutation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEWED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          current="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/9" --jq '.head.sha')"
+          checked="$(git rev-parse HEAD)"
+          if [ "$current" != "$REVIEWED_HEAD" ] || [ "$checked" != "$REVIEWED_HEAD" ]; then
+            echo "::error::PR HEAD advanced or checkout differs from reviewed source SHA; SQL refused."
+            exit 1
+          fi
+          echo "Pinned reviewed source HEAD: $checked"
       - name: Start actual HTTPS Kestrel and execute SQL-backed acceptance
         shell: bash
         run: |
@@ -132,6 +147,18 @@ jobs:
           assert actual == {'total':4,'passed':4,'failed':0,'notExecuted':0},actual
           print('PASS: 4/4 real Linux HTTPS-to-SQL tests, zero failed/skipped')
           PY
+      - name: Recheck approved PR HEAD after live execution
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEWED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          current="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/9" --jq '.head.sha')"
+          if [ "$current" != "$REVIEWED_HEAD" ]; then
+            echo "::error::PR HEAD advanced during live run; final-HEAD acceptance invalid."
+            exit 1
+          fi
       - name: Keep exact-SHA live test TRX, never secrets or server logs
         if: always()
         uses: actions/upload-artifact@v6

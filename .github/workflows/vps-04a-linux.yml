@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: vps-04a-${{ github.workflow }}-${{ github.ref }}
@@ -23,6 +24,9 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.action == 'labeled' &&
+      github.ref == 'refs/pull/9/merge' &&
+      github.event.pull_request.number == 9 &&
+      github.event.pull_request.base.ref == 'main' &&
       github.event.label.name == 'vps04a-live-approved' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.head.ref == 'codex/vps-04a-net10-aspnetcore'
@@ -44,6 +48,8 @@ jobs:
         run: |
           python3 -m py_compile scripts/configure-vps04a-live-gate.py
           python3 scripts/configure-vps04a-live-gate.py --help >/dev/null
+      - name: Regression-test protected live gate ref/SHA policy without credentials
+        run: python3 -m unittest discover -s scripts/tests -p 'test_vps04a_live_gate.py' -v
       - name: Restore and compile ASP.NET Core host / Server net10 graph
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
