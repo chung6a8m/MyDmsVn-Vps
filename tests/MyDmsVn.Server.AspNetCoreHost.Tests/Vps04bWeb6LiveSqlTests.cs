@@ -162,7 +162,8 @@ ORDER BY CreatedAtUtc DESC;", connection);
         var all = string.Concat(content);
         Assert.False(all.Contains(Required("VPS04A_LIVE_PASSWORD"), StringComparison.Ordinal),
             "Durable audit must never contain the disposable login password.");
-        Assert.DoesNotContain("__Host-mydmsvn-rt", all, StringComparison.Ordinal);
+        Assert.False(all.Contains("__Host-mydmsvn-rt", StringComparison.Ordinal),
+            "Durable audit must never contain refresh cookie material.");
     }
 
     [Fact]
@@ -256,7 +257,8 @@ ORDER BY CreatedAtUtc DESC;", connection);
             Assert.NotEqual(200, (int)login.StatusCode);
             Assert.False(login.Headers.Contains("Set-Cookie"));
             var loginBody = await login.Content.ReadAsStringAsync();
-            Assert.DoesNotContain(path, loginBody, StringComparison.Ordinal);
+            Assert.False(loginBody.Contains(path, StringComparison.Ordinal),
+                "HTTP failure must not disclose the private audit file path.");
             Assert.False(loginBody.Contains(Required("VPS04A_LIVE_PASSWORD"), StringComparison.Ordinal),
                 "HTTP failure must never return the disposable login password.");
 
@@ -264,7 +266,8 @@ ORDER BY CreatedAtUtc DESC;", connection);
             using var json = await Json(health, 503);
             Assert.Equal("SecurityAudit.Unavailable",
                 json.RootElement.GetProperty("error").GetProperty("code").GetString());
-            Assert.DoesNotContain(path, json.RootElement.GetRawText(), StringComparison.Ordinal);
+            Assert.False(json.RootElement.GetRawText().Contains(path, StringComparison.Ordinal),
+                "Degraded-health error must not disclose the private audit file path.");
             Assert.Equal(prior, File.ReadAllLines(path).Length);
         }
         finally
