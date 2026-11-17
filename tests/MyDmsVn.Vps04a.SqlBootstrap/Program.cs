@@ -137,6 +137,7 @@ internal static class Program
             await new SqlWebRuntimePrincipalValidator(
                 requireJournal: true, requireResolution: true, requireDesktopApi: true)
                 .ValidateAsync(runtime, CancellationToken.None);
+            _stage = "superuser-binding";
             await new SqlSuperuserBindingValidator()
                 .ValidateAsync(runtime, Writer, CancellationToken.None);
 
@@ -177,13 +178,19 @@ THEN 1 ELSE 0 END;", connection);
             Console.WriteLine("PASS: isolated SQL schema13 (13/13 DbUp), runtime principal, four-table read-only oracle and active fixtures.");
             return 0;
         }
-        catch
+        catch (Exception problem)
         {
-            // Under no circumstances print SQL exception text, passwords, connection
-            // strings, tokens, or the host's protected superuser credentials.
+            // Only fixed/allowlisted failure categories, never exception messages,
+            // passwords, connection strings, SQL text or token material.
+            var category = problem is DesktopStartupException error
+                ? error.Code
+                : problem is SqlException sqlError
+                    ? "SQL." + sqlError.Number.ToString(CultureInfo.InvariantCulture)
+                    : problem.GetType().Name;
             Console.Error.WriteLine("VPS04A-CI bootstrap REFUSED/FAILED at stage: " + _stage +
-                "; SQL error number: " + _sqlErrorNumber.ToString(CultureInfo.InvariantCulture) +
-                "; inner type: " + _sqlInnerType + ". No acceptance is claimed.");
+                "; safe code: " + category +
+                "; SQL readiness number: " + _sqlErrorNumber.ToString(CultureInfo.InvariantCulture) +
+                "; readiness inner type: " + _sqlInnerType + ". No acceptance is claimed.");
             return 1;
         }
     }
