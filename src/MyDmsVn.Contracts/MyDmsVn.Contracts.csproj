@@ -1,6 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
+    <TargetFramework Condition="'$(Vps04Server)' != 'true'">net48</TargetFramework>
+    <TargetFramework Condition="'$(Vps04Server)' == 'true'">net10.0</TargetFramework>
+    <!-- VPS-04A transitional graph: maintain the unchanged net48 lock while Linux targets net10. -->
+    <RestorePackagesWithLockFile Condition="'$(Vps04Server)' == 'true'">false</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" />
