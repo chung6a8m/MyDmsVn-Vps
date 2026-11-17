@@ -52,13 +52,21 @@ internal static class Program
     {
         try
         {
-            if (args.Length != 1 || args[0] != "provision-isolated-ci")
+            if (args.Length != 1 ||
+                (args[0] != "provision-isolated-ci" &&
+                 args[0] != "arm-ledger-fault" &&
+                 args[0] != "disarm-ledger-fault"))
                 throw new InvalidOperationException("No operator or production mode is available.");
             // The CLI runs under the pinned .NET10 host SDK directory, but all
             // source SQL scripts must be loaded from the exact checked-out repo.
             Directory.SetCurrentDirectory(Require("GITHUB_WORKSPACE"));
             var admin = new SqlConnectionStringBuilder(Require("VPS04A_CI_SQL_ADMIN_CONNECTION_STRING"));
             Admit(admin);
+            if (args[0] != "provision-isolated-ci")
+            {
+                _stage = "fault-injection-maintenance";
+                return await RunEphemeralFaultMaintenanceAsync(admin, args[0]);
+            }
             var runtimePassword = Password("VPS04A_CI_SQL_RUNTIME_PASSWORD");
             var oraclePassword = Password("VPS04A_CI_SQL_ORACLE_PASSWORD");
             var writerPassword = Password("VPS04A_LIVE_PASSWORD");
@@ -122,7 +130,12 @@ internal static class Program
                 await ExecuteAsync(connection, "GRANT SELECT ON dbo.WebAuthSessions TO [" + OracleLogin + "]; " +
                     "GRANT SELECT ON dbo.WebOperationJournal TO [" + OracleLogin + "]; " +
                     "GRANT SELECT ON dbo.SalesReceipts TO [" + OracleLogin + "]; " +
-                    "GRANT SELECT ON dbo.SalesReceiptLines TO [" + OracleLogin + "];");
+                    "GRANT SELECT ON dbo.SalesReceiptLines TO [" + OracleLogin + "]; " +
+                    "GRANT SELECT ON dbo.GoodsReceipts TO [" + OracleLogin + "]; " +
+                    "GRANT SELECT ON dbo.GoodsReceiptLines TO [" + OracleLogin + "]; " +
+                    "GRANT SELECT ON dbo.StockLedger TO [" + OracleLogin + "]; " +
+                    "GRANT SELECT ON dbo.StockValuationEntries TO [" + OracleLogin + "]; " +
+                    "GRANT SELECT ON dbo.StockBalances TO [" + OracleLogin + "];");
             }
 
             var runtime = new SqlConnectionStringBuilder(admin.ConnectionString)
@@ -166,10 +179,26 @@ SELECT CASE WHEN
   ISNULL(HAS_PERMS_BY_NAME('dbo.WebAuthSessions','OBJECT','SELECT'),0)<>1 OR
   ISNULL(HAS_PERMS_BY_NAME('dbo.WebOperationJournal','OBJECT','SELECT'),0)<>1 OR
   ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceipts','OBJECT','SELECT'),0)<>1 OR
-  ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceiptLines','OBJECT','SELECT'),0)<>1
+  ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceiptLines','OBJECT','SELECT'),0)<>1 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.GoodsReceipts','OBJECT','SELECT'),0)<>1 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.GoodsReceiptLines','OBJECT','SELECT'),0)<>1 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.StockLedger','OBJECT','SELECT'),0)<>1 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.StockValuationEntries','OBJECT','SELECT'),0)<>1 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.StockBalances','OBJECT','SELECT'),0)<>1 OR
+  EXISTS(
+    SELECT 1 FROM sys.objects o
+    CROSS APPLY sys.fn_my_permissions(
+      QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.'+QUOTENAME(o.name),N'OBJECT') p
+    WHERE o.is_ms_shipped=0 AND p.permission_name IN
+      (N'SELECT',N'INSERT',N'UPDATE',N'DELETE',N'EXECUTE',N'ALTER',N'CONTROL')
+      AND NOT (p.permission_name=N'SELECT' AND OBJECT_SCHEMA_NAME(o.object_id)=N'dbo'
+        AND o.name IN(N'WebAuthSessions',N'WebOperationJournal',N'SalesReceipts',
+          N'SalesReceiptLines',N'GoodsReceipts',N'GoodsReceiptLines',
+          N'StockLedger',N'StockValuationEntries',N'StockBalances'))
+  )
 THEN 1 ELSE 0 END;", connection);
                 if (Convert.ToInt32(await probe.ExecuteScalarAsync(), CultureInfo.InvariantCulture) != 0)
-                    throw new InvalidOperationException("Oracle is broader than the four approved tables.");
+                    throw new InvalidOperationException("Oracle exceeds the nine explicit CI-only read tables.");
             }
 
             _stage = "emit-owned-run-configuration";
@@ -183,7 +212,7 @@ THEN 1 ELSE 0 END;", connection);
                 "VPS04A_LIVE_EMPLOYEE_ID=" + ids.Employee.ToString(CultureInfo.InvariantCulture),
                 "VPS04A_LIVE_PRODUCT_ID=" + ids.Product.ToString(CultureInfo.InvariantCulture),
             });
-            Console.WriteLine("PASS: isolated SQL schema13 (13/13 DbUp), runtime principal, four-table read-only oracle and active fixtures.");
+            Console.WriteLine("PASS: isolated SQL schema13 (13/13 DbUp), runtime principal, nine-table CI-only read-only oracle and active fixtures.");
             return 0;
         }
         catch (Exception problem)
@@ -201,6 +230,70 @@ THEN 1 ELSE 0 END;", connection);
                 "; readiness inner type: " + _sqlInnerType + ". No acceptance is claimed.");
             return 1;
         }
+    }
+
+    // Fault injection is a distinct privileged *CI-only* phase, never a host
+    // runtime permission. The trigger is absent during Kestrel startup and
+    // removed after a single deliberately failed HTTP Post. All paths are
+    // bound to the same ephemeral localhost, fresh disposable SQL database.
+    private static async Task<int> RunEphemeralFaultMaintenanceAsync(
+        SqlConnectionStringBuilder master, string action)
+    {
+        if (Environment.GetEnvironmentVariable("VPS04A_CI_FAULT_APPROVED") != "approved-ci-only")
+            throw new InvalidOperationException("CI fault-injection gate is not explicitly admitted.");
+        var maintenance = new SqlConnectionStringBuilder(master.ConnectionString)
+        {
+            InitialCatalog = Database,
+            Pooling = false,
+        }.ConnectionString;
+
+        using var connection = new SqlConnection(maintenance);
+        await connection.OpenAsync();
+
+        if (action == "arm-ledger-fault")
+        {
+            if (!(await new SqlWeb5SchemaCompatibilityChecker(maintenance)
+                    .CheckAsync(CancellationToken.None)).IsCompatible)
+                throw new InvalidOperationException("Fault injection requires unmodified schema13.");
+
+            if (await ScalarAsync(connection,
+                "SELECT COUNT(*) FROM sys.triggers WHERE name=N'TR_Vps04aCiLedgerAbort';") != 0)
+                throw new InvalidOperationException("CI fault trigger already present.");
+
+            // Deliberately throws *after* the ledger INSERT; the UoW must roll
+            // back the posted header, line COGS, ledger, balance and journal.
+            await ExecuteAsync(connection, @"
+CREATE TRIGGER dbo.TR_Vps04aCiLedgerAbort ON dbo.StockLedger
+AFTER INSERT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  IF EXISTS (SELECT 1 FROM inserted WHERE DocumentType = 'SalesReceipt')
+    THROW 51488, 'Disposable CI rollback injection.', 1;
+END;");
+            Console.WriteLine("PASS: ephemeral ledger fault armed after original schema13 preflight.");
+            return 0;
+        }
+
+        if (action == "disarm-ledger-fault")
+        {
+            if (await ScalarAsync(connection,
+                "SELECT COUNT(*) FROM sys.triggers WHERE name=N'TR_Vps04aCiLedgerAbort';") != 1)
+                throw new InvalidOperationException("Expected exactly one CI fault trigger.");
+            await ExecuteAsync(connection, "DROP TRIGGER dbo.TR_Vps04aCiLedgerAbort;");
+            if (!(await new SqlWeb5SchemaCompatibilityChecker(maintenance)
+                    .CheckAsync(CancellationToken.None)).IsCompatible)
+                throw new InvalidOperationException("Original schema13 fingerprint not restored.");
+            Console.WriteLine("PASS: CI ledger fault removed; exact original schema13 fingerprint restored.");
+            return 0;
+        }
+        throw new InvalidOperationException("Unsupported disposable fault maintenance command.");
+    }
+
+    private static async Task<int> ScalarAsync(SqlConnection connection, string sql)
+    {
+        using var query = new SqlCommand(sql, connection) { CommandTimeout = 30 };
+        return Convert.ToInt32(await query.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
     }
 
     // This forensic probe only runs on denied CI admission, never as an alternate
