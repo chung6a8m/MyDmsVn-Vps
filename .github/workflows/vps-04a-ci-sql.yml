@@ -1,0 +1,390 @@
+name: VPS-04A — Self-contained Linux HTTPS to SQL13 CI
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps04a-ci-sql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-sql13:
+    name: Ubuntu .NET 10 + isolated SQL2022 TLS + golden HTTP/stock and WEB2-WEB6 group parity 15/15
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      MYDMSVN_WEB_ORIGIN: https://localhost:50443
+      MYDMSVN_WEB_JWT_ISSUER: https://localhost:50443
+      MYDMSVN_WEB_JWT_AUDIENCE: vps04a-ci
+      MYDMSVN_WEB_JWT_ACTIVE_KID: ci-key
+      MYDMSVN_WEB_OPERATION_MODE: web5
+      MYDMSVN_WEB_DESKTOP_API: enabled
+      MYDMSVN_WEB_SUPERUSER_USERNAME: vps04a_ci_writer
+      VPS04A_LIVE_USERNAME: vps04a_ci_writer
+      VPS04A_LIVE_DENIED_USERNAME: vps04a_ci_denied
+      VPS04A_LIVE_ALLOW_MUTATION: approved-nonproduction-only
+      VPS04A_CI_EPHEMERAL_SQL: approved-container-only
+      VPS04A_CI_FAULT_APPROVED: approved-ci-only
+      DOTNET_NOLOGO: "1"
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.404"
+      - name: Require exact pinned SDK and GitHub hosted Linux runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cd src/MyDmsVn.Server.AspNetCoreHost && dotnet --version)" = "10.0.404"
+          test "${RUNNER_OS}" = "Linux"
+          test "${GITHUB_ACTIONS}" = "true"
+
+      - name: Generate job-scoped credentials and two localhost TLS certificates
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$(mktemp -d)"
+          # Strong, independent per-job credentials, never GitHub Environment secrets.
+          sa="CiA@9$(openssl rand -hex 24)"
+          runtime="CiR@9$(openssl rand -hex 24)"
+          oracle="CiO@9$(openssl rand -hex 24)"
+          writer="CiW@9$(openssl rand -hex 24)"
+          denied="CiD@9$(openssl rand -hex 24)"
+          jwt="$(openssl rand -base64 32 | tr -d '\n')"
+          for secret in "$sa" "$runtime" "$oracle" "$writer" "$denied" "$jwt"; do
+            echo "::add-mask::$secret"
+          done
+
+          # The server certificate is verified by the Linux runner; no -k, no
+          # TrustServerCertificate and no external SQL address can be admitted.
+          openssl req -x509 -newkey rsa:3072 -nodes -keyout "$work/sql.key" -out "$work/sql.crt" \
+            -days 1 -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" >/dev/null 2>&1
+          openssl req -x509 -newkey rsa:3072 -nodes -keyout "$work/https.key" -out "$work/https.crt" \
+            -days 1 -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" >/dev/null 2>&1
+          sudo cp "$work/sql.crt" /usr/local/share/ca-certificates/vps04a-sql.crt
+          sudo cp "$work/https.crt" /usr/local/share/ca-certificates/vps04a-https.crt
+          sudo update-ca-certificates >/dev/null 2>&1
+
+          cat > "$work/mssql.conf" <<'CONF'
+          [network]
+          tlscert = /tmp/vps04a-sql.pem
+          tlskey = /tmp/vps04a-sql.key
+          tlsprotocols = 1.2
+          forceencryption = 1
+          CONF
+          # SQL Server container runs as uid 10001; TLS private key must not be world-readable.
+          sudo chown 10001:0 "$work/sql.key"
+          sudo chmod 0400 "$work/sql.key"
+          chmod 0444 "$work/sql.crt" "$work/mssql.conf"
+          {
+            echo "VPS04A_CI_TLS_DIR=$work"
+            echo "MSSQL_SA_PASSWORD=$sa"
+            echo "VPS04A_CI_SQL_ADMIN_CONNECTION_STRING=Server=localhost,1433;Initial Catalog=master;User ID=sa;Password=$sa;Encrypt=True;TrustServerCertificate=False;Connection Timeout=5;Pooling=False"
+            echo "VPS04A_CI_SQL_RUNTIME_PASSWORD=$runtime"
+            echo "VPS04A_CI_SQL_ORACLE_PASSWORD=$oracle"
+            echo "VPS04A_LIVE_PASSWORD=$writer"
+            echo "VPS04A_LIVE_DENIED_PASSWORD=$denied"
+            echo "MYDMSVN_WEB_JWT_KEYS=ci-key:$jwt"
+          } >> "$GITHUB_ENV"
+
+      - name: Launch private disposable Microsoft SQL Server 2022
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No volume for database files. Port bound to runner loopback ONLY.
+          docker run -d --name vps04a-ci-sql --hostname vps04a-ci-sql \
+            --pull=always -e ACCEPT_EULA=Y -e MSSQL_PID=Developer -e MSSQL_SA_PASSWORD \
+            -p 127.0.0.1:1433:1433 \
+            -v "$VPS04A_CI_TLS_DIR/mssql.conf:/var/opt/mssql/mssql.conf:ro" \
+            -v "$VPS04A_CI_TLS_DIR/sql.crt:/tmp/vps04a-sql.pem:ro" \
+            -v "$VPS04A_CI_TLS_DIR/sql.key:/tmp/vps04a-sql.key:ro" \
+            mcr.microsoft.com/mssql/server:2022-latest >/dev/null
+          test "$(docker inspect -f '{{.State.Running}}' vps04a-ci-sql)" = "true"
+
+      - name: Validate SQL container identity can read configured TLS files
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Container runs as uid10001 and must traverse the TLS key directory.
+          # Never relax key mode, print the certificate private key, or bypass TLS.
+          docker exec -u 10001 vps04a-ci-sql test -r /tmp/vps04a-sql.key
+          docker exec -u 10001 vps04a-ci-sql test -r /tmp/vps04a-sql.pem
+          docker exec -u 10001 vps04a-ci-sql test -r /var/opt/mssql/mssql.conf
+          echo "PASS: mssql process account can read TLS key, certificate and config"
+      - name: Check SQL engine process and readiness without printing container logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="$(docker inspect -f '{{.State.Status}}' vps04a-ci-sql)"
+          if [ "$state" != "running" ]; then
+            echo "::error::Ephemeral SQL Server container stopped during startup."
+            exit 1
+          fi
+          # Never print SQL logs: only one fixed, non-sensitive readiness classification.
+          if docker logs --tail 120 vps04a-ci-sql 2>&1 |
+              grep -Fq "SQL Server is now ready for client connections"; then
+            echo "SQL engine reports listener ready; bootstrap still verifies TLS and schema."
+          else
+            echo "SQL engine listener not yet confirmed; bootstrap will retry with verified TLS."
+          fi
+      - name: Restore and compile original DbUp13 migrator under CI-only net10 bootstrap
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
+            -p:Vps04Server=true --force-evaluate -v minimal
+          dotnet build ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
+            -p:Vps04Server=true -c Release -f net10.0 --no-restore -warnaserror -v minimal
+
+      - name: Apply original 001-013 migrations, principal allowlists and disposable seeds
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The bootstrap is fail-closed to GITHUB_ACTIONS=true, exact localhost:1433,
+          # fresh fixed-name database, encrypted verified SQL and explicit CI scope.
+          dotnet run --project ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
+            -p:Vps04Server=true -c Release -f net10.0 --no-build --no-restore -- provision-isolated-ci
+
+      - name: Restore and compile locked .NET10 production host and opt-in acceptance tests
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true --locked-mode
+          dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -c Release -f net10.0 --no-restore -warnaserror
+          dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true --locked-mode
+          dotnet build ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-restore -warnaserror
+
+      - name: Run actual Kestrel HTTPS against private SQL; independently reconcile SQL journal
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$VPS04A_CI_TLS_DIR"
+          server_pid=""
+          fault_armed=0
+          cleanup() {
+            if [ "$fault_armed" = "1" ]; then
+              (cd src/MyDmsVn.Server.AspNetCoreHost &&
+                dotnet run --project ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj
+                -p:Vps04Server=true -c Release -f net10.0 --no-build --no-restore -- disarm-ledger-fault) >/dev/null 2>&1 || true
+            fi
+            if [ -n "$server_pid" ]; then
+              kill "$server_pid" 2>/dev/null || true
+              wait "$server_pid" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+          https_password="CiTls@9$(openssl rand -hex 16)"
+          echo "::add-mask::$https_password"
+          openssl pkcs12 -export -out "$work/https.pfx" -inkey "$work/https.key" \
+            -in "$work/https.crt" -passout "pass:$https_password" >/dev/null 2>&1
+          export ASPNETCORE_URLS=https://localhost:50443
+          export ASPNETCORE_Kestrel__Certificates__Default__Path="$work/https.pfx"
+          export ASPNETCORE_Kestrel__Certificates__Default__Password="$https_password"
+          dotnet src/MyDmsVn.Server.AspNetCoreHost/bin/Release/net10.0/MyDmsVn.Server.AspNetCoreHost.dll \
+            >"$work/host.log" 2>&1 &
+          server_pid="$!"
+          ready=0
+          for attempt in $(seq 1 60); do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "::error::Actual NET10 host refused SQL/TLS/security admission; no live PASS."
+              exit 1
+            fi
+            if curl --silent --fail --max-time 3 https://localhost:50443/api/v1/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1 || { echo "::error::HTTPS Kestrel health failed without TLS bypass."; exit 1; }
+
+          mkdir -p vps04a-ci-trx
+          # Primary phase: all four prior SQL tests PLUS two independent
+          # live JSON/ledger/COGS and strict-wire denial facts. No staging SQL.
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps04aLiveSqlAcceptanceTests|FullyQualifiedName~Vps04aCiValuationSqlAcceptanceTests' \
+            --logger 'trx;LogFileName=vps04a-ci-https-sql.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
+          # Run a separate two-client oversell race ONLY after the normal
+          # reconciliation phase. Two distinct Drafts each request four units
+          # while only five remain; require one committed and one denied Post,
+          # SQL StockBalances/StockLedger/COGS/journal proof and same-key replay.
+          # This preserves one unit for the later mid-UoW fault/recovery gate.
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~ConcurrentTwoClientOversellIsFailClosedAndNeverDoublePosts' \
+            --logger 'trx;LogFileName=vps04a-ci-oversell-race.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
+          # SQL fault is installed ONLY after Kestrel startup+schema13 admission
+          # and after all normal tests have completed. The API runtime identity
+          # never owns DDL. The next isolated test proves a genuine mid-UoW
+          # error physically rolls back header, COGS, ledger, balance & journal.
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet run --project ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
+            -p:Vps04Server=true -c Release -f net10.0 --no-build --no-restore -- arm-ledger-fault)
+          fault_armed=1
+          set +e
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~InjectedLedgerFailureRollsBackSourceCostBalanceAndJournal' \
+            --logger 'trx;LogFileName=vps04a-ci-fault-rollback.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+          fault_result="$?"
+          set -e
+          # The original exact13 fingerprint MUST be restored before the
+          # recovery HTTP request; no schema drift accepted as a success.
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet run --project ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
+            -p:Vps04Server=true -c Release -f net10.0 --no-build --no-restore -- disarm-ledger-fault)
+          fault_armed=0
+          test "$fault_result" = 0 || { echo "::error::Fault rollback oracle failed."; exit 1; }
+
+          # A fresh production Kestrel worker must recover the original
+          # durable operation intent after an actual process restart. This
+          # also keeps the normal per-worker login rate limiter intact:
+          # never weaken security admission to accommodate acceptance tests.
+          kill "$server_pid"
+          wait "$server_pid" 2>/dev/null || true
+          server_pid=""
+          dotnet src/MyDmsVn.Server.AspNetCoreHost/bin/Release/net10.0/MyDmsVn.Server.AspNetCoreHost.dll \
+            >"$work/host-recovery.log" 2>&1 &
+          server_pid="$!"
+          recovery_ready=0
+          for attempt in $(seq 1 60); do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "::error::Recovery worker refused SQL/TLS/security admission."
+              exit 1
+            fi
+            if curl --silent --fail --max-time 3 https://localhost:50443/api/v1/health >/dev/null; then
+              recovery_ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$recovery_ready" = 1 || { echo "::error::Restarted Kestrel HTTPS health failed."; exit 1; }
+
+          # Only after independent SQL rollback proof, exact schema13 restore
+          # and new-worker admission do we retry the ORIGINAL same key/version.
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~DisarmedOriginalSameKeyRetryCommitsExactlyOnce' \
+            --logger 'trx;LogFileName=vps04a-ci-fault-recovery.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
+          # After rollback + same-key recovery are proven on a freshly
+          # restarted Kestrel worker, exercise independent warehouse keys.
+          # Only the disposable bootstrap creates the two warehouse seeds.
+          # The new case checks 4-decimal line allocation and both SQL/API
+          # warehouse balances under parallel Sales.Post requests.
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~ParallelPostsForSameProductAcrossTwoWarehousesKeepFourDecimalCostAllocations' \
+            --logger 'trx;LogFileName=vps04a-ci-multiwarehouse-fractional.trx' \
+            --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
+          # Five separately discovered WEB2..WEB6 grouped real HTTPS
+          # response-parity facts. Each writes safe, explicit expected/actual/
+          # diff projections plus its independent read-only SQL Oracle source;
+          # WEB6 is STRICTLY disabled/fail-closed, not a Linux WEB6 grant.
+          mkdir -p vps04a-ci-parity
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps04aCiGroupWireParitySqlAcceptanceTests' \
+            --logger 'trx;LogFileName=vps04a-ci-group-parity.trx' \
+            --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          files=list(Path('vps04a-ci-trx').glob('*.trx'))
+          expected={'vps04a-ci-https-sql.trx':6,'vps04a-ci-oversell-race.trx':1,
+                    'vps04a-ci-multiwarehouse-fractional.trx':1,
+                    'vps04a-ci-group-parity.trx':5,
+                    'vps04a-ci-fault-rollback.trx':1,
+                    'vps04a-ci-fault-recovery.trx':1}
+          assert {f.name for f in files} == set(expected),[p.name for p in files]
+          ns={'t':'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          total=0
+          for file in files:
+            counters=ET.parse(file).getroot().find('./t:ResultSummary/t:Counters',ns)
+            assert counters is not None,file.name
+            got={name:int(counters.attrib[name]) for name in
+                 ('total','executed','passed','failed','notExecuted')}
+            n=expected[file.name]
+            assert got == {'total':n,'executed':n,'passed':n,'failed':0,'notExecuted':0},(file.name,got)
+            total+=n
+          assert total==15
+          print('PASS: 15/15 real HTTPS-to-SQL tests: 10 prior SQL facts + '
+                'five WEB2..WEB6 grouped parity facts; zero failed/skipped')
+
+          # A test that reports PASS but omits a group, a case, or expected/
+          # actual/diff evidence is a hard CI failure. The WEB6 report is
+          # deliberately tagged disabled-fail-closed-only.
+          import json
+          reports=Path('vps04a-ci-parity')
+          groups={'WEB2':9,'WEB3':5,'WEB4':4,'WEB5':3,'WEB6':3}
+          assert {p.stem for p in reports.glob('*.json')}==set(groups)
+          total_scenarios=0
+          for group,minimum in groups.items():
+            value=json.loads((reports/(group+'.json')).read_text(encoding='utf-8'))
+            assert value['group']==group and value['environment']=='disposable-sql13'
+            assert value['mode']=='web5'
+            assert value['scope']==('disabled-fail-closed-only' if group=='WEB6'
+                                    else 'bounded-live-positive-and-negative')
+            cases=value['cases']
+            assert len(cases)>=minimum, (group, len(cases))
+            assert len({case['id'] for case in cases})==len(cases)
+            for case in cases:
+              assert all(key in case for key in ('expected','actual','diff','sqlOracle','fixture','route'))
+              assert not case['diff'], (group,case['id'],case['diff'])
+              assert case['sqlOracle']
+            total_scenarios+=len(cases)
+          assert total_scenarios>=24
+          print(f'PASS: {total_scenarios} explicit WEB2-WEB6 expected/actual/diff scenarios; '
+                'WEB6 fail-closed only; no implied enabled WEB6 parity')
+          PY
+
+      - name: Upload only safe WEB2-WEB6 expected actual diff projections
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps04a-ci-group-parity
+          path: vps04a-ci-parity/*.json
+          if-no-files-found: warn
+      - name: Upload only safe TRX (no passwords, no TLS private keys, no host logs)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps04a-selfcontained-https-sql-trx
+          path: vps04a-ci-trx/*.trx
+          if-no-files-found: warn
+      - name: Always destroy test SQL container, TLS files and generated credentials
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f -v vps04a-ci-sql >/dev/null 2>&1 || true
+          if [ -n "${VPS04A_CI_TLS_DIR:-}" ] && [ -d "$VPS04A_CI_TLS_DIR" ]; then
+            sudo rm -rf -- "$VPS04A_CI_TLS_DIR"
+          fi
+          sudo rm -f /usr/local/share/ca-certificates/vps04a-sql.crt \
+                     /usr/local/share/ca-certificates/vps04a-https.crt

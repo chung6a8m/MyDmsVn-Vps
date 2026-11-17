@@ -147,7 +147,7 @@ def validate_links(path: str, tracked: set[str], errors: list[str]) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default="foundation-report.json")
-    parser.add_argument("--expected-projects", type=int, default=48)
+    parser.add_argument("--expected-projects", type=int, default=51)
     args = parser.parse_args()
     errors: list[str] = []
     index, blob_shas, index_errors = tracked_files()
@@ -164,6 +164,11 @@ def main() -> int:
         errors.append("Nested Git repository metadata is forbidden")
 
     projects = sorted(p for p in tracked if p.endswith(".csproj"))
+    # VPS-04A adds exactly one CI-only executable outside product src graph.
+    # It source-links the original migrations; it is not a production dependency.
+    ci_sql_project = "tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj"
+    if ci_sql_project not in projects:
+        errors.append("Missing exact test-only SQL13 DbUp bootstrap project")
     if len(projects) != args.expected_projects:
         errors.append(
             f"Project count drift: expected {args.expected_projects}; "

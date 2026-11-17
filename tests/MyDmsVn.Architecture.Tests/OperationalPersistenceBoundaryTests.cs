@@ -32,10 +32,39 @@ public sealed class OperationalPersistenceBoundaryTests
         {
             var dependencies = System.Xml.Linq.XDocument.Load(project).Descendants("PackageReference").Select(e => (string?)e.Attribute("Include"));
             Assert.DoesNotContain(dependencies, value => value == "Dapper" || (value ?? "").StartsWith("RepoDb", StringComparison.OrdinalIgnoreCase));
-            var lockFile = Path.Combine(Path.GetDirectoryName(project)!, "packages.lock.json");
-            Assert.True(File.Exists(lockFile));
-            Assert.DoesNotContain("\"Dapper\"", File.ReadAllText(lockFile));
-            Assert.DoesNotContain("\"RepoDb", File.ReadAllText(lockFile));
+            var directory = Path.GetDirectoryName(project)!;
+            var legacyLock = Path.Combine(directory, "packages.lock.json");
+            var net10Lock = Path.Combine(directory, "packages.vps04a.lock.json");
+            var newHost = Path.GetFileNameWithoutExtension(project).Equals(
+                "MyDmsVn.Server.AspNetCoreHost", StringComparison.OrdinalIgnoreCase) ||
+                Path.GetFileNameWithoutExtension(project).Equals(
+                    "MyDmsVn.Server.AspNetCoreHost.Tests", StringComparison.OrdinalIgnoreCase);
+            // Legacy graph remains locked. The *single* ephemeral CI-only
+            // SQL13 bootstrap is not a shipping assembly: it compiles the original
+            // DbUp engine under net10 and generates a temporary restore lock in CI.
+            // Never apply this exception to another project or product assembly.
+            var ciSqlBootstrap = Path.GetFileNameWithoutExtension(project).Equals(
+                "MyDmsVn.Vps04a.SqlBootstrap", StringComparison.OrdinalIgnoreCase) &&
+                project.Contains(Path.DirectorySeparatorChar + "tests" + Path.DirectorySeparatorChar);
+            if (ciSqlBootstrap)
+            {
+                var xml = System.Xml.Linq.XDocument.Load(project);
+                Assert.Equal("net10.0", xml.Descendants("TargetFramework").Single().Value);
+                Assert.Equal("true", xml.Descendants("Vps04Server").Single().Value);
+                Assert.Equal("false", xml.Descendants("IsTestProject").Single().Value);
+                Assert.Contains(xml.Descendants("PackageReference"),
+                    entry => (string?)entry.Attribute("Include") == "dbup-sqlserver");
+                Assert.Contains(xml.Descendants("Compile"),
+                    entry => ((string?)entry.Attribute("Include"))?.EndsWith(
+                        "DatabaseMigrationRunner.cs", StringComparison.Ordinal) == true);
+            }
+            Assert.True(File.Exists(legacyLock) || (newHost && File.Exists(net10Lock)) || ciSqlBootstrap);
+            if (newHost) Assert.True(File.Exists(net10Lock));
+            foreach (var lockFile in new[] { legacyLock, net10Lock }.Where(File.Exists))
+            {
+                Assert.DoesNotContain("\"Dapper\"", File.ReadAllText(lockFile));
+                Assert.DoesNotContain("\"RepoDb", File.ReadAllText(lockFile));
+            }
         }
         var assembly = typeof(MyDmsVn.Server.Infrastructure.Persistence.SqlUnitOfWorkFactory).Assembly;
         Assert.Null(assembly.GetType("MyDmsVn.Server.Infrastructure.Persistence.RepoDbMappingInitializer"));

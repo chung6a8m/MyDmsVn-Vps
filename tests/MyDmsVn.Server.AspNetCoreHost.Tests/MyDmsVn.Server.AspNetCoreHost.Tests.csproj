@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Vps04Server>true</Vps04Server>
+    <!-- Live tests are absent from normal CI/discovery; explicit opt-in on approved SQL only. -->
+    <DefineConstants Condition="'$(Vps04ALive)' == 'true'">$(DefineConstants);VPS04A_LIVE</DefineConstants>
+    <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.vps04a.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/MyDmsVn.Server.AspNetCoreHost/MyDmsVn.Server.AspNetCoreHost.csproj" />
+  </ItemGroup>
+</Project>

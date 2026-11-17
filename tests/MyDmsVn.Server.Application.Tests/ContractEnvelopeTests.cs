@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using ErrorOr;
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace MyDmsVn.Server.Application.Tests
@@ -259,6 +261,37 @@ namespace MyDmsVn.Server.Application.Tests
                 JsonConvert.SerializeObject(receipt, settings));
         }
 
+        private static JObject ParseStrictContractJsonObject(string json)
+        {
+            using var text = new StringReader(json);
+            using var reader = new JsonTextReader(text) { DateParseHandling = DateParseHandling.None };
+            var result = JObject.Load(reader, new JsonLoadSettings
+            {
+                DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error
+            });
+            if (reader.Read())
+                throw new JsonReaderException("Trailing content after the JSON object is not allowed.");
+            return result;
+        }
+
+        [Theory]
+        [InlineData("{\"receiptId\":42,\"receiptId\":42}")]
+        [InlineData("{\"lines\":[{\"quantity\":2.5000,\"quantity\":2.5000}]}")]
+        public void Goods_receipt_contract_comparison_rejects_duplicate_json_properties(string json)
+        {
+            Assert.Throws<JsonReaderException>(() => ParseStrictContractJsonObject(json));
+        }
+
+        [Fact]
+        public void Goods_receipt_contract_comparison_ignores_member_order_but_preserves_date_text()
+        {
+            var expected = ParseStrictContractJsonObject("{\"receiptId\":42,\"receiptDate\":\"2026-10-10\"}");
+            var reordered = ParseStrictContractJsonObject("{\"receiptDate\":\"2026-10-10\",\"receiptId\":42}");
+            var alteredDate = ParseStrictContractJsonObject("{\"receiptDate\":\"2026-10-10T00:00:00\",\"receiptId\":42}");
+            Assert.True(JToken.DeepEquals(expected, reordered));
+            Assert.False(JToken.DeepEquals(expected, alteredDate));
+        }
+
         [Fact]
         public void Goods_receipt_contracts_expose_opaque_expected_and_current_version_tokens()
         {
@@ -298,13 +331,24 @@ namespace MyDmsVn.Server.Application.Tests
                 version,
                 Array.Empty<GoodsReceiptLineDto>());
             var settings = ApiJson.CreateSerializerSettings();
+            var updateJson = JsonConvert.SerializeObject(updateRequest, settings);
+            var postJson = JsonConvert.SerializeObject(postRequest, settings);
 
-            Assert.Equal(
-                "{\"receiptId\":42,\"expectedVersion\":\"AQIDBAUGBwg=\",\"receiptDate\":\"2026-10-10\",\"warehouseId\":2,\"employeeId\":3,\"note\":\"updated\",\"lines\":[{\"productId\":7,\"quantity\":2.5000,\"unitCost\":19.9900}]}",
-                JsonConvert.SerializeObject(updateRequest, settings));
-            Assert.Equal(
-                "{\"receiptId\":42,\"expectedVersion\":\"AQIDBAUGBwg=\"}",
-                JsonConvert.SerializeObject(postRequest, settings));
+            Assert.True(
+                JToken.DeepEquals(
+                    ParseStrictContractJsonObject("{\"receiptId\":42,\"expectedVersion\":\"AQIDBAUGBwg=\",\"receiptDate\":\"2026-10-10\",\"warehouseId\":2,\"employeeId\":3,\"note\":\"updated\",\"lines\":[{\"productId\":7,\"quantity\":2.5000,\"unitCost\":19.9900}]}"),
+                    ParseStrictContractJsonObject(updateJson)),
+                "Update request JSON must preserve its fields and values regardless of reflection property order.");
+            Assert.True(
+                JToken.DeepEquals(
+                    ParseStrictContractJsonObject("{\"receiptId\":42,\"expectedVersion\":\"AQIDBAUGBwg=\"}"),
+                    ParseStrictContractJsonObject(postJson)),
+                "Post request JSON must preserve its fields and values regardless of reflection property order.");
+
+            // Numeric token spelling is a frozen wire contract even if parsed JSON numbers compare equal.
+            // Delimiter lookaheads reject 2.50000/19.99000 without depending on member order.
+            Assert.Matches(@"""quantity""\s*:\s*2\.5000(?=\s*[,}])", updateJson);
+            Assert.Matches(@"""unitCost""\s*:\s*19\.9900(?=\s*[,}])", updateJson);
             Assert.Contains("\"version\":\"AQIDBAUGBwg=\"", JsonConvert.SerializeObject(receipt, settings));
         }
 

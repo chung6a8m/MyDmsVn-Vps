@@ -10,18 +10,34 @@ project_docs = {path: ET.parse(path).getroot() for path in projects}
 helpers = [path for path, doc in project_docs.items()
            if any(node.text == "false" for node in doc.iter("IsTestProject"))]
 suites = [path for path in projects if path not in helpers]
-assert len(projects) == 16 and len(helpers) == 3 and len(suites) == 13, \
+assert len(projects) == 18 and len(helpers) == 4 and len(suites) == 14, \
     "Test project inventory drift"
+ci_bootstrap = root / "tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj"
+assert ci_bootstrap in helpers and ci_bootstrap not in suites, \
+    "Original DbUp SQL13 bootstrap must remain an explicitly marked non-test tool"
+assert [n.text for n in project_docs[ci_bootstrap].iter("TargetFramework")] == ["net10.0"]
+assert [n.text for n in project_docs[ci_bootstrap].iter("OutputType")] == ["Exe"]
+assert "dbup-sqlserver" in {n.attrib["Include"] for n in project_docs[ci_bootstrap].iter("PackageReference")}
 for path in suites:
     doc = project_docs[path]
     props = lambda key: [n.text for n in doc.iter(key) if n.text]
     refs = {n.attrib["Include"] for n in doc.iter("PackageReference")}
-    assert props("TargetFramework") == ["net48"], path
+    target_frameworks = props("TargetFramework")
+    if path.name == "MyDmsVn.Server.Application.Tests.csproj":
+        assert target_frameworks == ["net48", "net10.0"], path
+    elif path.name == "MyDmsVn.Server.AspNetCoreHost.Tests.csproj":
+        assert target_frameworks == ["net10.0"], path
+    else:
+        assert target_frameworks == ["net48"], path
     assert props("OutputType") == ["Exe"], f"xUnit v3 executable missing: {path}"
     assert "xunit.v3" in refs and "xunit" not in refs, f"xUnit v3 package mismatch: {path}"
     assert "xunit.runner.visualstudio" in refs and "Microsoft.NET.Test.Sdk" in refs
     lock = path.parent / "packages.lock.json"
-    assert lock.exists() and '"xunit.v3"' in lock.read_text(encoding="utf-8-sig"), f"Missing locked xunit.v3: {path}"
+    if path.name != "MyDmsVn.Server.AspNetCoreHost.Tests.csproj":
+        assert lock.exists() and '"xunit.v3"' in lock.read_text(encoding="utf-8-sig"), f"Missing locked xunit.v3: {path}"
+    else:
+        net10_lock=path.parent / "packages.vps04a.lock.json"
+        assert net10_lock.exists() and '"xunit.v3"' in net10_lock.read_text(encoding="utf-8-sig"), f"Missing locked net10 xunit.v3: {path}"
 
 packages = (root / "Directory.Packages.props").read_text(encoding="utf-8-sig")
 assert 'PackageVersion Include="xunit.v3" Version="3.2.2"' in packages
@@ -62,7 +78,7 @@ for test_id, floor in expected_smoke_floors.items():
     assert smoke_matrix.count(row) == 1, f"Missing smoke floor {test_id}={floor}"
 assert smoke_matrix.count("minimum_tests:") == len(expected_smoke_floors), "Unexpected smoke floor inventory"
 
-print("VPS-01 static topology: PASS 13 executable xUnit v3 projects; 29 routes; 178 fixtures; 4 smoke floors")
+print("VPS-01 static topology: PASS 13 legacy + 1 net10 executable xUnit v3 projects, 4 non-test helpers including one isolated CI bootstrap; 29 routes; 178 fixtures; 4 smoke floors")
 
 
 # VPS-02 retains the 29 legacy routes; additions and Desktop mappings are versioned independently.

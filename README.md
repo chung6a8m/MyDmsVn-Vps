@@ -10,13 +10,15 @@ Independent Windows Desktop + Linux VPS modernization of MyDmsVn, starting from 
 
 See [Owner decisions](docs/decisions/README.md), [target architecture](docs/architecture/overview.md), and the [single authoritative roadmap status](docs/roadmap/README.md).
 
-## Current implementation stage: VPS-03 (PR #6 review/merge gate; not production acceptance)
+## Current implementation stage: VPS-04A — ASP.NET Core 10 Linux host (PR #9 review)
 
-VPS-00A/B established the independent source/build baseline. VPS-01 added executable xUnit v3 and frozen contracts; VPS-02 completed separately evidenced SQL-backed HTTP API parity. [VPS-03 PR #6](https://github.com/chung6a8m/MyDmsVn-Vps/pull/6) changes production `Desktop.App` (Windows `net48`) to use `Desktop.Infrastructure.Http` for HTTPS/JSON, not Local/Server or direct SQL. The legacy Local adapter remains in source for old tests. The new [published artifact CI](.github/workflows/vps-03-desktop-artifact.yml) validates net48 x86 output boundaries.
+VPS-00A/B established the independent baseline, VPS-01 executable xUnit v3, and VPS-02 SQL-backed HTTP parity. [VPS-03 PR #6](https://github.com/chung6a8m/MyDmsVn-Vps/pull/6) **merged** to `main` at `2685f87` on 2026-11-17. Desktop remains Windows `net48`, using `Desktop.Infrastructure.Http` via HTTPS/JSON rather than direct SQL; the Local adapter is retained for legacy tests.
 
-The **Server Domain/Application/Infrastructure/HttpHost/DbMigrator remain net48** in VPS-03; HttpHost is still OWIN/Web API 2 and uses Newtonsoft.Json and MediatR, and DbMigrator still uses DbUp. VPS-03 [Issue #8](https://github.com/chung6a8m/MyDmsVn-Vps/issues/8) has exact-SHA Windows HTTPS/SQL acceptance (46/46 method parity, 86/86 core tests, 1/1 attended GUI), while [Issue #7](https://github.com/chung6a8m/MyDmsVn-Vps/issues/7) has exact-SHA restart-safe recovery acceptance (15/15 cases including attended GUI and cleanup). See [VPS-03 evidence](docs/evidence/vps-03-desktop-http-cutover.md) and [Issue #7 closeout](docs/evidence/vps-03-issue-7-closeout.md). Completion of VPS-03 additionally requires independent PR #6 review, final review-fix HEAD CI and merge. These Windows/net48 gates **do not** approve production deployment, Linux hosting or VPS-09 acceptance.
+[VPS-04A PR #9](https://github.com/chung6a8m/MyDmsVn-Vps/pull/9) introduces the separate `src/MyDmsVn.Server.AspNetCoreHost` **ASP.NET Core `net10.0`** host and conditional `net10.0` Server graph (`-p:Vps04Server=true`). Its nested `global.json` pins SDK **10.0.404**, whereas the root `global.json` remains the Windows/legacy SDK 8.0.400 (latestFeature). The legacy `net48` HttpHost and DbMigrator still build independently. Newtonsoft.Json, MediatR and DbUp are intentionally retained pending VPS-05/06/07.
 
-The SDK selected by the root `global.json` is `8.0.400` with `latestFeature` roll-forward, a build tool only. The intended .NET 10 SDK `10.0.404` and Server `net10.0` arrive in VPS-04 after Desktop HTTP cutover. Do not prematurely retarget this baseline.
+PR #9 has bounded, disposable Linux HTTPS→SQL13 acceptance: **15/15 real SQL-backed tests**, **24 selected WEB2–WEB6 expected/actual/diff scenarios**, and **57/57 compiled routes**, plus Windows net48 and xUnit CI. The 178 frozen corpus files are source pins, **not 178 live HTTP response tests**. Protected staging is **NOT RUN**, and positive WEB6 portable audit, exhaustive route/value parity, VPS deployment and release approval are **NOT VERIFIED**.
+
+Subsequent increments: [VPS-04B protected audit/security](https://github.com/chung6a8m/MyDmsVn-Vps/issues/10), [VPS-08 staging/deployment](https://github.com/chung6a8m/MyDmsVn-Vps/issues/11), and [VPS-09 integrated acceptance](https://github.com/chung6a8m/MyDmsVn-Vps/issues/12). Review exact HEAD and CI in [PR #9](https://github.com/chung6a8m/MyDmsVn-Vps/pull/9); [roadmap](docs/roadmap/README.md) is the sole live status authority. No production-readiness claim.
 
 ## Build and test on Windows
 
@@ -34,16 +36,33 @@ dotnet build src/MyDmsVn.Server.DbMigrator/MyDmsVn.Server.DbMigrator.csproj -c R
 
 Running `Desktop.App` (not merely compiling it) requires `MYDMSVN_DESKTOP_API_ORIGIN` set to the deployed canonical HTTPS origin and `MYDMSVN_DESKTOP_OPERATION_MODE` set to the actual host mode (`legacy-web11`, `web4`, or `web5`). The additive host feature API still requires `MYDMSVN_WEB_DESKTOP_API=enabled`; do not enable it on production without the accepted SQL/permission/GUI gates.
 
-The .NET Framework runtime and GUI are Windows-only. Linux CI currently executes **static repository validation, not a Server runtime build**. See [build/CI guide](docs/build/build-and-ci.md) and [test policy](docs/testing/test-policy.md) for the exact supported gates. No SQL Server integration test is implicitly satisfied by a build or skipped test.
+The .NET Framework runtime and GUI are Windows-only. VPS-00B's Linux foundation job is static; VPS-04A runs a separate real Linux net10 build and disposable HTTPS→SQL CI. No build, discovery-only test or skipped protected staging job implies production acceptance. See the [build/CI guide](docs/build/build-and-ci.md) and [test policy](docs/testing/test-policy.md).
+
+## VPS-04A Linux net10 SQL-free developer gate
+
+From `src/MyDmsVn.Server.AspNetCoreHost` with SDK **10.0.404**:
+
+```bash
+dotnet --version
+dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true --locked-mode
+dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -c Release -f net10.0 --no-restore -warnaserror
+dotnet restore ../../tests/MyDmsVn.Server.Application.Tests/MyDmsVn.Server.Application.Tests.csproj -p:Vps04Server=true --locked-mode
+dotnet test ../../tests/MyDmsVn.Server.Application.Tests/MyDmsVn.Server.Application.Tests.csproj -p:Vps04Server=true -c Release -f net10.0 --no-restore
+dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true --locked-mode
+dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -c Release -f net10.0 --no-restore
+```
+
+Real SQL bootstrap, TLS and independent SQL Oracle are CI-only, described in the [VPS-04A runbook](docs/runbooks/vps-04a-selfcontained-ci.md). Do not target staging or production SQL.
+
 
 ## Repository map
 
-- `src/` — production source; `src/MyDmsVn.Desktop.Infrastructure.Http` is the active Desktop adapter, with `Infrastructure.Local` retained solely for legacy tests.
-- `tests/` — legacy tests; [current test entry point](tests/README.md).
+- `src/` — production source; `Server.AspNetCoreHost` is the transitional Linux net10 entry point, `Desktop.Infrastructure.Http` is the active Windows net48 client adapter, and `Infrastructure.Local` is retained for legacy tests.
+- `tests/` — net48 suites plus net10 native host tests and CI-only SQL bootstrap; [test entry point](tests/README.md).
 - `vendor/MyDmsVn.WinFormsKit/` — local source snapshot including SourceGrid, not submodules.
 - `docs/import/` — immutable snapshot provenance and source-integrity evidence.
 - `docs/decisions/`, `docs/architecture/`, `docs/roadmap/`, `docs/testing/`, `docs/evidence/` — independent project governance.
-- `.github/workflows/vps-foundation.yml` — Linux static and Windows net48 checks; `.github/workflows/vps-03-desktop-artifact.yml` — Desktop x86 publish, package and binary boundary audit.
+- `.github/workflows/vps-foundation.yml` — static/Windows net48; `vps-03-desktop-artifact.yml` — Desktop publish; `vps-04a-linux.yml` and `vps-04a-ci-sql.yml` — Linux net10 and disposable HTTPS→SQL13 gates.
 - `scripts/verify-vps-foundation.py` — cross-platform static path, project and document sanity checker.
 
 Do not use historic source-repository PASS results or exceptions to authorize a release of MyDmsVn-Vps.
