@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Web.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MyDmsVn.Server.HttpHost;
@@ -36,6 +37,28 @@ internal static class Net10RouteTable
             // ASP.NET Core routing chooses literals over parameters, independently of enumeration order.
             app.MapMethods(route.Path, new[] { route.Verb },
                 context => Dispatch(context, route));
+        }
+    }
+
+    internal static void MapFallback(WebApplication app)
+    {
+        // The default MapFallback pattern excludes paths containing a filename.
+        // Every unknown /api path, including dotted segments, needs the WEB2 JSON 404 envelope.
+        app.MapFallback("{**path}", (HttpContext context) => FallbackAsync(context));
+    }
+
+    internal static async Task FallbackAsync(HttpContext context)
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            using var response = HttpJson.Error(404, "NotFound", "The resource was not found.",
+                context.RequestServices.GetRequiredService<RequestIdentityAdmission>().CorrelationId);
+            await WriteAsync(context, response).ConfigureAwait(false);
+        }
+        else
+        {
+            // SPA static-file routing, proxy configuration and systemd are VPS-04B/VPS-08 gates.
+            context.Response.StatusCode = 404;
         }
     }
 
@@ -108,12 +131,13 @@ internal static class Net10RouteTable
             await WriteAsync(context, response).ConfigureAwait(false);
     }
 
-    private static async Task<HttpRequestMessage> CreateMessage(HttpContext context)
+    internal static async Task<HttpRequestMessage> CreateMessage(HttpContext context)
     {
         using var stream = new MemoryStream();
         await context.Request.Body.CopyToAsync(stream, context.RequestAborted).ConfigureAwait(false);
-        var uri = new Uri(context.Request.Scheme + "://" + context.Request.Host.Value +
-            context.Request.Path.Value + context.Request.QueryString.Value);
+        // Path.Value is decoded; concatenating it can reinterpret encoded '?' and '#'
+        // as new query/fragment delimiters. Preserve the URI boundary for wire parsers.
+        var uri = new Uri(context.Request.GetEncodedUrl(), UriKind.Absolute);
         var result = new HttpRequestMessage(new HttpMethod(context.Request.Method), uri);
         foreach (var pair in context.Request.Headers)
         {

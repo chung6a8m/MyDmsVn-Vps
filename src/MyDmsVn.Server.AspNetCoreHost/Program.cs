@@ -83,20 +83,7 @@ internal static class Program
         var app = builder.Build();
         app.Use(CoreApiBoundary.HandleAsync);
         Net10RouteTable.Map(app);
-        app.MapFallback(async context =>
-        {
-            if (context.Request.Path.StartsWithSegments("/api"))
-            {
-                using var response = HttpJson.Error(404, "NotFound", "The resource was not found.",
-                    context.RequestServices.GetRequiredService<RequestIdentityAdmission>().CorrelationId);
-                await Net10RouteTable.WriteAsync(context, response).ConfigureAwait(false);
-            }
-            else
-            {
-                // SPA static-file routing, proxy configuration and systemd are VPS-04B/VPS-08 gates.
-                context.Response.StatusCode = 404;
-            }
-        });
+        Net10RouteTable.MapFallback(app);
         return app;
     }
 }

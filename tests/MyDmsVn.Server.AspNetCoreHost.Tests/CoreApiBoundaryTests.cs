@@ -5,7 +5,9 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
 using MyDmsVn.Server.HttpHost;
@@ -28,6 +30,7 @@ public sealed class CoreApiBoundaryTests
                 ["test-key"] = Enumerable.Repeat((byte)0x5A, 32).ToArray()
             }));
         services.AddScoped<RequestIdentityAdmission>();
+        services.AddSingleton<AuthAttemptLimiter>();
         var context = new DefaultHttpContext
         {
             RequestServices = services.BuildServiceProvider()
@@ -177,6 +180,40 @@ public sealed class CoreApiBoundaryTests
         await CoreApiBoundary.HandleAsync(context, () => Task.CompletedTask);
         var correlation = context.Response.Headers["X-Correlation-ID"].ToString();
         Assert.Matches(new Regex("^[0-9a-f]{32}$", RegexOptions.CultureInvariant), correlation);
+    }
+
+    [Fact]
+    public void FallbackRouteIncludesUnknownApiPathsWithFileExtensions()
+    {
+        using var app = WebApplication.CreateBuilder().Build();
+        Net10RouteTable.MapFallback(app);
+        var endpoints = ((IEndpointRouteBuilder)app).DataSources
+            .SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
+        Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "{**path}" &&
+            endpoint.Order == int.MaxValue);
+    }
+
+    [Fact]
+    public async Task UnknownDottedApiPathProducesNotFoundJsonEnvelope()
+    {
+        var context = NewRequest("GET", "/api/v1/unknown.json");
+        context.RequestServices.GetRequiredService<RequestIdentityAdmission>().BeginCorrelation("fallback_01");
+        await Net10RouteTable.FallbackAsync(context);
+        Assert.Equal(404, context.Response.StatusCode);
+        Assert.StartsWith("application/json", context.Response.ContentType!);
+        using var document = JsonDocument.Parse(((MemoryStream)context.Response.Body).ToArray());
+        Assert.Contains("NotFound", document.RootElement.GetRawText());
+        Assert.Contains("fallback_01", document.RootElement.GetRawText());
+    }
+
+    [Fact]
+    public async Task LegacyRequestUriKeepsEscapedPathDelimitersSeparateFromQuery()
+    {
+        var context = NewRequest("GET", "/api/v1/sales-receipts/a?b#c");
+        context.Request.QueryString = new QueryString("?feature=sales");
+        using var message = await Net10RouteTable.CreateMessage(context);
+        Assert.Equal("/api/v1/sales-receipts/a%3Fb%23c", message.RequestUri!.AbsolutePath);
+        Assert.Equal("?feature=sales", message.RequestUri.Query);
     }
 
     [Fact]
