@@ -17,6 +17,8 @@ public static class SqlSchemaDefinitionFingerprint
     {
         if (commandTimeout <= 0 || commandTimeout > 30) throw new ArgumentOutOfRangeException(nameof(commandTimeout));
         cancellationToken.ThrowIfCancellationRequested();
+        // Permit only the exact FM journal shape; never waive other SQL definitions.
+        await SqlFluentMigratorVersionTableProof.VerifyAsync(connection, cancellationToken).ConfigureAwait(false);
         using var command = connection.CreateCommand();
         command.CommandTimeout = commandTimeout;
         command.CommandText = @"
@@ -38,7 +40,16 @@ UNION ALL SELECT CONCAT(N'ID|',OBJECT_NAME(object_id),N'|',name,N'|',CONVERT(nva
 UNION ALL SELECT CONCAT(N'CC|',OBJECT_NAME(object_id),N'|',name,N'|',definition,N'|',is_persisted) FROM sys.computed_columns WHERE OBJECTPROPERTY(object_id,'IsMSShipped')=0
 UNION ALL SELECT CONCAT(N'UT|',SCHEMA_NAME(schema_id),N'|',name) FROM sys.types WHERE is_user_defined=1
 )
-SELECT @s=STRING_AGG(CONVERT(nvarchar(max),signature) COLLATE Latin1_General_100_BIN2,N';') WITHIN GROUP(ORDER BY signature COLLATE Latin1_General_100_BIN2) FROM signatures;
+SELECT @s=STRING_AGG(CONVERT(nvarchar(max),signature) COLLATE Latin1_General_100_BIN2,N';') WITHIN GROUP(ORDER BY signature COLLATE Latin1_General_100_BIN2) FROM signatures WHERE NOT (
+signature LIKE N'O|dbo|FluentMigratorVersionInfo|%' OR
+signature LIKE N'C|dbo|FluentMigratorVersionInfo|%' OR
+signature LIKE N'D|dbo|FluentMigratorVersionInfo|%' OR
+signature LIKE N'K|dbo|FluentMigratorVersionInfo|%' OR
+signature LIKE N'F|dbo|FluentMigratorVersionInfo|%' OR
+signature LIKE N'I|dbo|FluentMigratorVersionInfo|%' OR
+signature LIKE N'IC|dbo|FluentMigratorVersionInfo|%' OR
+signature LIKE N'ID|FluentMigratorVersionInfo|%'
+);
 SELECT CONVERT(varchar(64),HASHBYTES('SHA2_256',@s),2);";
         return (string)(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false));
     }

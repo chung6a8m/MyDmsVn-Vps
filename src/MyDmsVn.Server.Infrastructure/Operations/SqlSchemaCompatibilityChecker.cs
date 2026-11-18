@@ -499,7 +499,7 @@ public sealed class SqlSchemaCompatibilityChecker : ISchemaCompatibilityChecker
         "N'SchemaVersions', N'Users', N'Roles', N'UserRoles', N'RolePermissions', N'UserPermissions', " +
         "N'Products', N'Warehouses', N'Employees', N'Customers', " +
         "N'GoodsReceipts', N'GoodsReceiptLines', N'StockLedger', N'StockBalances', " +
-        "N'SystemSecuritySettings', N'SecurityAuditEvents')) OR " +
+        "N'SystemSecuritySettings', N'SecurityAuditEvents', N'FluentMigratorVersionInfo')) OR " +
         "(candidate.type = N'P' AND candidate.name IN (N'ApplySecurityAdministration', " +
         "N'ReadSecurityPermissionImportTarget', N'ApplySecurityPermissionImport')) OR " +
         "(candidate.type = N'FN' AND candidate.name = N'CatalogTextContainsNul') OR " +
@@ -570,7 +570,7 @@ public sealed class SqlSchemaCompatibilityChecker : ISchemaCompatibilityChecker
         }
 
         var artifactSql = exactSchema9 ? ArtifactSql : ArtifactSql
-            .Replace("N'SystemSecuritySettings', N'SecurityAuditEvents'))", "N'SystemSecuritySettings', N'SecurityAuditEvents', N'SalesReceipts', N'SalesReceiptLines', N'StockValuationEntries'))")
+            .Replace("N'SystemSecuritySettings', N'SecurityAuditEvents', N'FluentMigratorVersionInfo'))", "N'SystemSecuritySettings', N'SecurityAuditEvents', N'FluentMigratorVersionInfo', N'SalesReceipts', N'SalesReceiptLines', N'StockValuationEntries'))")
             .Replace("candidate.type = N'SO' AND candidate.name = N'GoodsReceiptNumberSequence'", "candidate.type = N'SO' AND candidate.name IN (N'GoodsReceiptNumberSequence', N'SalesReceiptNumberSequence')")
             .Replace("candidate.name = N'TR_StockLedger_AppendOnly'", "candidate.name IN (N'TR_StockLedger_AppendOnly', N'TR_StockValuationEntries_AppendOnly')")
             .Replace("candidate.parent_object_id = OBJECT_ID(N'dbo.StockLedger', N'U')", "candidate.parent_object_id = CASE candidate.name WHEN N'TR_StockLedger_AppendOnly' THEN OBJECT_ID(N'dbo.StockLedger', N'U') ELSE OBJECT_ID(N'dbo.StockValuationEntries', N'U') END");
