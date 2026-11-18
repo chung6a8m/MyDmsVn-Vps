@@ -28,12 +28,21 @@ public abstract class ImmutableSqlMigration : Migration
         // SQL Server stores CREATE PROCEDURE/TRIGGER exactly, including leading
         // blank lines. Strip only newline characters at batch boundaries,
         // never SQL tokens or the immutable imported source bytes.
+        var version = Vps07bExecutionScope.VersionOf(ScriptName);
+        var batchIndex = 0;
         foreach (var sqlBatch in ImmutableSqlScript.Batches(ScriptName))
+        {
             Execute.Sql(sqlBatch.Trim('\r', '\n'));
+            batchIndex++;
+            // Only the separately admitted disposable CI runner can request
+            // this deterministic failure. The original SQL blob is immutable.
+            // FM must roll back this batch, its predecessors and both journals.
+            if (Vps07bExecutionScope.ShouldInjectFault(version, batchIndex))
+                Execute.Sql("THROW 51750, 'VPS07B isolated rollback oracle.', 1;");
+        }
 
         // Both journals and the original business SQL are in one migration
         // transaction. VersionInfo is appended by the runner after Up().
-        var version = Vps07bExecutionScope.VersionOf(ScriptName);
         Execute.WithConnection((connection, transaction) =>
         {
             using var command = connection.CreateCommand();

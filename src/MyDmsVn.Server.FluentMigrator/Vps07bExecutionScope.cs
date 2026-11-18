@@ -18,6 +18,8 @@ public static class Vps07bExecutionScope
     public static bool IsActive => State.Value != null;
     public static bool IsFresh => State.Value?.Fresh == true;
     public static int Count => ScriptNames.Length;
+    public static bool ShouldInjectFault(int version, int batch) =>
+        State.Value?.FaultVersion == version && State.Value?.FaultBatch == batch;
     public static string ScriptAt(int version) =>
         version >= 1 && version <= Count ? ScriptNames[version-1] :
         throw new ArgumentOutOfRangeException(nameof(version));
@@ -27,13 +29,16 @@ public static class Vps07bExecutionScope
             if (string.Equals(ScriptNames[i], script, StringComparison.Ordinal)) return i+1;
         throw new InvalidOperationException("VPS07B unknown historical SQL script.");
     }
-    public static IDisposable Enter(bool fresh)
+    public static IDisposable Enter(bool fresh, int faultVersion = 0, int faultBatch = 0)
     {
         if (State.Value != null) throw new InvalidOperationException("VPS07B nested run refused.");
-        State.Value = new RunState(fresh);
+        if (faultVersion is < 0 or > 13 || faultBatch is < 0 or > 9 ||
+            (faultVersion == 0) != (faultBatch == 0))
+            throw new InvalidOperationException("VPS07B invalid isolated CI fault request.");
+        State.Value = new RunState(fresh, faultVersion, faultBatch);
         return new Lease();
     }
-    private sealed record RunState(bool Fresh);
+    private sealed record RunState(bool Fresh, int FaultVersion, int FaultBatch);
     private sealed class Lease : IDisposable
     {
         public void Dispose() => State.Value = null;

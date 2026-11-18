@@ -34,13 +34,35 @@ internal static class Program
             if (string.IsNullOrWhiteSpace(secret))
                 throw new Vps07bRefusal("Migration.ConnectionRequired");
             var target = int.Parse(args[1].Substring(6), CultureInfo.InvariantCulture);
+            var faultVersion = 0;
+            var faultBatch = 0;
+            var fault = Environment.GetEnvironmentVariable("VPS07B_CI_FAULT");
+            if (!string.IsNullOrEmpty(fault))
+            {
+                // Fault injection is NEVER admitted against any production,
+                // staging or operator-supplied database. Fail closed.
+                var ciConnection = new SqlConnectionStringBuilder(secret);
+                if (Environment.GetEnvironmentVariable("CI") != "true" ||
+                    Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
+                    Environment.GetEnvironmentVariable("VPS07B_CI_EPHEMERAL_SQL") != "approved-container-only" ||
+                    !string.Equals(ciConnection.DataSource, "localhost,1433", StringComparison.OrdinalIgnoreCase) ||
+                    !ciConnection.InitialCatalog.StartsWith("MyDmsVnVps07bCi", StringComparison.Ordinal) ||
+                    ciConnection.TrustServerCertificate || ciConnection.Encrypt.ToString() != "True")
+                    throw new Vps07bRefusal("Migration.CiFaultScopeRefused");
+                var tokens = fault.Split(':');
+                if (tokens.Length != 2 ||
+                    !int.TryParse(tokens[0], NumberStyles.None, CultureInfo.InvariantCulture, out faultVersion) ||
+                    !int.TryParse(tokens[1], NumberStyles.None, CultureInfo.InvariantCulture, out faultBatch) ||
+                    faultVersion < 1 || faultVersion > 13 || faultBatch < 1 || faultBatch > 9)
+                    throw new Vps07bRefusal("Migration.InvalidCiFault");
+            }
             using var session = new Vps07bGuardedSession(secret, target);
             stage = "preflight";
             var admitted = session.Admit();
             stage = "bridge";
             session.Bridge(admitted);
             stage = "fluent-migrator-up";
-            using (Vps07bExecutionScope.Enter(admitted.IsFresh))
+            using (Vps07bExecutionScope.Enter(admitted.IsFresh, faultVersion, faultBatch))
             {
                 var services = new ServiceCollection()
                     .AddFluentMigratorCore()
