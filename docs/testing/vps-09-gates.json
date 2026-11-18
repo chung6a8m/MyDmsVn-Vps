@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "repository": "chung6a8m/MyDmsVn-Vps",
+  "sourceInventories": [
+    "docs/contracts/vps-01-route-inventory.json",
+    "docs/contracts/vps-02-route-additions.json"
+  ],
+  "frozenObservations": "docs/contracts/vps-05c-desktop-route-net48.json",
+  "requiredRoutes": 57,
+  "requiredLiveVariants": 293,
+  "gates": [
+    {
+      "id": "VPS09-01",
+      "name": "Exact Windows x86 and Linux net10 release provenance",
+      "minimumExecuted": 2
+    },
+    {
+      "id": "VPS09-02",
+      "name": "57-route and 293-variant real SQL HTTPS observations",
+      "minimumExecuted": 293
+    },
+    {
+      "id": "VPS09-03",
+      "name": "WEB5 positive and negative terminal operator decisions",
+      "minimumExecuted": 4
+    },
+    {
+      "id": "VPS09-04",
+      "name": "WEB6 enabled protected audit and denial",
+      "minimumExecuted": 3
+    },
+    {
+      "id": "VPS09-05",
+      "name": "JWT refresh rotation logout and session revocation",
+      "minimumExecuted": 4
+    },
+    {
+      "id": "VPS09-06",
+      "name": "Authorization permission negative and error mapping",
+      "minimumExecuted": 4
+    },
+    {
+      "id": "VPS09-07",
+      "name": "Idempotency concurrency lost ACK and oversell",
+      "minimumExecuted": 4
+    },
+    {
+      "id": "VPS09-08",
+      "name": "Source ledger stock and moving average COGS decimal multiwarehouse",
+      "minimumExecuted": 12
+    },
+    {
+      "id": "VPS09-09",
+      "name": "FluentMigrator fresh and approved legacy upgrades plus backup restore",
+      "minimumExecuted": 6
+    },
+    {
+      "id": "VPS09-10",
+      "name": "Failure injection rollback retry and durable reconciliation",
+      "minimumExecuted": 4
+    },
+    {
+      "id": "VPS09-11",
+      "name": "Protected Linux systemd Nginx TLS secrets reboot rollback",
+      "minimumExecuted": 8
+    },
+    {
+      "id": "VPS09-12",
+      "name": "Attended published Windows net48 x86 Desktop workflows",
+      "minimumExecuted": 9
+    },
+    {
+      "id": "VPS09-13",
+      "name": "Nonproduction resource teardown and audit preservation",
+      "minimumExecuted": 3
+    },
+    {
+      "id": "VPS09-14",
+      "name": "Independent final SHA review CI and explicit Owner release decision",
+      "minimumExecuted": 11
+    }
+  ],
+  "oracleScenarios": [
+    "web5-terminal",
+    "web6-audit",
+    "auth-session",
+    "authorization",
+    "idempotency-race",
+    "oversell",
+    "multiwarehouse",
+    "stock-ledger",
+    "moving-average-cogs",
+    "migration-journals",
+    "recovery-rollback",
+    "cleanup"
+  ],
+  "requiredWorkflowFiles": [
+    "vps-foundation.yml",
+    "vps-01-tests.yml",
+    "vps-03-desktop-artifact.yml",
+    "vps-04a-linux.yml",
+    "vps-04a-ci-sql.yml",
+    "vps-06a-mediator.yml",
+    "vps-06b-production.yml",
+    "vps-07a-fluentmigrator.yml",
+    "vps-07b-real-sql.yml",
+    "vps-08-linux-deploy.yml",
+    "vps-09-evidence.yml"
+  ]
+}
