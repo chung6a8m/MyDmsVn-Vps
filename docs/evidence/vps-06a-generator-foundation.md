@@ -1,6 +1,6 @@
 # VPS-06A — Mediator 3.x generator/pipeline foundation (pre-cutover)
 
-**Status:** IN PROGRESS — implementation in independent PR; NOT ACCEPTED or merged until full independent review and exact-final-HEAD CI. Owner [Issue #19](https://github.com/chung6a8m/MyDmsVn-Vps/issues/19). Base main: `ba1c00499f8993ffd73323aaf4004ed556b8a1bb` (VPS-05 closeout).
+**Status:** **COMPLETE / MERGED within bounded VPS-06A generator/pipeline foundation scope**, not production cutover. [PR #20](https://github.com/chung6a8m/MyDmsVn-Vps/pull/20) final reviewed HEAD `dfd8150110275898a8f60af99c2c2306f3a1b506`, all six required workflows SUCCESS, merged to `main` at `1a688c7698a7e7e98f4913771d4c967f6fe64b33` on 2026-11-18. [Issue #19](https://github.com/chung6a8m/MyDmsVn-Vps/issues/19) is the accepted foundation scope; [VPS-06B Issue #21](https://github.com/chung6a8m/MyDmsVn-Vps/issues/21) remains NOT STARTED.
 
 ## Frozen source behavior and boundary inventory
 
@@ -13,7 +13,7 @@
 - **Behavior matrix**: happy path; unauthorized/inactive/missing ID; permission denied; admitted/denied audit, no-audit request; validation field metadata/2 async validators/sequential execution; closed web-operation mapping and sanitized unknown exceptions; cancellation without exception reporting; independent scoped identities, correlations and audit under concurrent dispatch; root service provider scope refusal.
 - **Dependencies and source files**: no Desktop, Contracts, legacy API, SQL scripts, Host production code or migration journal modified. `VPS-06B` must inventory and port all real application handlers, request declarations, test-only probe handlers, caller registrations and dependency graph, then run full production parity/oracles.
 
-## Evidence gates pending
+## Originally required evidence gates (closed by final-HEAD verification below)
 
 1. Locked restore on exact commit, net10 10.0.404 build warnings-as-errors, emitted generated C# diagnostics and registration, scoped canary contract program with exact PASS count, negative diagnostics.
 2. Five existing PR workflows must continue: Linux net10 compiled 57 routes + VPS-05 SQL-free **293/293** differential; disposable HTTPS→SQL13 **15/15**; Windows net48; xUnit v3 discovery; Windows published Desktop artifact. All must run on the same final PR HEAD.
@@ -31,10 +31,29 @@ The unchanged VPS-00B project-count gate is intentionally re-inventoried **51→
 
 ## Review-fix extension — deterministic runner and source inventory
 
-Initial run showed **20/20** independent canary PASS cases and confirmed scoped service descriptors. A subsequent review refinement adds **mid-flight (inside async validator) cancellation** with no exception reporting, **actual DI disposal** of scoped identity state, and a fixed **22/22 strict case count** rather than self-referential N/N reporting. The report remains blocked until a new CI run demonstrates all 22 executed cases on the updated HEAD. Lexical inventory at prior checkpoint comprised **803** scanned source files (excluding canary), **139** `IRequestHandler` occurrences, **62** `ApplicationRequest` derivations, **3** pipeline occurrences, **171** sender interface occurrences, **495** lexical `.Send(...)` calls, **99** registration expressions; digest `970fbb3c0db7404839874a7489bf588f87fddd4a09f879b8da5c4cd21b2d495a`. These counts include tests and other `.Send` uses: they are source-location inventory, **not 139 distinct production handlers**. The inventory gate freezes this baseline and requires deliberate rebaseline for VPS-06B changes.
+Initial run showed **20/20** independent canary PASS cases and confirmed scoped service descriptors. A subsequent review refinement adds **mid-flight (inside async validator) cancellation** with no exception reporting, **actual DI disposal** of scoped identity state, and a fixed **22/22 strict case count** rather than self-referential N/N reporting. At that intermediate checkpoint the report remained blocked; the final reviewed PR HEAD later passed all 22/22 as recorded below. Lexical inventory at prior checkpoint comprised **803** scanned source files (excluding canary), **139** `IRequestHandler` occurrences, **62** `ApplicationRequest` derivations, **3** pipeline occurrences, **171** sender interface occurrences, **495** lexical `.Send(...)` calls, **99** registration expressions; digest `970fbb3c0db7404839874a7489bf588f87fddd4a09f879b8da5c4cd21b2d495a`. These counts include tests and other `.Send` uses: they are source-location inventory, **not 139 distinct production handlers**. The inventory gate freezes this baseline and requires deliberate rebaseline for VPS-06B changes.
 
 ## Reviewed positive-generator evidence and final-HEAD rerun
 
 Source inventory on implementation HEAD `839b620047008e4e5b6ea4e0575b15a42309a714`: [generator canary CI #44235947344](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44235947344) **SUCCESS** with SDK 10.0.404, **strict committed lock restore**, **4** generated source files, scoped `IMediator` plus internal handler DI, **22/22** independent runtime checks (including deterministic mid-flight cancellation and scoped disposal), `MSG0005` missing handler and `MSG0001` duplicate handler negative builds. The source inventory had **803** source files / same pinned digest and counts shown above. Its artifact contains generated source, test output and inventory; PR final documentation HEAD must rerun the entire CI set.
 
 As a review-hygiene correction, subsequent CI stores the **positive generator source snapshot before the two intentional negative builds**, ensuring that uploaded generated evidence cannot be confused with failed-build generated artifacts. The compiled canary `.deps.json` is checked for Mediator.Abstractions present / MediatR absent; this is **test canary only**, not proof that production net10 has removed MediatR.
+
+## Final independent review, six workflow gates and merge (2026-11-18)
+
+**Final implementation HEAD**: `dfd8150110275898a8f60af99c2c2306f3a1b506`. Entire [PR #20](https://github.com/chung6a8m/MyDmsVn-Vps/pull/20) diff independently reviewed: **17 changed files**, zero production `src/`, vendor, SQL or Desktop changes; previous findings about exact project topology, missing committed lock, incomplete cancellation/disposal proof and generated positive-vs-negative artifacts all remediated. The technical review has no outstanding P0/P1 within the canary scope and no unresolved inline threads. Connected owner-account review is a technical COMMENT, **not a distinct-user GitHub approval or protected staging admission**.
+
+Every required workflow was checked **completed / SUCCESS at the same final HEAD**, not inherited from a previous code or documentation SHA:
+
+| Workflow | Exact final-HEAD evidence | Accepted scope |
+| --- | --- | --- |
+| Isolated Mediator generator, locked restore and scoped canary | [#44236389157](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44236389157) | **22/22** deterministic runtime assertions, four generated source files, positive source preserved separately, internal handler/Scoped DI, compiled canary `.deps.json` contains Mediator.Abstractions but not MediatR, expected negative **MSG0005 / MSG0001** |
+| Linux .NET 10 SDK 10.0.404 + frozen 57-route gate | [#44236389238](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44236389238) | Application **366/366**, Host **660/660**, independent live **SQL-free** net48-vs-net10 differential **293/293**, 0 failed/skipped |
+| Disposable Linux HTTPS→SQL Server 2022 | [#44236389234](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44236389234) | **15/15** bounded real-SQL tests, **24** selected WEB2–WEB6 expected/actual/diff cases, separately **3/3** enabled WEB6 real TLS/audit/recovery checks; **not** independently protected staging or exhaustive 57-route real-SQL acceptance |
+| Windows net48 foundation + legacy | [#44236389209](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44236389209) | **8/8 jobs** success, unchanged existing legacy behavior |
+| Windows xUnit v3 topology / discovery | [#44236389257](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44236389257) | **10/10 jobs** success; discovery does not establish SQL/GUI execution |
+| Windows Desktop published artifact | [#44236389175](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44236389175) | SUCCESS publish/dependency boundary, **not** attended Desktop→Linux→SQL E2E |
+
+**GitHub final-HEAD checks:** 22 SUCCESS, one intentionally **SKIPPED `approved-linux-sql`** (not PASS), zero failed/pending mandatory. [PR #20](https://github.com/chung6a8m/MyDmsVn-Vps/pull/20) merged on `main` at **`1a688c7698a7e7e98f4913771d4c967f6fe64b33`**, separately verified after final PR CI/review. No claim of new CI on this later documentation-only closeout SHA; this evidence records the completed implementation PR.
+
+**Handoff:** [VPS-06B Issue #21](https://github.com/chung6a8m/MyDmsVn-Vps/issues/21) holds all **production** handler/request conversions, generator in the real ASP.NET Core Host, scoped pipeline and SQL transaction parity, full net10 produced runtime `.deps.json` **zero MediatR** and final-HEAD gates. The lexical 803-file inventory is not proof of production compiled handler completeness. net48 and net10 **production** still use MediatR; no production switch has occurred. VPS-07 DbUp→FluentMigrator, VPS-08 protected staging and VPS-09 integrated release/Owner approval remain **NOT VERIFIED / NOT STARTED as documented**.
