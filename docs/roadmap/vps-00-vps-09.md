@@ -24,7 +24,7 @@ Desktop net48 currently references Server net48 directly. Retargeting Server to 
 | VPS-07A | Convert immutable historical SQL 001–013 to FluentMigrator versions. | Exact script compatibility, transaction/batch behavior, no double-apply. |
 | VPS-07B | Journal bridge, schema fingerprint, supported upgrade-path matrix. | Real SQL fresh + approved existing states, concurrency/interruption/retry and backup/restore. |
 | VPS-08 | systemd, reverse proxy, TLS, secrets, logging, health, deploy/rollback. | Linux staged deployment with real restart/recovery, proxy trust and SQL connectivity. |
-| VPS-09 | Integrated Desktop Windows -> Linux HttpHost -> real SQL Server and closeout. | Source/ledger, stock/COGS, auth, rollback, migration, recovery, audit and explicit release decision. |
+| VPS-09 | Integrated Desktop Windows -> Linux HttpHost -> real SQL Server and closeout. [Operator runbook](../runbooks/vps-09-integrated-acceptance.md) and [14-gate registry](../testing/vps-09-gates.json) implement fail-closed evidence review. | Source/ledger, stock/COGS, auth, rollback, migration, recovery, audit, attended GUI, verified 57-route live SQL matrix and explicit signed Owner release decision; source-only tests cannot close the gate. |
 
 ## Implementation invariants
 

@@ -80,3 +80,7 @@ Real SQL bootstrap, TLS and independent SQL Oracle are CI-only, described in the
 - `scripts/verify-vps-foundation.py` — cross-platform static path, project and document sanity checker.
 
 Do not use historic source-repository PASS results or exceptions to authorize a release of MyDmsVn-Vps.
+
+## VPS-09 — Integrated Acceptance & Release Closeout
+
+The [VPS-09 runbook](docs/runbooks/vps-09-integrated-acceptance.md), [evidence ledger](docs/evidence/vps-09-integrated-closeout.md) and [14-gate registry](docs/testing/vps-09-gates.json) define the independent final acceptance. Source CI enforces 57-route/293-pair inventory and fail-closed signed-evidence checks; an optional protected Windows x86 / remote HTTPS to SQL runner checks a **bounded** four-test subset. The full attended Windows Desktop to deployed Linux net10 to isolated real SQL13 acceptance, VPS-08 protected staging, independent SQL Oracle, actual recovery/rollback and signed Owner production approval are **NOT VERIFIED**. Source-only merge never makes the release production-ready; authoritative status is [docs/roadmap/README.md](docs/roadmap/README.md).
