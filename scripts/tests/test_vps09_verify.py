@@ -68,6 +68,13 @@ class Vps09EvidenceGateTests(unittest.TestCase):
                 "querySha256": HEX,
             } for scenario in spec["oracleScenarios"]]
         }
+        self.preflight = {
+            "sourceSha": SHA,
+            "governanceMode": "single-owner-exception",
+            "decisionId": "OWN-VPS-04",
+            "owner": "chung6a8m",
+            "runnerSha256": HEX,
+        }
         self.attestation = {
             "schemaVersion": 2,
             "repository": "chung6a8m/MyDmsVn-Vps",
@@ -104,6 +111,7 @@ class Vps09EvidenceGateTests(unittest.TestCase):
             },
             "routeObservations": "route-observations.json",
             "sqlOracle": "sql-oracle.json",
+            "preflightReceipt": "preflight-receipt.json",
             "gates": {row["id"]: {
                 "status": "PASS", "discovered": row["minimumExecuted"],
                 "executed": row["minimumExecuted"], "passed": row["minimumExecuted"],
@@ -122,9 +130,11 @@ class Vps09EvidenceGateTests(unittest.TestCase):
     def refresh_evidence(self):
         write_json(self.packet / "route-observations.json", self.observations)
         write_json(self.packet / "sql-oracle.json", self.oracle)
+        write_json(self.packet / "preflight-receipt.json", self.preflight)
         (self.packet / "other-evidence.txt").write_text(
             "SYNTHETIC FIXTURE: NOT LIVE ACCEPTANCE\n", encoding="utf-8")
-        names = ["route-observations.json", "sql-oracle.json", "other-evidence.txt"]
+        names = ["route-observations.json", "sql-oracle.json", "preflight-receipt.json",
+                 "other-evidence.txt"]
         for row in self.spec["gates"]:
             name = "gates/" + row["id"] + ".json"
             write_json(self.packet / name, {"gate": row["id"], "synthetic": True})
@@ -276,6 +286,16 @@ class Vps09EvidenceGateTests(unittest.TestCase):
     def test_first_and_second_pass_runner_must_differ(self):
         self.attestation["governance"]["secondPassRunnerSha256"] = HEX
         self.rejects("RunnerSeparationRequired")
+
+    def test_first_pass_runner_must_match_preflight_receipt(self):
+        self.preflight["runnerSha256"] = "d" * 64
+        self.refresh_evidence()
+        self.rejects("FirstPassRunnerReceiptMismatch")
+
+    def test_second_pass_runner_must_match_verifying_machine(self):
+        self.sign()
+        with self.assertRaisesRegex(ValueError, "SecondPassRunnerIdentityMismatch"):
+            verifier.validate_packet(self.packet, SHA, self.public, self.pub_hash, "d" * 64)
 
     def test_cooling_off_shorter_than_24_hours_refused(self):
         self.attestation["releaseDecision"]["approvedAtUtc"] = "2026-11-16T23:59:59Z"

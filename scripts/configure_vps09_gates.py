@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configure or verify the three protected VPS-08/VPS-09 GitHub Environments.
+"""Configure or verify the three OWN-VPS-04 VPS-08/VPS-09 Environments.
 
 The helper validates protection, names, exact main and dedicated runner labels.
 It cannot validate secret values, physical SQL/VPS isolation, GUI attendance or
@@ -32,19 +32,21 @@ def environment_specs() -> dict[str, dict[str, Any]]:
     return {
         "vps08-sql13-nonproduction": {
             "branch": "main",
-            "preventSelfReview": True,
+            "preventSelfReview": False,
             "adminBypassDisabled": True,
+            "decisionId": "OWN-VPS-04",
             "runnerLabels": ("self-hosted", "linux", "vps08-staging"),
             "requiredSecrets": {"VPS08_STAGING_HOST_ATTESTATION"},
             "requiredVariables": {
                 "VPS08_STAGING_PROBE_URL", "VPS08_STAGING_MACHINE_SHA256",
-                "VPS08_RECEIPT_STATE_PATH", "VPS08_OPERATOR",
+                "VPS08_RECEIPT_STATE_PATH", "VPS08_OWNER",
             },
         },
         "vps09-fullstack-nonproduction": {
             "branch": "main",
-            "preventSelfReview": True,
+            "preventSelfReview": False,
             "adminBypassDisabled": True,
+            "decisionId": "OWN-VPS-04",
             "runnerLabels": ("self-hosted", "windows", "vps09-attended"),
             "requiredSecrets": {
                 "VPS09_ISOLATED_SQL_ADMISSION", "VPS09_READONLY_SQL_ORACLE",
@@ -59,29 +61,30 @@ def environment_specs() -> dict[str, dict[str, Any]]:
                 "VPS09_ORACLE_PLAN_PATH", "VPS09_ROUTE_PLAN_SHA256",
                 "VPS09_ORACLE_PLAN_SHA256", "VPS09_EVIDENCE_ROOT",
                 "VPS09_GUI_CHECKLIST_PATH", "VPS09_LINUX_RECEIPT_PATH",
-                "VPS09_OPERATOR", "VPS09_REVIEWER", "VPS09_OWNER",
+                "VPS09_FIRST_PASS_RUNNER_SHA256", "VPS09_OWNER",
             },
         },
         "vps09-release-review": {
             "branch": "main",
-            "preventSelfReview": True,
+            "preventSelfReview": False,
             "adminBypassDisabled": True,
+            "decisionId": "OWN-VPS-04",
             "runnerLabels": ("self-hosted", "linux", "vps09-reviewer"),
             "requiredSecrets": set(),
             "requiredVariables": {
                 "VPS09_REVIEW_PACKET_PATH", "VPS09_OWNER_PUBKEY_PATH",
-                "VPS09_OWNER_PUBKEY_SHA256",
+                "VPS09_OWNER_PUBKEY_SHA256", "VPS09_SECOND_PASS_RUNNER_SHA256",
+                "VPS09_OWNER",
             },
         },
     }
 
 
-def protection_payload(operator_id: int, reviewer_id: int) -> dict[str, Any]:
-    require(operator_id != reviewer_id, "SameAccountApprovalForbidden")
+def protection_payload() -> dict[str, Any]:
     return {
         "wait_timer": 0,
-        "prevent_self_review": True,
-        "reviewers": [{"type": "User", "id": reviewer_id}],
+        "prevent_self_review": False,
+        "reviewers": [],
         "deployment_branch_policy": {
             "protected_branches": False,
             "custom_branch_policies": True,
@@ -103,14 +106,10 @@ def get(path: str) -> Any:
     return gh("api", path)
 
 
-def configure(environment: str, reviewer: str) -> None:
+def configure(environment: str) -> None:
     specs = environment_specs()
     require(environment in specs, "EnvironmentUnknown")
-    require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}", reviewer) is not None,
-            "ReviewerLoginInvalid")
-    operator = get("user")
-    reviewer_user = get("users/" + reviewer)
-    payload = protection_payload(int(operator["id"]), int(reviewer_user["id"]))
+    payload = protection_payload()
     gh("api", "--method", "PUT", f"{API}/{environment}", data=payload)
     policies = get(f"{API}/{environment}/deployment-branch-policies?per_page=100")
     rows = policies.get("branch_policies", [])
@@ -119,7 +118,8 @@ def configure(environment: str, reviewer: str) -> None:
     if not rows:
         gh("api", "--method", "POST", f"{API}/{environment}/deployment-branch-policies",
            data={"name": "main", "type": "branch"})
-    print(f"VPS09_ENV_CONFIGURED: {environment}; disable admin bypass manually before verify")
+    print(f"VPS09_ENV_CONFIGURED: {environment}; governance=OWN-VPS-04; "
+          "NO_INDEPENDENT_HUMAN_REVIEW; disable admin bypass manually before verify")
 
 
 def verify(environment: str, expected_sha: str) -> None:
@@ -133,13 +133,7 @@ def verify(environment: str, expected_sha: str) -> None:
             "DeploymentPolicyInvalid")
     rules = [item for item in value.get("protection_rules", [])
              if item.get("type") == "required_reviewers"]
-    require(len(rules) == 1 and len(rules[0].get("reviewers", [])) == 1,
-            "IndependentReviewerRequired")
-    require(rules[0].get("prevent_self_review", value.get("prevent_self_review", False)),
-            "PreventSelfReviewRequired")
-    current_id = get("user").get("id")
-    reviewer_id = (rules[0]["reviewers"][0].get("reviewer") or {}).get("id")
-    require(reviewer_id != current_id, "OperatorCannotReviewOwnDeployment")
+    require(not rules, "UnexpectedHumanReviewerRule")
     policies = get(f"{API}/{environment}/deployment-branch-policies?per_page=100")
     require({(item.get("name"), item.get("type"))
              for item in policies.get("branch_policies", [])} == {("main", "branch")},
@@ -158,8 +152,10 @@ def verify(environment: str, expected_sha: str) -> None:
                 if runner.get("status") == "online"
                 and required_labels <= {label.get("name") for label in runner.get("labels", [])}]
     require(len(admitted) == 1, "ExactlyOneDedicatedOnlineRunnerRequired")
-    print(f"VPS09_ENV_VERIFY_PASS: {environment}; main_sha={expected_sha}; names and runner admitted")
-    print("NOT VERIFIED: secret values, SQL/VPS isolation, GUI/reboot evidence, Owner release")
+    print(f"VPS09_ENV_VERIFY_PASS: {environment}; main_sha={expected_sha}; "
+          "governance=OWN-VPS-04; names and runner admitted")
+    print("NO_INDEPENDENT_HUMAN_REVIEW; NOT VERIFIED: secret values, SQL/VPS isolation, "
+          "GUI/reboot evidence, Owner release")
 
 
 def main() -> int:
@@ -168,7 +164,6 @@ def main() -> int:
     configure_command = commands.add_parser("configure")
     configure_command.add_argument("--environment", required=True,
                                    choices=tuple(environment_specs()))
-    configure_command.add_argument("--reviewer", required=True)
     verify_command = commands.add_parser("verify")
     verify_command.add_argument("--environment", required=True,
                                 choices=tuple(environment_specs()))
@@ -176,7 +171,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.command == "configure":
-            configure(args.environment, args.reviewer)
+            configure(args.environment)
         else:
             verify(args.environment, args.expected_sha)
         return 0

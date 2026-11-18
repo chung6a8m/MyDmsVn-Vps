@@ -40,13 +40,25 @@ class Vps09WindowsIntegratedScriptTests(unittest.TestCase):
                 "pwsh", "-NoProfile", "-File", str(SCRIPT),
                 "-Phase", "Prepare", "-ReviewedSha", SHA,
                 "-Origin", "https://staging.invalid", "-EvidenceDirectory", str(evidence),
-                "-Operator", "operator01", "-Reviewer", "reviewer02", "-Owner", "reviewer02",
+                "-Owner", "chung6a8m",
                 "-RoutePlanPath", "missing-routes.json", "-OraclePlanPath", "missing-oracles.json",
             ], capture_output=True, text=True, env=env)
 
             self.assertNotEqual(0, result.returncode)
             self.assertIn("VPS09.IsolatedSqlApprovalMissing", result.stdout + result.stderr)
             self.assertFalse(evidence.exists())
+
+    def test_script_exposes_single_owner_interface_only(self):
+        command = (
+            f"$command = Get-Command '{SCRIPT}';"
+            "$names = @($command.Parameters.Keys);"
+            "if('Owner' -notin $names -or 'Operator' -in $names -or 'Reviewer' -in $names){exit 1}"
+        )
+
+        result = subprocess.run(["pwsh", "-NoProfile", "-Command", command],
+                                capture_output=True, text=True)
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

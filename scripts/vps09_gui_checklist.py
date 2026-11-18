@@ -52,15 +52,16 @@ def load(path: Path) -> dict[str, Any]:
 
 def validate(path: Path) -> dict[str, Any]:
     document = load(path)
-    require(document.get("schemaVersion") == 1, "ChecklistSchemaInvalid")
+    require(document.get("schemaVersion") == 2, "ChecklistSchemaInvalid")
+    require(document.get("governanceMode") == "single-owner-exception"
+            and document.get("decisionId") == "OWN-VPS-04",
+            "ChecklistGovernanceInvalid")
     require(SHA.fullmatch(str(document.get("sourceSha", ""))) is not None,
             "ChecklistSourceShaInvalid")
     require(DIGEST.fullmatch(str(document.get("desktopExecutableSha256", ""))) is not None,
             "DesktopDigestInvalid")
-    operator = str(document.get("operator", "")).strip()
-    reviewer = str(document.get("reviewer", "")).strip()
-    require(len(operator) >= 3 and len(reviewer) >= 3, "ChecklistPeopleMissing")
-    require(operator.casefold() != reviewer.casefold(), "ReviewMustBeIndependent")
+    owner = str(document.get("owner", "")).strip()
+    require(owner == "chung6a8m", "ChecklistOwnerInvalid")
     require(document.get("sessionType") == "interactive", "InteractiveSessionRequired")
     rows = document.get("checkpoints")
     require(isinstance(rows, list) and len(rows) == len(CHECKPOINTS),
@@ -81,30 +82,32 @@ def validate(path: Path) -> dict[str, Any]:
         evidence.add(digest)
     require(seen == set(CHECKPOINTS), "CheckpointCoverageGap")
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "sourceSha": document["sourceSha"],
         "desktopExecutableSha256": document["desktopExecutableSha256"],
-        "operator": operator,
-        "reviewer": reviewer,
+        "governanceMode": "single-owner-exception",
+        "decisionId": "OWN-VPS-04",
+        "owner": owner,
         "executed": 9,
         "passed": 9,
         "failed": 0,
         "skipped": 0,
-        "attendedEvidenceReview": "REQUIRED",
+        "attendedEvidenceReview": "OWNER_SECOND_PASS_REQUIRED",
         "overall": "STRUCTURE_COMPLETE_NOT_REVIEWED",
     }
 
 
-def template(source_sha: str, desktop_sha256: str, operator: str, reviewer: str) -> dict[str, Any]:
+def template(source_sha: str, desktop_sha256: str, owner: str) -> dict[str, Any]:
     require(SHA.fullmatch(source_sha) is not None, "ChecklistSourceShaInvalid")
     require(DIGEST.fullmatch(desktop_sha256) is not None, "DesktopDigestInvalid")
-    require(operator.casefold() != reviewer.casefold(), "ReviewMustBeIndependent")
+    require(owner == "chung6a8m", "ChecklistOwnerInvalid")
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "sourceSha": source_sha,
         "desktopExecutableSha256": desktop_sha256,
-        "operator": operator,
-        "reviewer": reviewer,
+        "governanceMode": "single-owner-exception",
+        "decisionId": "OWN-VPS-04",
+        "owner": owner,
         "sessionType": "interactive",
         "checkpoints": [
             {"id": checkpoint, "scalePercent": scale, "outcome": "NOT_RECORDED",
@@ -128,8 +131,7 @@ def main() -> int:
     create = commands.add_parser("template")
     create.add_argument("--source-sha", required=True)
     create.add_argument("--desktop-sha256", required=True)
-    create.add_argument("--operator", required=True)
-    create.add_argument("--reviewer", required=True)
+    create.add_argument("--owner", required=True)
     create.add_argument("--output", required=True, type=Path)
     check = commands.add_parser("validate")
     check.add_argument("--input", required=True, type=Path)
@@ -138,11 +140,12 @@ def main() -> int:
     try:
         if args.command == "template":
             write_exclusive(args.output, template(args.source_sha, args.desktop_sha256,
-                                                  args.operator, args.reviewer))
+                                                  args.owner))
             print("VPS09_GUI_TEMPLATE_CREATED: all nine checkpoints remain NOT_RECORDED")
         else:
             write_exclusive(args.output, validate(args.input))
-            print("VPS09_GUI_CHECKLIST_STRUCTURE_PASS: attended review still REQUIRED")
+            print("VPS09_GUI_CHECKLIST_STRUCTURE_PASS: Owner second-pass review still REQUIRED; "
+                  "NO_INDEPENDENT_HUMAN_REVIEW")
         return 0
     except (ChecklistBlocked, OSError, ValueError, TypeError, KeyError) as error:
         print("VPS09_GUI_CHECKLIST_BLOCKED: " + str(error))

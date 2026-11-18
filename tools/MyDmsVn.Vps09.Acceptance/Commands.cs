@@ -18,9 +18,10 @@ public sealed record PreflightCommandInput(
     string Origin,
     string SqlOracleConnectionStringEnvironment,
     string Admission,
-    string Operator,
-    string Reviewer,
+    string GovernanceMode,
+    string DecisionId,
     string Owner,
+    string RunnerSha256,
     string DatabaseClassification);
 
 public sealed record RoutesCommandInput(
@@ -147,7 +148,8 @@ public static class CommandLine
         var state = git.Read();
         var receipt = PreflightValidator.Validate(new PreflightInput(
             input.ReviewedSha, state.Sha, state.Clean, input.Origin, connection,
-            input.Admission, input.Operator, input.Reviewer, input.Owner,
+            input.Admission, input.GovernanceMode, input.DecisionId, input.Owner,
+            input.RunnerSha256,
             input.DatabaseClassification));
         WriteNew(outputPath, receipt);
     }
@@ -234,7 +236,8 @@ public static class CommandLine
         PreflightValidator.Validate(new PreflightInput(
             new string('a', 40), new string('a', 40), true,
             "https://sql-admission.invalid", connectionString,
-            "reviewed-isolated-sql13-only", "operator", "reviewer", "owner",
+            "reviewed-isolated-sql13-only", "single-owner-exception", "OWN-VPS-04",
+            "chung6a8m", new string('a', 64),
             "isolated-nonproduction"));
     }
 

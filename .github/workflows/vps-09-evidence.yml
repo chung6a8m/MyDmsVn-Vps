@@ -99,7 +99,7 @@ jobs:
           try {
             ./scripts/Invoke-Vps09IntegratedAcceptance.ps1 -Phase Prepare -ReviewedSha ('a' * 40) `
               -Origin 'https://staging.invalid' -EvidenceDirectory "$env:RUNNER_TEMP/vps09-integrated-negative" `
-              -Operator operator01 -Reviewer reviewer02 -Owner reviewer02 `
+              -Owner chung6a8m `
               -RoutePlanPath missing-routes.json -OraclePlanPath missing-oracles.json
             throw 'VPS09.MissingIntegratedAdmissionAccepted'
           }
@@ -192,8 +192,7 @@ jobs:
       VPS09_ROUTE_PLAN_SHA256: ${{ vars.VPS09_ROUTE_PLAN_SHA256 }}
       VPS09_ORACLE_PLAN_SHA256: ${{ vars.VPS09_ORACLE_PLAN_SHA256 }}
       VPS09_EVIDENCE_ROOT: ${{ vars.VPS09_EVIDENCE_ROOT }}
-      VPS09_OPERATOR: ${{ vars.VPS09_OPERATOR }}
-      VPS09_REVIEWER: ${{ vars.VPS09_REVIEWER }}
+      VPS09_FIRST_PASS_RUNNER_SHA256: ${{ vars.VPS09_FIRST_PASS_RUNNER_SHA256 }}
       VPS09_OWNER: ${{ vars.VPS09_OWNER }}
     steps:
       - uses: actions/checkout@v5
@@ -211,8 +210,7 @@ jobs:
           $evidence = Join-Path $env:VPS09_EVIDENCE_ROOT '${{ github.sha }}'
           ./scripts/Invoke-Vps09IntegratedAcceptance.ps1 -Phase Prepare `
             -ReviewedSha '${{ github.sha }}' -Origin $env:VPS09_PUBLIC_ORIGIN `
-            -EvidenceDirectory $evidence -Operator $env:VPS09_OPERATOR `
-            -Reviewer $env:VPS09_REVIEWER -Owner $env:VPS09_OWNER `
+            -EvidenceDirectory $evidence -Owner $env:VPS09_OWNER `
             -RoutePlanPath $env:VPS09_ROUTE_PLAN_PATH -OraclePlanPath $env:VPS09_ORACLE_PLAN_PATH
           python scripts/vps09_packet_builder.py --root $evidence --source-sha '${{ github.sha }}' `
             --artifact preflight-receipt.json --artifact route-observations.json `
@@ -245,8 +243,7 @@ jobs:
       VPS09_EVIDENCE_ROOT: ${{ vars.VPS09_EVIDENCE_ROOT }}
       VPS09_GUI_CHECKLIST_PATH: ${{ vars.VPS09_GUI_CHECKLIST_PATH }}
       VPS09_LINUX_RECEIPT_PATH: ${{ vars.VPS09_LINUX_RECEIPT_PATH }}
-      VPS09_OPERATOR: ${{ vars.VPS09_OPERATOR }}
-      VPS09_REVIEWER: ${{ vars.VPS09_REVIEWER }}
+      VPS09_FIRST_PASS_RUNNER_SHA256: ${{ vars.VPS09_FIRST_PASS_RUNNER_SHA256 }}
       VPS09_OWNER: ${{ vars.VPS09_OWNER }}
     steps:
       - uses: actions/checkout@v5
@@ -265,8 +262,7 @@ jobs:
           $evidence = Join-Path $env:VPS09_EVIDENCE_ROOT '${{ github.sha }}'
           ./scripts/Invoke-Vps09IntegratedAcceptance.ps1 -Phase Finalize `
             -ReviewedSha '${{ github.sha }}' -Origin $env:VPS09_PUBLIC_ORIGIN `
-            -EvidenceDirectory $evidence -Operator $env:VPS09_OPERATOR `
-            -Reviewer $env:VPS09_REVIEWER -Owner $env:VPS09_OWNER `
+            -EvidenceDirectory $evidence -Owner $env:VPS09_OWNER `
             -GuiChecklistPath $env:VPS09_GUI_CHECKLIST_PATH `
             -LinuxReceiptPath $env:VPS09_LINUX_RECEIPT_PATH -CleanupConfirmed
           python scripts/vps09_packet_builder.py --root $evidence --source-sha '${{ github.sha }}' `
@@ -282,8 +278,8 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  independent-release-review:
-    name: Verify signed fullstack receipt (structural only; no implicit release)
+  single-owner-second-pass-review:
+    name: Verify signed fullstack receipt under OWN-VPS-04 (no independent human review)
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/main' &&
@@ -304,16 +300,23 @@ jobs:
           TRUSTED_PUBKEY_SHA256: ${{ vars.VPS09_OWNER_PUBKEY_SHA256 }}
           REVIEWED_BUNDLE_PATH: ${{ vars.VPS09_REVIEW_PACKET_PATH }}
           REVIEWED_PUBKEY_PATH: ${{ vars.VPS09_OWNER_PUBKEY_PATH }}
+          SECOND_PASS_RUNNER_SHA256: ${{ vars.VPS09_SECOND_PASS_RUNNER_SHA256 }}
+          VPS09_OWNER: ${{ vars.VPS09_OWNER }}
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$RUNNER_OS" = Linux
+          test "$VPS09_OWNER" = chung6a8m
+          [[ "$SECOND_PASS_RUNNER_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          test -r /etc/machine-id
+          test "$(sha256sum /etc/machine-id | cut -d ' ' -f1)" = "$SECOND_PASS_RUNNER_SHA256"
           [[ "$TRUSTED_PUBKEY_SHA256" =~ ^[a-f0-9]{64}$ ]]
           test -n "$REVIEWED_BUNDLE_PATH" && test -n "$REVIEWED_PUBKEY_PATH"
           python3 scripts/vps09_verify.py verify \
             --bundle "$REVIEWED_BUNDLE_PATH" \
             --expected-sha "$GITHUB_SHA" \
             --trusted-key "$REVIEWED_PUBKEY_PATH" \
-            --trusted-key-sha256 "$TRUSTED_PUBKEY_SHA256"
-          echo "VPS09_RECEIPT_STRUCTURAL_ONLY: independent reviewer must audit physical evidence."
+            --trusted-key-sha256 "$TRUSTED_PUBKEY_SHA256" \
+            --expected-second-pass-runner-sha256 "$SECOND_PASS_RUNNER_SHA256"
+          echo "VPS09_RECEIPT_STRUCTURAL_ONLY: OWN-VPS-04 Owner second-pass complete; NO_INDEPENDENT_HUMAN_REVIEW."

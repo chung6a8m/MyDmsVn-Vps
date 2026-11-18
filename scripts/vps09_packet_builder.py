@@ -60,7 +60,7 @@ def build_index(root: Path, source_sha: str, artifacts: list[str]) -> dict[str, 
         "artifacts": dict(sorted(ledger.items())),
         "signingStatus": "UNSIGNED",
         "ownerReleaseDecision": "NOT_ATTACHED",
-        "nextStep": "Independent reviewer attaches the explicit Owner decision before offline Ed25519 signing.",
+        "nextStep": "After the OWN-VPS-04 24-hour cooling period, the Owner performs the second pass, attaches the explicit release decision and signs offline with Ed25519; NO_INDEPENDENT_HUMAN_REVIEW.",
     }
 
 

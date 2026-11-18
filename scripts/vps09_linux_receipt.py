@@ -84,20 +84,22 @@ def initialize(
     source_sha: str,
     machine_sha256: str,
     artifact_sha256: str,
-    operator: str,
+    owner: str,
 ) -> dict[str, Any]:
     require(SHA.fullmatch(source_sha) is not None, "SourceShaInvalid")
     require(DIGEST.fullmatch(machine_sha256) is not None, "MachineShaInvalid")
     require(DIGEST.fullmatch(artifact_sha256) is not None, "ArtifactShaInvalid")
-    require(len(operator.strip()) >= 3, "OperatorMissing")
+    require(owner == "chung6a8m", "OwnerInvalid")
     document = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "sourceSha": source_sha,
         "machineSha256": machine_sha256,
         "artifactSha256": artifact_sha256,
-        "operator": operator.strip(),
+        "governanceMode": "single-owner-exception",
+        "decisionId": "OWN-VPS-04",
+        "owner": owner,
         "events": [],
-        "physicalEvidenceReview": "REQUIRED",
+        "physicalEvidenceReview": "OWNER_SECOND_PASS_REQUIRED",
     }
     write_exclusive(state_path, document)
     return document
@@ -106,7 +108,9 @@ def initialize(
 def record(state_path: Path, evidence_path: Path) -> dict[str, Any]:
     state = strict_json(state_path)
     evidence = strict_json(evidence_path)
-    require(evidence.get("schemaVersion") == 1, "EventSchemaInvalid")
+    require(evidence.get("schemaVersion") == 2, "EventSchemaInvalid")
+    require(evidence.get("governanceMode") == "single-owner-exception"
+            and evidence.get("decisionId") == "OWN-VPS-04", "EventGovernanceInvalid")
     event = evidence.get("event")
     require(event in EVENTS, "EventUnknown")
     require(not any(item.get("event") == event for item in state.get("events", [])),
@@ -114,7 +118,7 @@ def record(state_path: Path, evidence_path: Path) -> dict[str, Any]:
     require(evidence.get("sourceSha") == state.get("sourceSha"), "EventSourceMismatch")
     require(evidence.get("machineSha256") == state.get("machineSha256"),
             "EventMachineMismatch")
-    require(evidence.get("operator") == state.get("operator"), "EventOperatorMismatch")
+    require(evidence.get("owner") == state.get("owner"), "EventOwnerMismatch")
     require(isinstance(evidence.get("observedAtUtc"), str)
             and evidence["observedAtUtc"].endswith("Z"), "EventTimestampInvalid")
     require(DIGEST.fullmatch(str(evidence.get("evidenceDigest", ""))) is not None,
@@ -144,13 +148,15 @@ def finalize(state_path: Path, output_path: Path) -> dict[str, Any]:
             "EventCoverageGap")
     ordered = sorted(state["events"], key=lambda item: EVENTS.index(item["event"]))
     receipt = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "sourceSha": state["sourceSha"],
         "machineSha256": state["machineSha256"],
         "artifactSha256": state["artifactSha256"],
-        "operator": state["operator"],
+        "governanceMode": "single-owner-exception",
+        "decisionId": "OWN-VPS-04",
+        "owner": state["owner"],
         "events": ordered,
-        "physicalEvidenceReview": "REQUIRED",
+        "physicalEvidenceReview": "OWNER_SECOND_PASS_REQUIRED",
         "overall": "STRUCTURE_COMPLETE_NOT_REVIEWED",
     }
     write_exclusive(output_path, receipt)
@@ -165,7 +171,7 @@ def main() -> int:
     init.add_argument("--source-sha", required=True)
     init.add_argument("--machine-sha256", required=True)
     init.add_argument("--artifact-sha256", required=True)
-    init.add_argument("--operator", required=True)
+    init.add_argument("--owner", required=True)
     add = commands.add_parser("record")
     add.add_argument("--state", required=True, type=Path)
     add.add_argument("--evidence", required=True, type=Path)
@@ -176,12 +182,13 @@ def main() -> int:
     try:
         if args.command == "init":
             initialize(args.state, args.source_sha, args.machine_sha256,
-                       args.artifact_sha256, args.operator)
+                       args.artifact_sha256, args.owner)
         elif args.command == "record":
             record(args.state, args.evidence)
         else:
             finalize(args.state, args.output)
-        print("VPS09_LINUX_RECEIPT_STRUCTURE_PASS: physical review still REQUIRED")
+        print("VPS09_LINUX_RECEIPT_STRUCTURE_PASS: Owner second-pass review still REQUIRED; "
+              "NO_INDEPENDENT_HUMAN_REVIEW")
         return 0
     except (ReceiptBlocked, OSError, ValueError, TypeError, KeyError) as error:
         print("VPS09_LINUX_RECEIPT_BLOCKED: " + str(error))

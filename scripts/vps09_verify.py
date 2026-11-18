@@ -238,7 +238,8 @@ def validate_oracle(folder: Path, att: dict[str, Any], scenarios: list[str]) -> 
 
 
 def validate_packet(folder: Path, expected_sha: str,
-                    trusted_key: Path, trusted_digest: str) -> None:
+                    trusted_key: Path, trusted_digest: str,
+                    expected_second_pass_runner_sha256: str | None = None) -> None:
     spec, _, pairs = inventory()
     require(SHA40.fullmatch(expected_sha) is not None, "ExpectedShaInvalid")
     raw = verify_signature(folder, trusted_key, trusted_digest)
@@ -278,6 +279,10 @@ def validate_packet(folder: Path, expected_sha: str,
     require(SHA256.fullmatch(first_runner) is not None
             and SHA256.fullmatch(second_runner) is not None
             and first_runner != second_runner, "RunnerSeparationRequired")
+    if expected_second_pass_runner_sha256 is not None:
+        require(SHA256.fullmatch(expected_second_pass_runner_sha256) is not None
+                and second_runner == expected_second_pass_runner_sha256,
+                "SecondPassRunnerIdentityMismatch")
     decision = att.get("releaseDecision", {})
     require(decision.get("status") == "APPROVED_FOR_PRODUCTION"
             and decision.get("owner") == governance["owner"]
@@ -299,6 +304,15 @@ def validate_packet(folder: Path, expected_sha: str,
     require(approved_at - finalized_at >= timedelta(hours=24),
             "OwnerCoolingOffIncomplete")
     artifact_names = validate_artifacts(folder, att)
+    preflight_location = att.get("preflightReceipt")
+    require(preflight_location in artifact_names, "PreflightReceiptArtifactMissing")
+    preflight = verified_artifact_document(folder, att, preflight_location)
+    require(preflight.get("sourceSha") == expected_sha
+            and preflight.get("governanceMode") == "single-owner-exception"
+            and preflight.get("decisionId") == "OWN-VPS-04"
+            and preflight.get("owner") == governance["owner"]
+            and preflight.get("runnerSha256") == first_runner,
+            "FirstPassRunnerReceiptMismatch")
     required = {item["id"] for item in spec["gates"]}
     gates = att.get("gates")
     require(isinstance(gates, dict) and set(gates) == required, "GateSetIncomplete")
@@ -351,6 +365,7 @@ def main() -> int:
     verify.add_argument("--expected-sha", required=True)
     verify.add_argument("--trusted-key", type=Path, required=True)
     verify.add_argument("--trusted-key-sha256", required=True)
+    verify.add_argument("--expected-second-pass-runner-sha256", required=True)
     args = parser.parse_args()
     try:
         spec, routes, observations = inventory()
@@ -360,7 +375,8 @@ def main() -> int:
                   "this is NOT live SQL or release evidence")
         else:
             validate_packet(args.bundle, args.expected_sha,
-                            args.trusted_key, args.trusted_key_sha256)
+                            args.trusted_key, args.trusted_key_sha256,
+                            args.expected_second_pass_runner_sha256)
             print("VPS09_SIGNED_PACKET_STRUCTURE_PASS: signature, SHA, ledger, coverage, "
                   "gate counters and Owner assertion; governance=OWN-VPS-04; "
                   "assurance=NO_INDEPENDENT_HUMAN_REVIEW; physical evidence review remains manual")

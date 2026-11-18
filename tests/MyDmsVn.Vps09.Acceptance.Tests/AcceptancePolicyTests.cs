@@ -19,7 +19,9 @@ public sealed class AcceptancePolicyTests
         Assert.Equal(Sha, receipt.SourceSha);
         Assert.Equal("staging.example", receipt.PublicHost);
         Assert.Equal("Vps09_Isolated", receipt.Database);
-        Assert.Equal("operator01", receipt.Operator);
+        Assert.Equal("chung6a8m", receipt.Owner);
+        Assert.Equal("OWN-VPS-04", receipt.DecisionId);
+        Assert.Equal(Digest, receipt.RunnerSha256);
         Assert.DoesNotContain("Password", receipt.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -73,12 +75,12 @@ public sealed class AcceptancePolicyTests
     }
 
     [Fact]
-    public void OperatorCannotAlsoBeReviewerOrOwner()
+    public void UnapprovedGovernanceModeIsRefused()
     {
         var error = Assert.Throws<AcceptanceBlockedException>(() =>
-            PreflightValidator.Validate(ValidPreflight() with { Reviewer = "OPERATOR01" }));
+            PreflightValidator.Validate(ValidPreflight() with { GovernanceMode = "self-approved" }));
 
-        Assert.Equal("VPS09.ReviewMustBeIndependent", error.Code);
+        Assert.Equal("VPS09.SingleOwnerGovernanceMissing", error.Code);
     }
 
     [Fact]
@@ -196,9 +198,10 @@ public sealed class AcceptancePolicyTests
         Origin: "https://staging.example",
         SqlOracleConnectionString: "Server=sql.example;Initial Catalog=Vps09_Isolated;Encrypt=True;TrustServerCertificate=False;User ID=oracle;Password=hidden",
         Admission: "reviewed-isolated-sql13-only",
-        Operator: "operator01",
-        Reviewer: "reviewer02",
-        Owner: "reviewer02",
+        GovernanceMode: "single-owner-exception",
+        DecisionId: "OWN-VPS-04",
+        Owner: "chung6a8m",
+        RunnerSha256: Digest,
         DatabaseClassification: "isolated-nonproduction");
 
     private static RouteObservation Observation(string caseId, string variant, int status) => new(

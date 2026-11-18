@@ -20,18 +20,20 @@ public sealed record PreflightInput(
     string Origin,
     string SqlOracleConnectionString,
     string Admission,
-    string Operator,
-    string Reviewer,
+    string GovernanceMode,
+    string DecisionId,
     string Owner,
+    string RunnerSha256,
     string DatabaseClassification);
 
 public sealed record PreflightReceipt(
     string SourceSha,
     string PublicHost,
     string Database,
-    string Operator,
-    string Reviewer,
+    string GovernanceMode,
+    string DecisionId,
     string Owner,
+    string RunnerSha256,
     string SqlTransport);
 
 public static class PreflightValidator
@@ -70,15 +72,16 @@ public static class PreflightValidator
               && !string.Equals(database, "master", StringComparison.OrdinalIgnoreCase),
             "VPS09.SqlOracleDatabaseInvalid");
 
-        Block(!string.IsNullOrWhiteSpace(input.Operator)
-              && !string.IsNullOrWhiteSpace(input.Reviewer)
-              && !string.IsNullOrWhiteSpace(input.Owner), "VPS09.PeopleMissing");
-        Block(!string.Equals(input.Operator, input.Reviewer, StringComparison.OrdinalIgnoreCase)
-              && !string.Equals(input.Operator, input.Owner, StringComparison.OrdinalIgnoreCase),
-            "VPS09.ReviewMustBeIndependent");
+        Block(input.GovernanceMode == "single-owner-exception"
+              && input.DecisionId == "OWN-VPS-04"
+              && input.Owner == "chung6a8m", "VPS09.SingleOwnerGovernanceMissing");
+        Block(RouteEvidenceValidator.Digest(input.RunnerSha256),
+            "VPS09.FirstPassRunnerIdentityMissing");
 
-        return new PreflightReceipt(input.ReviewedSha, admittedOrigin.Host, database!, input.Operator,
-            input.Reviewer, input.Owner, "encrypt-config-admitted; handshake-required-by-oracles");
+        return new PreflightReceipt(input.ReviewedSha, admittedOrigin.Host, database!,
+            input.GovernanceMode, input.DecisionId, input.Owner,
+            input.RunnerSha256,
+            "encrypt-config-admitted; handshake-required-by-oracles");
     }
 
     private static Dictionary<string, string> ParseSql(string connectionString)
