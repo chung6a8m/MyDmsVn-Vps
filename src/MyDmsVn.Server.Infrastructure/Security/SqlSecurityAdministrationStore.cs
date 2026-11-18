@@ -382,8 +382,23 @@ public sealed class SqlSecurityAdministrationRepository : ISecurityAdministratio
         Guid correlationId,
         CancellationToken cancellationToken)
     {
+        var entriesJson = SerializePermissionImportEntries(import.Entries);
+        using var command = SqlRead.Command(_context.Connection, _context.Transaction, "dbo.ApplySecurityPermissionImport",
+            SqlRead.Text("@TargetType", import.TargetType == PermissionImportTargetTypeDto.User ? "User" : "Role"),
+            SqlRead.P("@TargetId", SqlDbType.Int, import.TargetId), SqlRead.P("@ActorUserId", SqlDbType.Int, actorUserId),
+            SqlRead.P("@ExpectedRevision", SqlDbType.BigInt, expectedTargetRevision),
+            new SqlParameter("@EntriesJson", SqlDbType.NVarChar, -1) { Value = entriesJson }, SqlRead.P("@CorrelationId", SqlDbType.UniqueIdentifier, correlationId));
+        command.CommandType = CommandType.StoredProcedure;
+        return await SqlRead.SingleAsync(command, reader => new PermissionAssignmentImportResultDto(
+            reader.GetInt64(0), reader.GetInt32(1), reader.GetBoolean(2)), cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static string SerializePermissionImportEntries(
+        IReadOnlyList<PermissionAssignmentImportEntryDto> entries)
+    {
+        if (entries == null) throw new ArgumentNullException(nameof(entries));
 #if NET10_0_OR_GREATER
-        var entriesJson = JsonSerializer.Serialize(import.Entries.Select(entry => new
+        return JsonSerializer.Serialize(entries.Select(entry => new
         {
             PermissionKey = entry.PermissionKey,
             entry.Granted,
@@ -394,20 +409,12 @@ public sealed class SqlSecurityAdministrationRepository : ISecurityAdministratio
             PropertyNamingPolicy = null
         });
 #else
-        var entriesJson = JsonConvert.SerializeObject(import.Entries.Select(entry => new
+        return JsonConvert.SerializeObject(entries.Select(entry => new
         {
             PermissionKey = entry.PermissionKey,
             entry.Granted,
         }));
 #endif
-        using var command = SqlRead.Command(_context.Connection, _context.Transaction, "dbo.ApplySecurityPermissionImport",
-            SqlRead.Text("@TargetType", import.TargetType == PermissionImportTargetTypeDto.User ? "User" : "Role"),
-            SqlRead.P("@TargetId", SqlDbType.Int, import.TargetId), SqlRead.P("@ActorUserId", SqlDbType.Int, actorUserId),
-            SqlRead.P("@ExpectedRevision", SqlDbType.BigInt, expectedTargetRevision),
-            new SqlParameter("@EntriesJson", SqlDbType.NVarChar, -1) { Value = entriesJson }, SqlRead.P("@CorrelationId", SqlDbType.UniqueIdentifier, correlationId));
-        command.CommandType = CommandType.StoredProcedure;
-        return await SqlRead.SingleAsync(command, reader => new PermissionAssignmentImportResultDto(
-            reader.GetInt64(0), reader.GetInt32(1), reader.GetBoolean(2)), cancellationToken).ConfigureAwait(false);
     }
 
     private sealed class UserRow

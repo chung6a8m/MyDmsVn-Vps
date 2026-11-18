@@ -94,6 +94,29 @@ public sealed class PortableAuditLinuxTests
     }
 
     [Fact]
+    public async Task JsonlShapeOrderAndExplicitNullableFieldsRemainByteExactAcrossRestart()
+    {
+        using var destination = new Destination();
+        var first = new PortableProtectedSecurityAuditSink(destination.Options());
+        await first.WriteAsync(new SecurityAuditEntry(
+            SecurityAuditAction.Authentication, SecurityAuditOutcome.Denied, null,
+            new DateTime(2026, 11, 18, 1, 2, 3, DateTimeKind.Utc),
+            documentType: "WebAuthRefresh", correlationId: null), CancellationToken.None);
+
+        var reopened = new PortableProtectedSecurityAuditSink(destination.Options());
+        await reopened.WriteAsync(new SecurityAuditEntry(
+            SecurityAuditAction.Authentication, SecurityAuditOutcome.Succeeded, 19,
+            new DateTime(2026, 11, 18, 1, 2, 4, DateTimeKind.Utc),
+            documentType: "WebAuthLogout", correlationId: "audit_second"), CancellationToken.None);
+
+        Assert.Equal(new[]
+        {
+            "{\"category\":\"WebAuthRefresh\",\"action\":\"Authentication\",\"outcome\":\"Denied\",\"userId\":null,\"correlationId\":null,\"utc\":\"2026-11-18T01:02:03.0000000Z\"}",
+            "{\"category\":\"WebAuthLogout\",\"action\":\"Authentication\",\"outcome\":\"Succeeded\",\"userId\":19,\"correlationId\":\"audit_second\",\"utc\":\"2026-11-18T01:02:04.0000000Z\"}",
+        }, File.ReadAllLines(destination.Path));
+    }
+
+    [Fact]
     public void StartupRejectsBroadDirectoryAndFileModesAndNeverRepairsPermissions()
     {
         using var destination = new Destination();
