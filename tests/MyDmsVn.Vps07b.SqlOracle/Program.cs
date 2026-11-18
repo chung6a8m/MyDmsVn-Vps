@@ -235,7 +235,7 @@ INSERT dbo.GoodsReceipts(ReceiptNo,ReceiptDate,WarehouseId,EmployeeId,
 VALUES(N'CI-RECEIPT',CONVERT(date,@posted),@warehouse,@employee,
  'Posted',@actor,@posted,@actor);
 SET @receipt=SCOPE_IDENTITY();
-INSERT dbo.GoodsReceiptLines(ReceiptId,LineNo,ProductId,Quantity,UnitCost,CreatedByUserId)
+INSERT dbo.GoodsReceiptLines(ReceiptId,[LineNo],ProductId,Quantity,UnitCost,CreatedByUserId)
 VALUES(@receipt,1,@product,CAST(4 AS decimal(18,4)),CAST(2.5 AS decimal(19,4)),@actor);
 SET @receiptLine=SCOPE_IDENTITY();
 INSERT dbo.StockLedger(WarehouseId,ProductId,DocumentType,DocumentId,DocumentLineId,
