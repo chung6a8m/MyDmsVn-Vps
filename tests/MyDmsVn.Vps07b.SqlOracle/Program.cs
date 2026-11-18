@@ -35,6 +35,7 @@ internal static class Program
     private static string _master = "";
     private static string _cli = "";
     private static string _stage = "admission";
+    private const int RequiredSqlCaseCount = 47;
     private static int _passed;
     private static int _executed;
     private static readonly List<string> Databases = new();
@@ -425,7 +426,10 @@ EXEC @r=sys.sp_releaseapplock @Resource=N'MyDmsVn.SchemaMigration',
             Assert(await JournalSignature(denied) == stable, "VPS07B_UNAPPROVED_MUTATED");
             Pass("operator consent missing refused");
 
-            Console.WriteLine("VPS07B_REAL_SQL_PASS: executed=" + _executed + "; passed=" +
+            Assert(_executed == RequiredSqlCaseCount && _passed == RequiredSqlCaseCount,
+                "VPS07B_REQUIRED_CASE_COUNT_MISMATCH");
+            Console.WriteLine("VPS07B_REAL_SQL_PASS: discovered=" + RequiredSqlCaseCount +
+                "; executed=" + _executed + "; passed=" +
                 _passed + "; failed=0; skipped=0; SQL2022 verified TLS; ephemeral.");
             return 0;
         }
