@@ -217,6 +217,46 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                 "VPS07B_MAINTENANCE_REFUSAL_CREATED_JOURNAL");
             Pass("missing restricted maintenance rejected before bridge");
 
+            // A real SQL Server BACKUP ... WITH CHECKSUM, RESTORE VERIFYONLY,
+            // RESTORE ... WITH REPLACE is rehearsed only on an owned disposable
+            // database. This is NOT protected-staging or production evidence.
+            _stage = "owned-backup-restore-rehearsal";
+            var backupDb = await PrepareDbUp(12);
+            var preBackupRows = await SourceData(backupDb, 12);
+            var preBackupJournal = await JournalSignatureOfLegacy(backupDb);
+            var preBackupSchema = await DefinitionSignature(backupDb);
+            var backupPath = "/var/opt/mssql/data/" + backupDb + ".bak";
+            await ExecMaster("BACKUP DATABASE [" + backupDb + "] TO DISK=N'" +
+                backupPath + "' WITH INIT, FORMAT, CHECKSUM;");
+            await ExecMaster("RESTORE VERIFYONLY FROM DISK=N'" + backupPath +
+                "' WITH CHECKSUM;");
+            await RunCli(backupDb, 13, expectSuccess: true);
+            await Check(backupDb, 13);
+            Assert(await SourceData(backupDb, 12) == preBackupRows,
+                "VPS07B_PRE_RESTORE_DATA_MISMATCH");
+            await ExecMaster("ALTER DATABASE [" + backupDb +
+                "] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;");
+            await ExecMaster("RESTORE DATABASE [" + backupDb +
+                "] FROM DISK=N'" + backupPath + "' WITH REPLACE, RECOVERY, CHECKSUM;");
+            await ExecMaster("ALTER DATABASE [" + backupDb +
+                "] SET RESTRICTED_USER WITH ROLLBACK IMMEDIATE;");
+            Assert(await JournalSignatureOfLegacy(backupDb) == preBackupJournal,
+                "VPS07B_RESTORE_JOURNAL_MISMATCH");
+            Assert(await SourceData(backupDb, 12) == preBackupRows,
+                "VPS07B_RESTORE_DATA_MISMATCH");
+            Assert(await DefinitionSignature(backupDb) == preBackupSchema,
+                "VPS07B_RESTORE_SCHEMA_MISMATCH");
+            Assert(await Count(backupDb,
+                "SELECT CASE WHEN OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U') IS NULL THEN 0 ELSE 1 END;") == 0,
+                "VPS07B_RESTORE_STALE_FM_JOURNAL");
+            await RunCli(backupDb, 13, expectSuccess: true);
+            await Check(backupDb, 13);
+            Assert(await SourceData(backupDb, 12) == preBackupRows,
+                "VPS07B_POST_RESTORE_RETRY_DATA_MISMATCH");
+            Assert(await DefinitionSignature(backupDb) == baselineSignature,
+                "VPS07B_POST_RESTORE_RETRY_SCHEMA_MISMATCH");
+            Pass("owned SQL12 backup/checksum/verify/restore/retry to SQL13");
+
             // Adversarial and concurrent admission probes use a dedicated,
             // already-upgraded disposable database. They never alter a user DB.
             var denied = baseline;
