@@ -859,6 +859,8 @@ AND (r.wait_type LIKE N'WAITFOR%' OR r.command=N'WAITFOR');") > 0)
         {
             Assert(process.ExitCode == 0 && output.Contains("VPS07B_SQL_VERIFIED:",StringComparison.Ordinal),
                 "VPS07B_CLI_FAILED_" + process.ExitCode + "_" + SafeCode(diagnostic) + "_" +
+                System.Text.RegularExpressions.Regex.Match(diagnostic,
+                    @"S=[0-9]+;R=[0-9]+;T=[0-9]+;SelfT=[0-9]+;L=[0-9]+").Value + "_" +
                 new string((diagnostic.Split('\n').FirstOrDefault(x =>
                     x.StartsWith("Migration.Failed: stage=", StringComparison.Ordinal)) ?? "")
                     .Where(c => char.IsLetterOrDigit(c) || c == '=' || c == ';' ||

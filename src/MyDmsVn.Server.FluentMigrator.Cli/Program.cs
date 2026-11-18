@@ -91,7 +91,13 @@ internal static class Program
         }
         catch (MyDmsVn.Server.DbMigrator.DatabaseMigrationPreflightException ex)
         {
-            Console.Error.WriteLine(ex.Code + ": restricted maintenance admission refused.");
+            // Original validator emits only bounded integer DMV counters.
+            // Allowlist their exact format; never print arbitrary SQL, names
+            // or exception messages to the operator.
+            var counters = System.Text.RegularExpressions.Regex.Match(
+                ex.Message, @"S=[0-9]+;R=[0-9]+;T=[0-9]+;SelfT=[0-9]+;L=[0-9]+");
+            Console.Error.WriteLine(ex.Code + ": restricted maintenance admission refused." +
+                (counters.Success ? " " + counters.Value : ""));
             return 4;
         }
         catch (Exception ex)
