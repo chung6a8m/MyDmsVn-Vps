@@ -441,7 +441,12 @@ EXEC @r=sys.sp_releaseapplock @Resource=N'MyDmsVn.SchemaMigration',
                 "VPS07B_UNPRIVILEGED_CREATED_FM_JOURNAL");
             await Exec(underprivileged, "DROP USER [" + deniedLogin + "];");
             await ExecMaster("DROP LOGIN [" + deniedLogin + "];");
-            Pass("migration identity without CONTROL denied before mutation");
+            await RunCli(denied, 13, expectSuccess: false,
+                expectedCode: "Migration.DedicatedControlPrincipalRequired",
+                forceOutsideCi: true);
+            Assert(await JournalSignature(denied) == stable,
+                "VPS07B_PRODUCTION_SYSADMIN_REFUSAL_MUTATED");
+            Pass("migration identity without CONTROL and sysadmin outside ephemeral CI refused");
 
             // Explicitly test no operator approval even with valid disposable SQL.
             await RunCli(denied, 13, expectSuccess: false, approved: false);
@@ -776,7 +781,7 @@ ORDER BY Sig;", c);
 
     private static async Task RunCli(string db, int version, bool expectSuccess, bool approved = true,
         string? ciFault = null, string? expectedCode = null, string? connectionOverride = null,
-        bool interruptAtWaitfor = false)
+        bool interruptAtWaitfor = false, bool forceOutsideCi = false)
     {
         var psi = new ProcessStartInfo("dotnet") { RedirectStandardError = true,
             RedirectStandardOutput = true, UseShellExecute = false };
@@ -795,6 +800,15 @@ ORDER BY Sig;", c);
         psi.Environment["VPS07B_SQL_CONNECTION_STRING"] = connectionOverride ?? For(db);
         psi.Environment["VPS07B_OPERATOR_APPROVAL"] =
             approved ? "approved-maintenance-and-verified-backup" : "";
+        if (forceOutsideCi)
+        {
+            // Exercise the production principal guard in a disposable SQL
+            // database; never use this override for an actual write test.
+            Assert(!expectSuccess && ciFault == null, "VPS07B_NONCI_PROBE_UNSAFE");
+            psi.Environment["CI"] = "false";
+            psi.Environment["GITHUB_ACTIONS"] = "false";
+            psi.Environment["VPS07B_CI_EPHEMERAL_SQL"] = "";
+        }
         if (!string.IsNullOrEmpty(ciFault))
             psi.Environment["VPS07B_CI_FAULT"] = ciFault;
         else

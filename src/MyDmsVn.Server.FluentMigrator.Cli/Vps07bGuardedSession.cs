@@ -48,6 +48,9 @@ internal sealed class Vps07bGuardedSession : IDisposable
     public AdmittedSource Admit()
     {
         _lock.Open();
+        if (Scalar("SELECT ISNULL(IS_SRVROLEMEMBER(N'sysadmin'),0);") == 1 &&
+            !IsEphemeralCiSql())
+            throw new Vps07bRefusal("Migration.DedicatedControlPrincipalRequired");
         if (Scalar("SELECT ISNULL(HAS_PERMS_BY_NAME(DB_NAME(),N'DATABASE',N'CONTROL'),0);") != 1)
             throw new Vps07bRefusal("Migration.ControlPermissionRequired");
         var lockResult = Scalar(
@@ -111,6 +114,19 @@ WHERE is_ms_shipped=0 AND (parent_object_id=0 OR type IN (N'TR',N'TA'));") != 0 
 
         _admitted = true;
         return new AdmittedSource(version, version == 0, hasFm);
+    }
+
+    private bool IsEphemeralCiSql()
+    {
+        var connection = new SqlConnectionStringBuilder(RunnerConnectionString);
+        return Environment.GetEnvironmentVariable("CI") == "true" &&
+            Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true" &&
+            Environment.GetEnvironmentVariable("VPS07B_CI_EPHEMERAL_SQL") == "approved-container-only" &&
+            string.Equals(connection.DataSource, "localhost,1433", StringComparison.OrdinalIgnoreCase) &&
+            connection.InitialCatalog.StartsWith("MyDmsVnVps07bCi", StringComparison.Ordinal) &&
+            !connection.IntegratedSecurity &&
+            string.Equals(connection.UserID, "sa", StringComparison.OrdinalIgnoreCase) &&
+            !connection.TrustServerCertificate && connection.Encrypt.ToString() == "True";
     }
 
     private void VerifySchema9ValuationReadiness()
