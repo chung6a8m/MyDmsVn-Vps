@@ -264,18 +264,25 @@ public static class ManifestAdmission
             PreflightValidator.Block(seen.Add(key), "VPS09.RouteObservationDuplicate");
             PreflightValidator.Block(definitions.TryGetValue(key, out var definition),
                 "VPS09.RouteObservationUnknown");
-            PreflightValidator.Block(item.Method == definition!.Request.Method
-                                     && item.Actor == definition.Request.Actor
-                                     && item.ExpectedStatus == definition.Expected.Status
-                                     && MatchesTemplate(definition.Request.PathTemplate, item.Path)
-                                     && RouteEvidenceValidator.Digest(item.ExpectedBodySha256),
-                "VPS09.RouteExecutionPlanMismatch");
+            PreflightValidator.Block(item.Method == definition!.Request.Method,
+                "VPS09.RouteExecutionMethodMismatch");
+            PreflightValidator.Block(item.Actor == definition.Request.Actor,
+                "VPS09.RouteExecutionActorMismatch");
+            PreflightValidator.Block(item.ExpectedStatus == definition.Expected.Status,
+                "VPS09.RouteExecutionStatusMismatch");
+            PreflightValidator.Block(MatchesTemplate(definition.Request.PathTemplate, item.Path),
+                "VPS09.RouteExecutionPathMismatch");
+            PreflightValidator.Block(RouteEvidenceValidator.Digest(item.ExpectedBodySha256),
+                "VPS09.RouteExecutionDigestInvalid");
         }
     }
 
     private static bool MatchesTemplate(string template, string path)
     {
-        var pattern = Regex.Replace(Regex.Escape(template), @"\\\{[^}]+\\\}", "[^/?]+");
+        const string parameterMarker = "__VPS09_ROUTE_PARAMETER__";
+        var marked = Regex.Replace(template, @"\{[^}]+\}", parameterMarker,
+            RegexOptions.CultureInvariant);
+        var pattern = Regex.Escape(marked).Replace(parameterMarker, "[^/?]+", StringComparison.Ordinal);
         return Regex.IsMatch(path, "^" + pattern + @"(?:\?.*)?$", RegexOptions.CultureInvariant);
     }
 

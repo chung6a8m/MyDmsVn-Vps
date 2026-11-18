@@ -15,6 +15,12 @@ on:
         description: 'reviewed-isolated-fullstack-only enables protected nonproduction jobs'
         required: false
         type: string
+      acceptance_phase:
+        description: 'bounded, prepare, finalize, or review; protected manual execution only'
+        required: false
+        default: bounded
+        type: choice
+        options: [bounded, prepare, finalize, review]
 
 permissions:
   contents: read
@@ -28,7 +34,7 @@ concurrency:
 
 jobs:
   source-evidence-policy:
-    name: Source inventory and 33 synthetic signed-evidence tests (NOT live acceptance)
+    name: Source inventory, orchestrator and signed-evidence tests (NOT live acceptance)
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
@@ -43,6 +49,20 @@ jobs:
         run: python3 scripts/vps09_verify.py inventory
       - name: Execute synthetic signed-packet admission/refusal tests
         run: python3 -m unittest discover -s scripts/tests -p 'test_vps09_verify.py' -v
+      - name: Validate executable 293-scenario policy and sanitized receipt tools
+        run: |
+          python3 scripts/vps09_manifest.py validate
+          python3 -m unittest discover -s scripts/tests -p 'test_vps09_*.py' -v
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.404'
+      - name: Execute .NET 10 external acceptance policy tests (NO live SQL)
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          test "$(dotnet --version)" = 10.0.404
+          dotnet restore ../../tests/MyDmsVn.Vps09.Acceptance.Tests/MyDmsVn.Vps09.Acceptance.Tests.csproj --locked-mode
+          dotnet test ../../tests/MyDmsVn.Vps09.Acceptance.Tests/MyDmsVn.Vps09.Acceptance.Tests.csproj \
+            -c Release -f net10.0 --no-restore
 
   windows-source-policy:
     name: Windows PowerShell syntax and fail-closed admission (NO SQL or GUI)
@@ -62,6 +82,9 @@ jobs:
           $script = (Resolve-Path scripts/Invoke-Vps09WindowsAcceptance.ps1).Path
           $null = [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$parseErrors)
           if ($parseErrors.Count -ne 0) { throw "VPS09.WindowsScriptParser: $($parseErrors[0].Message)" }
+          $integrated = (Resolve-Path scripts/Invoke-Vps09IntegratedAcceptance.ps1).Path
+          $null = [System.Management.Automation.Language.Parser]::ParseFile($integrated, [ref]$tokens, [ref]$parseErrors)
+          if ($parseErrors.Count -ne 0) { throw "VPS09.IntegratedScriptParser: $($parseErrors[0].Message)" }
       - name: Explicitly unapproved execution must refuse before networking/SQL
         shell: pwsh
         run: |
@@ -69,6 +92,16 @@ jobs:
           try {
             ./scripts/Invoke-Vps09WindowsAcceptance.ps1 -ReviewedSha ('a' * 40) -Origin 'https://staging.invalid' -EvidenceDirectory "$env:RUNNER_TEMP/vps09-negative"
             throw 'VPS09.MissingAdmissionAccepted'
+          }
+          catch {
+            if ($_.Exception.Message -notmatch 'VPS09.IsolatedSqlApprovalMissing') { throw }
+          }
+          try {
+            ./scripts/Invoke-Vps09IntegratedAcceptance.ps1 -Phase Prepare -ReviewedSha ('a' * 40) `
+              -Origin 'https://staging.invalid' -EvidenceDirectory "$env:RUNNER_TEMP/vps09-integrated-negative" `
+              -Operator operator01 -Reviewer reviewer02 -Owner reviewer02 `
+              -RoutePlanPath missing-routes.json -OraclePlanPath missing-oracles.json
+            throw 'VPS09.MissingIntegratedAdmissionAccepted'
           }
           catch {
             if ($_.Exception.Message -notmatch 'VPS09.IsolatedSqlApprovalMissing') { throw }
@@ -81,6 +114,7 @@ jobs:
       github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/main' &&
       inputs.approved_scope == 'reviewed-isolated-fullstack-only' &&
+      inputs.acceptance_phase == 'bounded' &&
       inputs.reviewed_sha == github.sha
     needs: [source-evidence-policy, windows-source-policy]
     runs-on: [self-hosted, windows, vps09-attended]
@@ -131,14 +165,129 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  windows-live-integrated-prepare:
+    name: Prepare 293-route, 12-Oracle and attended GUI evidence (GUI remains pending)
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.approved_scope == 'reviewed-isolated-fullstack-only' &&
+      inputs.acceptance_phase == 'prepare' &&
+      inputs.reviewed_sha == github.sha
+    needs: [source-evidence-policy, windows-source-policy]
+    runs-on: [self-hosted, windows, vps09-attended]
+    environment: vps09-fullstack-nonproduction
+    timeout-minutes: 180
+    env:
+      VPS09_ISOLATED_SQL_ADMISSION: ${{ secrets.VPS09_ISOLATED_SQL_ADMISSION }}
+      VPS04A_SQL_ORACLE_CONNECTION_STRING: ${{ secrets.VPS09_READONLY_SQL_ORACLE }}
+      VPS09_WRITER_USERNAME: ${{ secrets.VPS09_WRITER_USERNAME }}
+      VPS09_WRITER_PASSWORD: ${{ secrets.VPS09_WRITER_PASSWORD }}
+      VPS09_DENIED_USERNAME: ${{ secrets.VPS09_DENIED_USERNAME }}
+      VPS09_DENIED_PASSWORD: ${{ secrets.VPS09_DENIED_PASSWORD }}
+      VPS09_OPERATOR_USERNAME: ${{ secrets.VPS09_OPERATOR_USERNAME }}
+      VPS09_OPERATOR_PASSWORD: ${{ secrets.VPS09_OPERATOR_PASSWORD }}
+      VPS09_PUBLIC_ORIGIN: ${{ vars.VPS09_PUBLIC_ORIGIN }}
+      VPS09_ROUTE_PLAN_PATH: ${{ vars.VPS09_ROUTE_PLAN_PATH }}
+      VPS09_ORACLE_PLAN_PATH: ${{ vars.VPS09_ORACLE_PLAN_PATH }}
+      VPS09_EVIDENCE_ROOT: ${{ vars.VPS09_EVIDENCE_ROOT }}
+      VPS09_OPERATOR: ${{ vars.VPS09_OPERATOR }}
+      VPS09_REVIEWER: ${{ vars.VPS09_REVIEWER }}
+      VPS09_OWNER: ${{ vars.VPS09_OWNER }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.400
+            10.0.404
+      - name: Execute protected prepare phase; GUI is explicitly NOT_RECORDED
+        shell: pwsh
+        run: |
+          $evidence = Join-Path $env:VPS09_EVIDENCE_ROOT '${{ github.sha }}'
+          ./scripts/Invoke-Vps09IntegratedAcceptance.ps1 -Phase Prepare `
+            -ReviewedSha '${{ github.sha }}' -Origin $env:VPS09_PUBLIC_ORIGIN `
+            -EvidenceDirectory $evidence -Operator $env:VPS09_OPERATOR `
+            -Reviewer $env:VPS09_REVIEWER -Owner $env:VPS09_OWNER `
+            -RoutePlanPath $env:VPS09_ROUTE_PLAN_PATH -OraclePlanPath $env:VPS09_ORACLE_PLAN_PATH
+          python scripts/vps09_packet_builder.py --root $evidence --source-sha '${{ github.sha }}' `
+            --artifact preflight-receipt.json --artifact route-observations.json `
+            --artifact sql-oracle.json --artifact gui-checklist.template.json `
+            --output "$env:RUNNER_TEMP/vps09-prepare-index.json"
+      - name: Upload hashes only; raw protected evidence remains on the attended runner
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps09-prepare-index-${{ github.sha }}
+          path: ${{ runner.temp }}/vps09-prepare-index.json
+          if-no-files-found: error
+          retention-days: 7
+
+  windows-live-integrated-finalize:
+    name: Validate attended GUI, Linux receipt and cleanup (no release approval)
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.approved_scope == 'reviewed-isolated-fullstack-only' &&
+      inputs.acceptance_phase == 'finalize' &&
+      inputs.reviewed_sha == github.sha
+    needs: [source-evidence-policy, windows-source-policy]
+    runs-on: [self-hosted, windows, vps09-attended]
+    environment: vps09-fullstack-nonproduction
+    timeout-minutes: 30
+    env:
+      VPS09_ISOLATED_SQL_ADMISSION: ${{ secrets.VPS09_ISOLATED_SQL_ADMISSION }}
+      VPS09_CLEANUP_ATTESTATION: ${{ secrets.VPS09_CLEANUP_ATTESTATION }}
+      VPS09_PUBLIC_ORIGIN: ${{ vars.VPS09_PUBLIC_ORIGIN }}
+      VPS09_EVIDENCE_ROOT: ${{ vars.VPS09_EVIDENCE_ROOT }}
+      VPS09_GUI_CHECKLIST_PATH: ${{ vars.VPS09_GUI_CHECKLIST_PATH }}
+      VPS09_LINUX_RECEIPT_PATH: ${{ vars.VPS09_LINUX_RECEIPT_PATH }}
+      VPS09_OPERATOR: ${{ vars.VPS09_OPERATOR }}
+      VPS09_REVIEWER: ${{ vars.VPS09_REVIEWER }}
+      VPS09_OWNER: ${{ vars.VPS09_OWNER }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.404'
+      - name: Require explicit owned-resource cleanup and finalize structural evidence
+        shell: pwsh
+        run: |
+          if ($env:VPS09_CLEANUP_ATTESTATION -cne 'confirmed-owned-nonproduction-cleanup') {
+            throw 'VPS09.CleanupNotConfirmed'
+          }
+          $evidence = Join-Path $env:VPS09_EVIDENCE_ROOT '${{ github.sha }}'
+          ./scripts/Invoke-Vps09IntegratedAcceptance.ps1 -Phase Finalize `
+            -ReviewedSha '${{ github.sha }}' -Origin $env:VPS09_PUBLIC_ORIGIN `
+            -EvidenceDirectory $evidence -Operator $env:VPS09_OPERATOR `
+            -Reviewer $env:VPS09_REVIEWER -Owner $env:VPS09_OWNER `
+            -GuiChecklistPath $env:VPS09_GUI_CHECKLIST_PATH `
+            -LinuxReceiptPath $env:VPS09_LINUX_RECEIPT_PATH -CleanupConfirmed
+          python scripts/vps09_packet_builder.py --root $evidence --source-sha '${{ github.sha }}' `
+            --artifact route-observations.json --artifact sql-oracle.json `
+            --artifact gui-checklist-receipt.json --artifact vps09-sanitized-summary.json `
+            --output "$env:RUNNER_TEMP/vps09-finalize-index.json"
+      - name: Upload sanitized hashes only; packet remains unsigned
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps09-finalize-index-${{ github.sha }}
+          path: ${{ runner.temp }}/vps09-finalize-index.json
+          if-no-files-found: error
+          retention-days: 7
+
   independent-release-review:
     name: Verify signed fullstack receipt (structural only; no implicit release)
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/main' &&
       inputs.approved_scope == 'reviewed-isolated-fullstack-only' &&
+      inputs.acceptance_phase == 'review' &&
       inputs.reviewed_sha == github.sha
-    needs: [source-evidence-policy, windows-live-bounded]
+    needs: [source-evidence-policy, windows-source-policy]
     runs-on: [self-hosted, linux, vps09-reviewer]
     environment: vps09-release-review
     timeout-minutes: 20

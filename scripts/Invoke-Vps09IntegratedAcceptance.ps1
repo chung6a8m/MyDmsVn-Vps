@@ -63,6 +63,21 @@ function Invoke-Acceptance([string]$Command, [string]$Input, [string]$Output) {
     if ($LASTEXITCODE -ne 0) { throw "VPS09.AcceptanceCommandFailed:$Command" }
 }
 
+function Get-ProtectedAccessToken([string]$UsernameName, [string]$PasswordName) {
+    $username = [Environment]::GetEnvironmentVariable($UsernameName)
+    $password = [Environment]::GetEnvironmentVariable($PasswordName)
+    if ([string]::IsNullOrWhiteSpace($username) -or [string]::IsNullOrWhiteSpace($password)) {
+        throw "VPS09.RequiredProtectedSettingMissing:$UsernameName/$PasswordName"
+    }
+    $payload = @{ username = $username; password = $password } | ConvertTo-Json -Compress
+    $response = Invoke-RestMethod -Uri "$canonical/api/v1/auth/login" -Method Post `
+        -Headers @{ Origin = $canonical; 'X-Requested-With' = 'XMLHttpRequest' } `
+        -ContentType 'application/json' -Body $payload -MaximumRedirection 0 -TimeoutSec 30
+    $token = [string]$response.data.accessToken
+    if ([string]::IsNullOrWhiteSpace($token)) { throw "VPS09.LoginTokenMissing:$UsernameName" }
+    return $token
+}
+
 if ($Phase -eq 'Prepare') {
     if (Test-Path -LiteralPath $evidence) { throw 'VPS09.EvidenceDirectoryMustBeNew' }
     if ([string]::IsNullOrWhiteSpace($RoutePlanPath) -or
@@ -105,7 +120,17 @@ if ($Phase -eq 'Prepare') {
         databaseClassification = 'isolated-nonproduction'
     })
     Invoke-Acceptance 'preflight' $preflightInput (Join-Path $evidence 'preflight-receipt.json')
-    Invoke-Acceptance 'routes' ([IO.Path]::GetFullPath($RoutePlanPath)) (Join-Path $evidence 'route-observations.json')
+    $env:VPS09_WRITER_BEARER_TOKEN = Get-ProtectedAccessToken 'VPS09_WRITER_USERNAME' 'VPS09_WRITER_PASSWORD'
+    $env:VPS09_DENIED_BEARER_TOKEN = Get-ProtectedAccessToken 'VPS09_DENIED_USERNAME' 'VPS09_DENIED_PASSWORD'
+    $env:VPS09_OPERATOR_BEARER_TOKEN = Get-ProtectedAccessToken 'VPS09_OPERATOR_USERNAME' 'VPS09_OPERATOR_PASSWORD'
+    try {
+        Invoke-Acceptance 'routes' ([IO.Path]::GetFullPath($RoutePlanPath)) (Join-Path $evidence 'route-observations.json')
+    }
+    finally {
+        Remove-Item Env:VPS09_WRITER_BEARER_TOKEN -ErrorAction SilentlyContinue
+        Remove-Item Env:VPS09_DENIED_BEARER_TOKEN -ErrorAction SilentlyContinue
+        Remove-Item Env:VPS09_OPERATOR_BEARER_TOKEN -ErrorAction SilentlyContinue
+    }
     Invoke-Acceptance 'oracles' ([IO.Path]::GetFullPath($OraclePlanPath)) (Join-Path $evidence 'sql-oracle.json')
 
     python scripts/vps09_gui_checklist.py template --source-sha $ReviewedSha `
