@@ -41,14 +41,14 @@ UNION ALL SELECT CONCAT(N'CC|',OBJECT_NAME(object_id),N'|',name,N'|',definition,
 UNION ALL SELECT CONCAT(N'UT|',SCHEMA_NAME(schema_id),N'|',name) FROM sys.types WHERE is_user_defined=1
 )
 SELECT @s=STRING_AGG(CONVERT(nvarchar(max),signature) COLLATE Latin1_General_100_BIN2,N';') WITHIN GROUP(ORDER BY signature COLLATE Latin1_General_100_BIN2) FROM signatures WHERE NOT (
-signature LIKE N'O|dbo|FluentMigratorVersionInfo|%' OR
-signature LIKE N'C|dbo|FluentMigratorVersionInfo|%' OR
-signature LIKE N'D|dbo|FluentMigratorVersionInfo|%' OR
-signature LIKE N'K|dbo|FluentMigratorVersionInfo|%' OR
-signature LIKE N'F|dbo|FluentMigratorVersionInfo|%' OR
-signature LIKE N'I|dbo|FluentMigratorVersionInfo|%' OR
-signature LIKE N'IC|dbo|FluentMigratorVersionInfo|%' OR
-signature LIKE N'ID|FluentMigratorVersionInfo|%'
+signature COLLATE Latin1_General_100_BIN2 LIKE N'O|dbo|FluentMigratorVersionInfo|%' OR
+signature COLLATE Latin1_General_100_BIN2 LIKE N'C|dbo|FluentMigratorVersionInfo|%' OR
+signature COLLATE Latin1_General_100_BIN2 LIKE N'D|dbo|FluentMigratorVersionInfo|%' OR
+signature COLLATE Latin1_General_100_BIN2 LIKE N'K|dbo|FluentMigratorVersionInfo|%' OR
+signature COLLATE Latin1_General_100_BIN2 LIKE N'F|dbo|FluentMigratorVersionInfo|%' OR
+signature COLLATE Latin1_General_100_BIN2 LIKE N'I|dbo|FluentMigratorVersionInfo|%' OR
+signature COLLATE Latin1_General_100_BIN2 LIKE N'IC|dbo|FluentMigratorVersionInfo|%' OR
+signature COLLATE Latin1_General_100_BIN2 LIKE N'ID|FluentMigratorVersionInfo|%'
 );
 SELECT CONVERT(varchar(64),HASHBYTES('SHA2_256',@s),2);";
         return (string)(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false));
