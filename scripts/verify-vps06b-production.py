@@ -43,19 +43,76 @@ assert "<Vps06bMediator>true</Vps06bMediator>" in host_project
 assert "VPS06B_MEDIATOR" in app_project or "Vps06bMediator" in app_project
 assert "#if !VPS06B_MEDIATOR" in (app / "DependencyInjection.cs").read_text(encoding="utf-8-sig")
 
+
+# Stable, source-derived production typed-handler manifest (not the VPS-06A
+# lexical 139 occurrences or test-only nested handler fixtures).
+import re
+manifest_path = root / "docs/contracts/vps-06b-typed-handler-manifest.json"
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+assert manifest["schemaVersion"] == 1
+assert manifest["expectedHandlerContracts"] == 46
+assert manifest["expectedHandlerClasses"] == 34
+assert manifest["compilerSymbol"] == "VPS06B_MEDIATOR"
+
+def split_interface_types(value: str) -> tuple[str, str]:
+    depth = 0
+    for index, char in enumerate(value):
+        if char == "<":
+            depth += 1
+        elif char == ">":
+            depth -= 1
+        elif char == "," and depth == 0:
+            return (value[:index].strip(), value[index + 1:].strip())
+    raise AssertionError(f"Malformed IRequestHandler pair: {value}")
+
+def handler_pairs(value: str) -> list[tuple[str, str]]:
+    pairs = []
+    marker = "IRequestHandler<"
+    start = 0
+    while (index := value.find(marker, start)) >= 0:
+        cursor, depth = index + len(marker), 1
+        end = cursor
+        while end < len(value) and depth:
+            if value[end] == "<":
+                depth += 1
+            elif value[end] == ">":
+                depth -= 1
+            end += 1
+        assert depth == 0, "Unbalanced request/response generic types"
+        pairs.append(split_interface_types(value[cursor:end - 1]))
+        start = end
+    return pairs
+
+def normalize_type(value: str) -> str:
+    return re.sub(r"\\s+", "", value)
+
+seen = []
+for file in sorted({item["file"] for item in manifest["handlers"]}):
+    relative = Path(file)
+    assert relative.parts[0] == "src" and ".." not in relative.parts
+    source = (root / relative).read_text(encoding="utf-8-sig")
+    ns = re.search(r"\\bnamespace\\s+([\\w.]+)\\s*[;{]", source)
+    assert ns is not None, file
+    for match in re.finditer(r"\\b(internal|public)\\s+(?:sealed\\s+)?class\\s+(\\w+)\\s*:\\s*([\\s\\S]*?)\\s*\\{", source):
+        for request, response in handler_pairs(match.group(3)):
+            seen.append((file, ns.group(1) + "." + match.group(2),
+                match.group(1), normalize_type(request), normalize_type(response)))
+expected = [(item["file"], item["handler"], item["visibility"],
+    normalize_type(item["request"]), normalize_type(item["response"])) for item in manifest["handlers"]]
+assert len(seen) == 46 and len(set(seen)) == 46, f"Product request inventory changed: {seen}"
+assert len({item[1] for item in seen}) == 34
+assert set(seen) == set(expected), f"Product request signatures drifted: missing={set(expected)-set(seen)} extra={set(seen)-set(expected)}"
+
 if args.stage == "source":
     generated = host / "obj/mediator-generated"
     cs = sorted(generated.rglob("*.cs"))
     assert len(cs) >= 4, f"Expected generated Mediator C# in {generated}; found {len(cs)}"
     combined = "\n".join(p.read_text(encoding="utf-8-sig") for p in cs)
-    for symbol in (
-        "GetFoundationStatusQuery", "CreateProductCommand",
-        "PostSalesReceiptCommand", "PostGoodsReceiptCommand",
-        "MutateSecurityAdministrationCommand",
-        "ExceptionHandlingBehavior", "AuthorizationBehavior", "ValidationBehavior",
-    ):
+    for symbol in sorted({item["request"] for item in manifest["handlers"]} | {
+        "ExceptionHandlingBehavior", "AuthorizationBehavior", "ValidationBehavior"
+    }):
         assert symbol in combined, f"Generated source lacks production type {symbol}"
-    print(f"VPS06B_SOURCE_GENERATED_PASS files={len(cs)}: production requests and pipeline emitted")
+    print(f"VPS06B_SOURCE_GENERATED_PASS files={len(cs)} typed_handlers={len(seen)} classes=34: all production requests and pipeline emitted")
 else:
     assert args.publish_dir, "--publish-dir is required for published stage"
     publish = Path(args.publish_dir)
