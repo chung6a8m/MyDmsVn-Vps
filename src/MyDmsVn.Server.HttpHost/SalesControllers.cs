@@ -5,7 +5,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http;
 using ErrorOr;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using Microsoft.Extensions.DependencyInjection;
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application;

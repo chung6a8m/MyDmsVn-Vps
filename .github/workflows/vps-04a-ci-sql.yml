@@ -163,12 +163,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true --locked-mode
-          dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -c Release -f net10.0 --no-restore -warnaserror
+          dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode
+          dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore -warnaserror
           dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
-            -p:Vps04Server=true -p:Vps04ALive=true --locked-mode
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true --locked-mode
           dotnet build ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
-            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-restore -warnaserror
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-restore -warnaserror
 
       - name: Run actual Kestrel HTTPS against private SQL; independently reconcile SQL journal
         shell: bash
@@ -218,7 +218,7 @@ jobs:
           # live JSON/ledger/COGS and strict-wire denial facts. No staging SQL.
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
-            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
             --filter 'FullyQualifiedName~Vps04aLiveSqlAcceptanceTests|FullyQualifiedName~Vps04aCiValuationSqlAcceptanceTests' \
             --logger 'trx;LogFileName=vps04a-ci-https-sql.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
 
@@ -229,7 +229,7 @@ jobs:
           # This preserves one unit for the later mid-UoW fault/recovery gate.
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
-            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
             --filter 'FullyQualifiedName~ConcurrentTwoClientOversellIsFailClosedAndNeverDoublePosts' \
             --logger 'trx;LogFileName=vps04a-ci-oversell-race.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
 
@@ -244,7 +244,7 @@ jobs:
           set +e
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
-            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
             --filter 'FullyQualifiedName~InjectedLedgerFailureRollsBackSourceCostBalanceAndJournal' \
             --logger 'trx;LogFileName=vps04a-ci-fault-rollback.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
           fault_result="$?"
@@ -285,7 +285,7 @@ jobs:
           # and new-worker admission do we retry the ORIGINAL same key/version.
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
-            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
             --filter 'FullyQualifiedName~DisarmedOriginalSameKeyRetryCommitsExactlyOnce' \
             --logger 'trx;LogFileName=vps04a-ci-fault-recovery.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
 
@@ -296,7 +296,7 @@ jobs:
           # warehouse balances under parallel Sales.Post requests.
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
-            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
             --filter 'FullyQualifiedName~ParallelPostsForSameProductAcrossTwoWarehousesKeepFourDecimalCostAllocations' \
             --logger 'trx;LogFileName=vps04a-ci-multiwarehouse-fractional.trx' \
             --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
@@ -308,7 +308,7 @@ jobs:
           mkdir -p vps04a-ci-parity
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
-            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
             --filter 'FullyQualifiedName~Vps04aCiGroupWireParitySqlAcceptanceTests' \
             --logger 'trx;LogFileName=vps04a-ci-group-parity.trx' \
             --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
@@ -364,6 +364,28 @@ jobs:
                 'WEB6 fail-closed only; no implied enabled WEB6 parity')
           PY
 
+          # VPS-06B independent native-dispatch SQL Oracle: after the original
+          # 15/15 sequential rollback/retry, oversell and WEB2-WEB6 parity facts.
+          # Read-only and exclusively admitted to this disposable SQL13 job.
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps06bSqlGeneratedMediatorParityTests' \
+            --logger 'trx;LogFileName=vps06b-sql-generated-mediator.trx' \
+            --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          path=Path('vps04a-ci-trx/vps06b-sql-generated-mediator.trx')
+          assert path.is_file(),'Missing VPS06B SQL oracle test TRX'
+          ns={'t':'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          counters=ET.parse(path).getroot().find('./t:ResultSummary/t:Counters',ns)
+          assert counters is not None
+          actual={k:int(counters.attrib[k]) for k in ('total','executed','passed','failed','notExecuted')}
+          assert actual=={'total':3,'executed':3,'passed':3,'failed':0,'notExecuted':0},actual
+          print('VPS06B_SQL_NATIVE_ORACLE_PASS 3/3: rollback, oversell race, scoped identity')
+          PY
+
           # VPS-04B executes separately from the historical WEB6-disabled
           # assertions above. Exact SQL13, seeded journal and verified HTTPS
           # remain in this disposable GitHub-hosted Linux job only.
@@ -398,13 +420,13 @@ jobs:
 
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
-            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
             --filter 'FullyQualifiedName~Vps04bWeb6LiveSqlTests.EnabledWeb6ContextReceiptEligibilityAndSessionRevocationWithRealSql' \
             --logger 'trx;LogFileName=vps04b-web6-live.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
 
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
-            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
             --filter 'FullyQualifiedName~Vps04bWeb6LiveSqlTests.RuntimeAuditWriteRefusalDegradesHealthWithoutLeakingPathOrSecrets' \
             --logger 'trx;LogFileName=vps04b-web6-degraded.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
 
@@ -451,7 +473,7 @@ jobs:
 
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
-            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
             --filter 'FullyQualifiedName~Vps04bWeb6LiveSqlTests.NewLinuxHostRecoversHealthyAndKeepsPriorAuditAfterRestart' \
             --logger 'trx;LogFileName=vps04b-web6-restart.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
 

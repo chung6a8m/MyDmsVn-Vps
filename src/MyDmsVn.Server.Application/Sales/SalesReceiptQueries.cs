@@ -2,7 +2,11 @@
 using System.Threading.Tasks;
 using ErrorOr;
 using FluentValidation;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application.Security;
 
@@ -17,6 +21,11 @@ public sealed class ListSalesReceiptsQuery : ApplicationRequest<SalesReceiptList
 
 internal sealed class ListSalesReceiptsQueryHandler : IRequestHandler<ListSalesReceiptsQuery, ErrorOr<SalesReceiptListPage>>
 {
+#if VPS06B_MEDIATOR
+    ValueTask<ErrorOr<SalesReceiptListPage>> IRequestHandler<ListSalesReceiptsQuery, ErrorOr<SalesReceiptListPage>>.Handle(ListSalesReceiptsQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<SalesReceiptListPage>>(Handle(message, cancellationToken));
+#endif
+
     private readonly ISalesReceiptQueryService _queries;
     public ListSalesReceiptsQueryHandler(ISalesReceiptQueryService queries) => _queries = queries;
     public async Task<ErrorOr<SalesReceiptListPage>> Handle(ListSalesReceiptsQuery query, CancellationToken token) => await _queries.ListAsync(SalesReceiptCursor.Parse(query.Request).Request, token).ConfigureAwait(false);
@@ -40,6 +49,11 @@ public sealed class GetSalesReceiptByIdQuery : ApplicationRequest<SalesReceiptDt
 
 internal sealed class GetSalesReceiptByIdQueryHandler : IRequestHandler<GetSalesReceiptByIdQuery, ErrorOr<SalesReceiptDto>>
 {
+#if VPS06B_MEDIATOR
+    ValueTask<ErrorOr<SalesReceiptDto>> IRequestHandler<GetSalesReceiptByIdQuery, ErrorOr<SalesReceiptDto>>.Handle(GetSalesReceiptByIdQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<SalesReceiptDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly ISalesReceiptQueryService _queries;
     public GetSalesReceiptByIdQueryHandler(ISalesReceiptQueryService queries) => _queries = queries;
     public async Task<ErrorOr<SalesReceiptDto>> Handle(GetSalesReceiptByIdQuery query, CancellationToken cancellationToken)

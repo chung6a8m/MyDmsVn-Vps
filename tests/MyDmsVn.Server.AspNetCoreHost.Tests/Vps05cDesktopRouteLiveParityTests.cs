@@ -10,7 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
-using MediatR;
+using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -803,6 +803,9 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Production" });
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Services.AddServerApplication().AddHttpRequestIdentity();
+            // Use the production generated dispatcher, then let the frozen
+            // differential corpus replace individual handlers with its oracles.
+            builder.Services.AddProductionGeneratedMediator();
             builder.Services.AddSingleton(options);
             builder.Services.AddSingleton<IUtcClock>(clock);
             builder.Services.AddSingleton<AuthAttemptLimiter>();
@@ -1009,12 +1012,12 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             private readonly Func<TRequest, TResult> _result;
             public CaptureHandler(DesktopState state, Func<TRequest, TResult> result)
             { _state = state; _result = result; }
-            public Task<ErrorOr<TResult>> Handle(TRequest request, CancellationToken cancellationToken)
+            public ValueTask<ErrorOr<TResult>> Handle(TRequest request, CancellationToken cancellationToken)
             {
                 _state.Calls.Add(request!);
                 if (_state.ThrowHandlers)
                     throw new InvalidOperationException("secret-database-connection");
-                return Task.FromResult<ErrorOr<TResult>>(_result(request));
+                return ValueTask.FromResult<ErrorOr<TResult>>(_result(request));
             }
         }
     }

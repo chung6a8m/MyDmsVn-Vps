@@ -1,7 +1,11 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using ErrorOr;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Server.Application.Security;
 
 namespace MyDmsVn.Server.Application

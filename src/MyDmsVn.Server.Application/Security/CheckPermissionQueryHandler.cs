@@ -1,7 +1,11 @@
 using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Contracts;
 
 namespace MyDmsVn.Server.Application.Security
@@ -9,6 +13,11 @@ namespace MyDmsVn.Server.Application.Security
     internal sealed class CheckPermissionQueryHandler
         : IRequestHandler<CheckPermissionQuery, ErrorOr<PermissionDecisionDto>>
     {
+#if VPS06B_MEDIATOR
+    ValueTask<ErrorOr<PermissionDecisionDto>> IRequestHandler<CheckPermissionQuery, ErrorOr<PermissionDecisionDto>>.Handle(CheckPermissionQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<PermissionDecisionDto>>(Handle(message, cancellationToken));
+#endif
+
         private readonly IPermissionAuthorizationService _authorization;
 
         public CheckPermissionQueryHandler(IPermissionAuthorizationService authorization)

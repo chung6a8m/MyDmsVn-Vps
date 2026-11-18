@@ -3,7 +3,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
 using FluentValidation;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application.Security;
 
@@ -94,6 +98,12 @@ internal sealed class GetStockCardQueryValidator
 internal sealed class GetStockBalancesQueryHandler
     : IRequestHandler<GetStockBalancesQuery, ErrorOr<PagedResult<StockBalanceRow>>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<PagedResult<StockBalanceRow>>> IRequestHandler<GetStockBalancesQuery, ErrorOr<PagedResult<StockBalanceRow>>>.Handle(GetStockBalancesQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<PagedResult<StockBalanceRow>>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IInventoryQueryService _queryService;
 
     public GetStockBalancesQueryHandler(IInventoryQueryService queryService) =>
@@ -110,6 +120,12 @@ internal sealed class GetStockBalancesQueryHandler
 internal sealed class GetStockCardQueryHandler
     : IRequestHandler<GetStockCardQuery, ErrorOr<PagedResult<StockCardRow>>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<PagedResult<StockCardRow>>> IRequestHandler<GetStockCardQuery, ErrorOr<PagedResult<StockCardRow>>>.Handle(GetStockCardQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<PagedResult<StockCardRow>>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IInventoryQueryService _queryService;
 
     public GetStockCardQueryHandler(IInventoryQueryService queryService) =>

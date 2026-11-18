@@ -53,8 +53,8 @@ jobs:
       - name: Restore and compile ASP.NET Core host / Server net10 graph
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
-          dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true --locked-mode -v minimal
-          dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -c Release -f net10.0 --no-restore -warnaserror -v minimal
+          dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode -v minimal
+          dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore -warnaserror -v minimal
       - name: VPS-04B enforce Linux runtime dependency boundary
         run: python3 scripts/verify-vps04b-runtime-boundary.py
       - name: Restore and execute net10 Server.Application xUnit v3 regressions
@@ -81,8 +81,8 @@ jobs:
       - name: Run native ASP.NET Core boundary regressions without SQL
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
-          dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true --locked-mode -v minimal
-          dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -c Release -f net10.0 --no-restore -v minimal --logger "trx;LogFileName=vps04a-core-boundary.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+          dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode -v minimal
+          dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore -v minimal --logger "trx;LogFileName=vps04a-core-boundary.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
       - name: Require native boundary test execution, no failure or skip
         run: |
           python3 - <<'PY'
@@ -104,7 +104,7 @@ jobs:
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
           dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
-            -p:Vps04Server=true -c Release -f net10.0 --no-build --no-restore -v minimal \
+            -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-build --no-restore -v minimal \
             --filter FullyQualifiedName~Vps05cDesktopRouteLiveParityTests \
             --logger "trx;LogFileName=vps05c-live-desktop-routes.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
           python3 - <<'PY'
@@ -123,7 +123,7 @@ jobs:
       - name: Reflect compiled ASP.NET Core endpoint inventory
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
-          dotnet run --project MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true --no-build -c Release -- --list-routes > "$GITHUB_WORKSPACE/vps04a-routes.json"
+          dotnet run --project MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -p:Vps06bMediator=true --no-build -c Release -- --list-routes > "$GITHUB_WORKSPACE/vps04a-routes.json"
       - name: Compare native endpoint mapping with immutable WEB2-6 and Desktop API routes
         run: python3 scripts/verify-vps-04a.py vps04a-routes.json
       - name: Validate WEB2-WEB6 57-route live coverage ledger against frozen route source
@@ -131,7 +131,7 @@ jobs:
       - name: Compile optional real HTTPS to SQL tests without running or skipping them
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
-          dotnet build ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-restore -warnaserror -v minimal
+          dotnet build ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-restore -warnaserror -v minimal
       - name: Preserve route evidence
         if: always()
         uses: actions/upload-artifact@v6

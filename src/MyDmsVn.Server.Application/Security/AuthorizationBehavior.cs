@@ -1,7 +1,11 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Server.Application.Identity;
 
 namespace MyDmsVn.Server.Application.Security
@@ -27,14 +31,21 @@ namespace MyDmsVn.Server.Application.Security
             _clock = clock;
         }
 
+#if VPS06B_MEDIATOR
+        public async ValueTask<TResponse> Handle(
+            TRequest request,
+            MessageHandlerDelegate<TRequest, TResponse> next,
+            CancellationToken cancellationToken)
+#else
         public async Task<TResponse> Handle(
             TRequest request,
             RequestHandlerDelegate<TResponse> next,
             CancellationToken cancellationToken)
+#endif
         {
             if (request is not IAuthorizedRequest authorizedRequest)
             {
-                return await next().ConfigureAwait(false);
+                return await InvokeNext(next, request, cancellationToken).ConfigureAwait(false);
             }
 
             var currentUser = _currentUserAccessor.Current;
@@ -94,7 +105,7 @@ namespace MyDmsVn.Server.Application.Security
                 actorRequest.BindAuthorizedUser(currentUser.UserId.Value);
             }
 
-            return await next().ConfigureAwait(false);
+            return await InvokeNext(next, request, cancellationToken).ConfigureAwait(false);
         }
 
         private Task AuditAsync(
@@ -119,5 +130,19 @@ namespace MyDmsVn.Server.Application.Security
                 businessOperationCommitted: false,
                 cancellationToken);
         }
+#if VPS06B_MEDIATOR
+        private static ValueTask<TResponse> InvokeNext(
+            MessageHandlerDelegate<TRequest, TResponse> next,
+            TRequest request,
+            CancellationToken cancellationToken)
+            => next(request, cancellationToken);
+#else
+        private static Task<TResponse> InvokeNext(
+            RequestHandlerDelegate<TResponse> next,
+            TRequest request,
+            CancellationToken cancellationToken)
+            => next();
+#endif
+
     }
 }

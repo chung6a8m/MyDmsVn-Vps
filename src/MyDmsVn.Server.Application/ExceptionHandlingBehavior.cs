@@ -2,7 +2,11 @@
 using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 
 namespace MyDmsVn.Server.Application
 {
@@ -17,14 +21,21 @@ namespace MyDmsVn.Server.Application
             _exceptionReporter = exceptionReporter;
         }
 
+#if VPS06B_MEDIATOR
+        public async ValueTask<TResponse> Handle(
+            TRequest request,
+            MessageHandlerDelegate<TRequest, TResponse> next,
+            CancellationToken cancellationToken)
+#else
         public async Task<TResponse> Handle(
             TRequest request,
             RequestHandlerDelegate<TResponse> next,
             CancellationToken cancellationToken)
+#endif
         {
             try
             {
-                return await next().ConfigureAwait(false);
+                return await InvokeNext(next, request, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -55,5 +66,19 @@ namespace MyDmsVn.Server.Application
                     });
             }
         }
+#if VPS06B_MEDIATOR
+        private static ValueTask<TResponse> InvokeNext(
+            MessageHandlerDelegate<TRequest, TResponse> next,
+            TRequest request,
+            CancellationToken cancellationToken)
+            => next(request, cancellationToken);
+#else
+        private static Task<TResponse> InvokeNext(
+            RequestHandlerDelegate<TResponse> next,
+            TRequest request,
+            CancellationToken cancellationToken)
+            => next();
+#endif
+
     }
 }

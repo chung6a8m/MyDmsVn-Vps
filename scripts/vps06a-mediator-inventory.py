@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enumerate source MediatR messages/handlers/dispatch without scanning vendored code.
+"""Enumerate frozen *legacy* MediatR source without scanning vendored code.
 
 This is lexical inventory (for VPS-06A handoff), NOT generator acceptance of each
 production handler. Compile-time generator registration for production is VPS-06B.
@@ -24,12 +24,33 @@ sources = sorted([
     *root.joinpath("tests").rglob("*.cs")
 ])
 sources = [p for p in sources if not any(name in {"bin", "obj"} for name in p.parts)
-           and "MyDmsVn.Vps06A.MediatorCanary" not in p.parts]
+           and "MyDmsVn.Vps06A.MediatorCanary" not in p.parts
+           and not p.name.startswith("Vps06b")
+           and p.name not in {"Vps06bInternals.cs", "GeneratedMediatorRegistration.cs"}]
+# Keep the 06A negative/frozen lexical inventory of the net48/legacy code
+# path. Conditional VPS-06B native source does not alter that original baseline.
+def legacy_slice(data: str) -> str:
+    lines, active, out = data.splitlines(keepends=True), [], []
+    for line in lines:
+        m = re.match(r"^\s*#if\s+(!?)VPS06B_MEDIATOR\s*$", line)
+        if m:
+            active.append(m.group(1) == "!")
+            continue
+        if active and re.match(r"^\s*#else\s*$", line):
+            active[-1] = not active[-1]
+            continue
+        if active and re.match(r"^\s*#endif\s*$", line):
+            active.pop()
+            continue
+        if all(active):
+            out.append(line)
+    assert not active, "Unbalanced VPS06B_MEDIATOR source conditional"
+    return "".join(out)
 results = {key: [] for key in patterns}
 digester = hashlib.sha256()
 for path in sources:
     relative = path.relative_to(root).as_posix()
-    data = path.read_text(encoding="utf-8-sig", errors="replace")
+    data = legacy_slice(path.read_text(encoding="utf-8-sig", errors="replace"))
     digester.update(relative.encode("utf-8") + b"\0" + data.encode("utf-8") + b"\0")
     for key, pattern in patterns.items():
         for m in pattern.finditer(data):
@@ -51,7 +72,7 @@ expected = {
 assert counts == expected, f"MediatR source inventory drift: expected {expected}; actual {counts}"
 report = {
     "schemaVersion": 1,
-    "purpose": "VPS-06A lexical inventory; not a generated production handler count",
+    "purpose": "VPS-06A frozen legacy lexical inventory (VPS-06B conditional source excluded); not a production generated handler count",
     "sourceDigestSha256": digester.hexdigest(),
     "scannedSourceFiles": len(sources),
     "counts": counts,

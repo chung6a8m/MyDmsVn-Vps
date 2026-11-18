@@ -5,7 +5,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
 using FluentValidation;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Contracts.Security;
 using MyDmsVn.Server.Application.Identity;
 
@@ -169,6 +173,11 @@ public sealed class MutateSecurityAdministrationCommand
 internal sealed class ListSecurityUsersQueryHandler
     : IRequestHandler<ListSecurityUsersQuery, ErrorOr<IReadOnlyList<SecurityUserDto>>>
 {
+#if VPS06B_MEDIATOR
+    ValueTask<ErrorOr<IReadOnlyList<SecurityUserDto>>> IRequestHandler<ListSecurityUsersQuery, ErrorOr<IReadOnlyList<SecurityUserDto>>>.Handle(ListSecurityUsersQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<IReadOnlyList<SecurityUserDto>>>(Handle(message, cancellationToken));
+#endif
+
     private readonly ISecurityAdministrationStore _store;
 
     public ListSecurityUsersQueryHandler(ISecurityAdministrationStore store) => _store = store;
@@ -183,6 +192,11 @@ internal sealed class ListSecurityUsersQueryHandler
 internal sealed class ListSecurityRolesQueryHandler
     : IRequestHandler<ListSecurityRolesQuery, ErrorOr<IReadOnlyList<SecurityRoleDto>>>
 {
+#if VPS06B_MEDIATOR
+    ValueTask<ErrorOr<IReadOnlyList<SecurityRoleDto>>> IRequestHandler<ListSecurityRolesQuery, ErrorOr<IReadOnlyList<SecurityRoleDto>>>.Handle(ListSecurityRolesQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<IReadOnlyList<SecurityRoleDto>>>(Handle(message, cancellationToken));
+#endif
+
     private readonly ISecurityAdministrationStore _store;
 
     public ListSecurityRolesQueryHandler(ISecurityAdministrationStore store) => _store = store;
@@ -197,6 +211,11 @@ internal sealed class ListSecurityRolesQueryHandler
 internal sealed class MutateSecurityAdministrationCommandHandler
     : IRequestHandler<MutateSecurityAdministrationCommand, ErrorOr<SecurityAdministrationResultDto>>
 {
+#if VPS06B_MEDIATOR
+    ValueTask<ErrorOr<SecurityAdministrationResultDto>> IRequestHandler<MutateSecurityAdministrationCommand, ErrorOr<SecurityAdministrationResultDto>>.Handle(MutateSecurityAdministrationCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<SecurityAdministrationResultDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly ISecurityAdministrationStore _store;
     private readonly IPermissionRegistry _registry;
     private readonly IPasswordHasher _passwordHasher;

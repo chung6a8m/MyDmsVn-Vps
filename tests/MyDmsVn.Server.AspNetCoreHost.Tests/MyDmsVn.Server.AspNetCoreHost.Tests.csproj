@@ -5,9 +5,10 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <Vps04Server>true</Vps04Server>
+    <Vps06bMediator>true</Vps06bMediator>
     <!-- Live tests are absent from normal CI/discovery; explicit opt-in on approved SQL only. -->
     <DefineConstants Condition="'$(Vps04ALive)' == 'true'">$(DefineConstants);VPS04A_LIVE</DefineConstants>
-    <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.vps04a.lock.json</NuGetLockFilePath>
+    <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.vps06b.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

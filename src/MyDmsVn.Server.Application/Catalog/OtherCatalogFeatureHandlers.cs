@@ -2,7 +2,11 @@
 using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application.Identity;
 using MyDmsVn.Server.Application.Persistence;
@@ -17,6 +21,24 @@ internal sealed class WarehouseFeatureHandlers :
     IRequestHandler<GetWarehouseByIdQuery, ErrorOr<WarehouseDto>>,
     IRequestHandler<LookupWarehousesQuery, ErrorOr<IReadOnlyList<CatalogLookupDto>>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<WarehouseDto>> IRequestHandler<UpdateWarehouseCommand, ErrorOr<WarehouseDto>>.Handle(UpdateWarehouseCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<WarehouseDto>>(Handle(message, cancellationToken));
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<UnitResponse>> IRequestHandler<SetWarehouseActiveCommand, ErrorOr<UnitResponse>>.Handle(SetWarehouseActiveCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<UnitResponse>>(Handle(message, cancellationToken));
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<PagedResult<WarehouseDto>>> IRequestHandler<ListWarehousesQuery, ErrorOr<PagedResult<WarehouseDto>>>.Handle(ListWarehousesQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<PagedResult<WarehouseDto>>>(Handle(message, cancellationToken));
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<WarehouseDto>> IRequestHandler<GetWarehouseByIdQuery, ErrorOr<WarehouseDto>>.Handle(GetWarehouseByIdQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<WarehouseDto>>(Handle(message, cancellationToken));
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<IReadOnlyList<CatalogLookupDto>>> IRequestHandler<LookupWarehousesQuery, ErrorOr<IReadOnlyList<CatalogLookupDto>>>.Handle(LookupWarehousesQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<IReadOnlyList<CatalogLookupDto>>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _factory;
     private readonly IUtcClock _clock;
     private readonly IWarehouseQueryService _queries;
@@ -74,6 +96,24 @@ internal sealed class EmployeeFeatureHandlers :
     IRequestHandler<GetEmployeeByIdQuery, ErrorOr<EmployeeDto>>,
     IRequestHandler<LookupEmployeesQuery, ErrorOr<IReadOnlyList<CatalogLookupDto>>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<EmployeeDto>> IRequestHandler<UpdateEmployeeCommand, ErrorOr<EmployeeDto>>.Handle(UpdateEmployeeCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<EmployeeDto>>(Handle(message, cancellationToken));
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<UnitResponse>> IRequestHandler<SetEmployeeActiveCommand, ErrorOr<UnitResponse>>.Handle(SetEmployeeActiveCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<UnitResponse>>(Handle(message, cancellationToken));
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<PagedResult<EmployeeDto>>> IRequestHandler<ListEmployeesQuery, ErrorOr<PagedResult<EmployeeDto>>>.Handle(ListEmployeesQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<PagedResult<EmployeeDto>>>(Handle(message, cancellationToken));
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<EmployeeDto>> IRequestHandler<GetEmployeeByIdQuery, ErrorOr<EmployeeDto>>.Handle(GetEmployeeByIdQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<EmployeeDto>>(Handle(message, cancellationToken));
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<IReadOnlyList<CatalogLookupDto>>> IRequestHandler<LookupEmployeesQuery, ErrorOr<IReadOnlyList<CatalogLookupDto>>>.Handle(LookupEmployeesQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<IReadOnlyList<CatalogLookupDto>>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _factory;
     private readonly IUtcClock _clock;
     private readonly IEmployeeQueryService _queries;
@@ -138,6 +178,24 @@ internal sealed class CustomerFeatureHandlers :
     IRequestHandler<GetCustomerByIdQuery, ErrorOr<CustomerDto>>,
     IRequestHandler<LookupCustomersQuery, ErrorOr<IReadOnlyList<CatalogLookupDto>>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<CustomerDto>> IRequestHandler<UpdateCustomerCommand, ErrorOr<CustomerDto>>.Handle(UpdateCustomerCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<CustomerDto>>(Handle(message, cancellationToken));
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<UnitResponse>> IRequestHandler<SetCustomerActiveCommand, ErrorOr<UnitResponse>>.Handle(SetCustomerActiveCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<UnitResponse>>(Handle(message, cancellationToken));
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<PagedResult<CustomerDto>>> IRequestHandler<ListCustomersQuery, ErrorOr<PagedResult<CustomerDto>>>.Handle(ListCustomersQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<PagedResult<CustomerDto>>>(Handle(message, cancellationToken));
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<CustomerDto>> IRequestHandler<GetCustomerByIdQuery, ErrorOr<CustomerDto>>.Handle(GetCustomerByIdQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<CustomerDto>>(Handle(message, cancellationToken));
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<IReadOnlyList<CatalogLookupDto>>> IRequestHandler<LookupCustomersQuery, ErrorOr<IReadOnlyList<CatalogLookupDto>>>.Handle(LookupCustomersQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<IReadOnlyList<CatalogLookupDto>>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _factory;
     private readonly IUtcClock _clock;
     private readonly ICustomerQueryService _queries;
