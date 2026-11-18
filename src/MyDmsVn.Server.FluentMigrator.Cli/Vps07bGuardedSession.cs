@@ -61,17 +61,24 @@ internal sealed class Vps07bGuardedSession : IDisposable
             throw new Vps07bRefusal("Migration.AlreadyRunning");
         _ownsLock = true;
 
-        // Historical source cannot be admitted while application-owned
-        // objects have explicit PUBLIC grants. The original DbUp scripts
-        // grant no application objects to PUBLIC; later approved scoped
-        // runtime/operator grants remain unaffected.
+        // Explicit PUBLIC grants can propagate through dbo schema or database
+        // scope without an object-level permission row. Reject all three
+        // paths before any bridge writes. Default CONNECT and SQL Server
+        // column-key metadata grants are not data access; scoped non-PUBLIC
+        // application grants remain unaffected.
         if (Scalar(@"SELECT CASE WHEN EXISTS(
 SELECT 1 FROM sys.database_permissions p
-JOIN sys.objects o ON p.class=1 AND p.major_id=o.object_id
 WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'public')
-AND p.state IN (N'G',N'W') AND o.is_ms_shipped=0
+AND p.state IN (N'G',N'W') AND (
+    (p.class=1 AND EXISTS(SELECT 1 FROM sys.objects o
+        WHERE o.object_id=p.major_id AND o.is_ms_shipped=0))
+    OR (p.class=3 AND p.major_id=SCHEMA_ID(N'dbo'))
+    OR (p.class=0 AND p.permission_name NOT IN (
+        N'CONNECT',N'VIEW ANY COLUMN MASTER KEY DEFINITION',
+        N'VIEW ANY COLUMN ENCRYPTION KEY DEFINITION'))
+)
 ) THEN 1 ELSE 0 END;") != 0)
-            throw new Vps07bRefusal("Migration.PublicObjectGrantRefused");
+            throw new Vps07bRefusal("Migration.UnsafePublicGrantRefused");
 
         var hasLegacy = Exists("dbo.SchemaVersions");
         var hasFm = Exists(JournalName);
@@ -281,7 +288,7 @@ ON dbo.FluentMigratorVersionInfo(Version);");
                 throw new Vps07bRefusal("Migration.FutureLegacyJournal");
             var actual = reader.GetString(0);
             var expected = Vps07bExecutionScope.ScriptAt(version);
-            if (actual != expected && actual != LegacyPrefix + expected)
+            if (actual != LegacyPrefix + expected)
                 throw new Vps07bRefusal("Migration.UnknownOrReorderedLegacyJournal");
         }
         return version;

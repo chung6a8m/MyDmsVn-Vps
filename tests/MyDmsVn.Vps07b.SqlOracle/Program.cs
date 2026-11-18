@@ -35,7 +35,7 @@ internal static class Program
     private static string _master = "";
     private static string _cli = "";
     private static string _stage = "admission";
-    private const int RequiredSqlCaseCount = 54;
+    private const int RequiredSqlCaseCount = 58;
     private static int _passed;
     private static int _executed;
     private static readonly List<string> Databases = new();
@@ -176,6 +176,24 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
             }
             Assert(await DefinitionSignature(chained) == baselineSignature,
                 "VPS07B_INCREMENTAL_FINAL_DEFINITION_DRIFT");
+
+            // Only versions 9..13 have approved native fingerprints.
+            // An interrupted fresh prefix 1..8 must be refused, not resumed
+            // by guessing an unproven intermediate schema.
+            _stage = "fresh-partial-upgrade-fail-closed";
+            var partialFresh = await Create();
+            await RunCli(partialFresh, 13, expectSuccess: false,
+                ciFault: "5:1", expectedCode: "sql=51750");
+            Assert(await Count(partialFresh, "SELECT COUNT(*) FROM dbo.SchemaVersions;") == 4,
+                "VPS07B_PARTIAL_FRESH_LEGACY_PREFIX_MISMATCH");
+            Assert(await Count(partialFresh, "SELECT COUNT(*) FROM dbo.FluentMigratorVersionInfo;") == 4,
+                "VPS07B_PARTIAL_FRESH_FM_PREFIX_MISMATCH");
+            await RunCli(partialFresh, 13, expectSuccess: false,
+                expectedCode: "Migration.UnsupportedHistoricalVersion");
+            Assert(await Count(partialFresh, "SELECT COUNT(*) FROM dbo.SchemaVersions;") == 4 &&
+                await Count(partialFresh, "SELECT COUNT(*) FROM dbo.FluentMigratorVersionInfo;") == 4,
+                "VPS07B_PARTIAL_FRESH_RETRY_MUTATED_HISTORY");
+            Pass("interrupted fresh SQL005: version4 remains fail-closed, replacement required");
 
             // Three actual SQL THROW failures, after first/middle/last SQL
             // batch, prove FM rolls back BOTH journals and all business DDL.
@@ -339,11 +357,27 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
 
             await Exec(denied, "GRANT SELECT ON dbo.Users TO public;");
             await RunCli(denied, 13, expectSuccess: false,
-                expectedCode: "Migration.PublicObjectGrantRefused");
+                expectedCode: "Migration.UnsafePublicGrantRefused");
             await Exec(denied, "REVOKE SELECT ON dbo.Users FROM public;");
             Assert(await JournalSignature(denied) == stable,
                 "VPS07B_PUBLIC_BUSINESS_GRANT_MUTATED_HISTORY");
             Pass("unsafe public grant on business table refused before migration");
+
+            await Exec(denied, "GRANT SELECT ON SCHEMA::dbo TO public;");
+            await RunCli(denied, 13, expectSuccess: false,
+                expectedCode: "Migration.UnsafePublicGrantRefused");
+            await Exec(denied, "REVOKE SELECT ON SCHEMA::dbo FROM public;");
+            Assert(await JournalSignature(denied) == stable,
+                "VPS07B_PUBLIC_SCHEMA_GRANT_MUTATED_HISTORY");
+            Pass("inherited PUBLIC schema SELECT refused before mutation");
+
+            await Exec(denied, "GRANT SELECT TO public;");
+            await RunCli(denied, 13, expectSuccess: false,
+                expectedCode: "Migration.UnsafePublicGrantRefused");
+            await Exec(denied, "REVOKE SELECT FROM public;");
+            Assert(await JournalSignature(denied) == stable,
+                "VPS07B_PUBLIC_DATABASE_GRANT_MUTATED_HISTORY");
+            Pass("inherited PUBLIC database SELECT refused before mutation");
 
             // Forged versions, unexpected objects, mis-shaped journals and
             // future legacy history are refused without replay or trust bypass.
@@ -368,6 +402,18 @@ VALUES(N'MyDmsVn.Server.DbMigrator.Scripts.014_Unexpected.sql',GETDATE());");
                 "VPS07B_FUTURE_DBUP_CLEANUP_MISMATCH");
             Pass("future DbUp journal refused");
 
+            await Exec(denied, @"UPDATE dbo.SchemaVersions
+SET ScriptName=N'001_PersistenceFoundation.sql'
+WHERE Id=(SELECT MIN(Id) FROM dbo.SchemaVersions);");
+            await RunCli(denied, 13, expectSuccess: false,
+                expectedCode: "Migration.UnknownOrReorderedLegacyJournal");
+            await Exec(denied, @"UPDATE dbo.SchemaVersions
+SET ScriptName=N'MyDmsVn.Server.DbMigrator.Scripts.001_PersistenceFoundation.sql'
+WHERE Id=(SELECT MIN(Id) FROM dbo.SchemaVersions);");
+            Assert(await JournalSignature(denied) == stable,
+                "VPS07B_NONCANONICAL_LEGACY_RESTORATION_MISMATCH");
+            Pass("bare SQL script alias is not canonical DbUp journal provenance");
+
             await Exec(denied, "ALTER TABLE dbo.FluentMigratorVersionInfo ADD InjectedFlag bit NULL;");
             await RunCli(denied, 13, expectSuccess: false,
                 expectedCode: "Migration.FluentMigratorJournalDefinitionMismatch");
@@ -378,7 +424,7 @@ VALUES(N'MyDmsVn.Server.DbMigrator.Scripts.014_Unexpected.sql',GETDATE());");
                 "VPS07B_BAD_FM_SHAPE_CLEANUP_MISMATCH");
             await Exec(denied, "GRANT SELECT ON dbo.FluentMigratorVersionInfo TO public;");
             await RunCli(denied, 13, expectSuccess: false,
-                expectedCode: "Migration.PublicObjectGrantRefused");
+                expectedCode: "Migration.UnsafePublicGrantRefused");
             await Exec(denied, "REVOKE SELECT ON dbo.FluentMigratorVersionInfo FROM public;");
             Assert(await JournalSignature(denied) == stable,
                 "VPS07B_PUBLIC_JOURNAL_GRANT_CLEANUP_MISMATCH");
@@ -847,8 +893,8 @@ ORDER BY Sig;", c);
         {
             Assert(index < expected, "VPS07B_LEGACY_JOURNAL_TOO_LONG");
             var name = reader.GetString(0);
-            Assert(name.EndsWith(".Scripts." + Scripts[index], StringComparison.Ordinal) ||
-                name == Scripts[index], "VPS07B_LEGACY_JOURNAL_UNKNOWN");
+            Assert(name == "MyDmsVn.Server.DbMigrator.Scripts." + Scripts[index],
+                "VPS07B_LEGACY_JOURNAL_UNKNOWN");
             index++;
         }
         Assert(index == expected, "VPS07B_LEGACY_JOURNAL_COUNT");

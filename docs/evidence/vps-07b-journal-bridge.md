@@ -29,6 +29,14 @@ Mandatory final verification includes: exact9..13 and empty source admission, ex
 **Review policy:** audit the entire [PR #26 diff](https://github.com/chung6a8m/MyDmsVn-Vps/pull/26/files), regenerate independent SQL oracles and inspect exact job logs, generated lock graph, counts, final HEAD and checksum comparison. Update this ledger and the PR with run IDs and dispositions before deciding review/merge. A log saying `SUCCESS` for compilation alone never means VPS-07B acceptance.
 
 
+## Independent review findings — code fixes committed, final-HEAD CI required
+
+6. **P1 — inherited PUBLIC permission bypass.** A grant at `SCHEMA::dbo` or database scope could expose application objects without an object-level grant; refuse object, schema and broad database grants in preflight, with independent SQL negatives.
+7. **P1 — bare legacy SQL alias provenance.** Enforce the complete original embedded DbUp resource name; add forged bare-alias refusal.
+8. **P1 — interrupted fresh prefix not explicitly exercised.** Inject failure in SQL005 after versions1..4 commit, prove dual-journal consistency and fail-closed rerun; document operator-led fresh replacement/backup restore.
+
+**New required acceptance floor: 58/58 real SQL cases**, zero failed/skipped, on exact new PR HEAD; earlier 54/54 is historical evidence only.
+
 ## Review findings addressed on this branch
 
 1. **P0 — deleted FM journal could have been restamped as unbridged DbUp.** Fixed with a database-scoped durable cutover marker created in the same serializable transaction as the FM journal. Tested absent/forged marker and deleted journal on SQL2022; native fingerprint admission also verifies this binding. No original DbUp script or legacy journal row was changed.
