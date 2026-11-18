@@ -6,7 +6,12 @@ using System.Threading.Tasks;
 using System.Data;
 using ErrorOr;
 using Microsoft.Data.SqlClient;
+#if NET10_0_OR_GREATER
+using System.Text.Json;
+using System.Text.Encodings.Web;
+#else
 using Newtonsoft.Json;
+#endif
 using MyDmsVn.Contracts.Security;
 using MyDmsVn.Server.Application.Persistence;
 using MyDmsVn.Server.Application.Security;
@@ -377,11 +382,24 @@ public sealed class SqlSecurityAdministrationRepository : ISecurityAdministratio
         Guid correlationId,
         CancellationToken cancellationToken)
     {
+#if NET10_0_OR_GREATER
+        var entriesJson = JsonSerializer.Serialize(import.Entries.Select(entry => new
+        {
+            PermissionKey = entry.PermissionKey,
+            entry.Granted,
+        }), new JsonSerializerOptions
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            WriteIndented = false,
+            PropertyNamingPolicy = null
+        });
+#else
         var entriesJson = JsonConvert.SerializeObject(import.Entries.Select(entry => new
         {
             PermissionKey = entry.PermissionKey,
             entry.Granted,
         }));
+#endif
         using var command = SqlRead.Command(_context.Connection, _context.Transaction, "dbo.ApplySecurityPermissionImport",
             SqlRead.Text("@TargetType", import.TargetType == PermissionImportTargetTypeDto.User ? "User" : "Role"),
             SqlRead.P("@TargetId", SqlDbType.Int, import.TargetId), SqlRead.P("@ActorUserId", SqlDbType.Int, actorUserId),
