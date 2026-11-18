@@ -34,6 +34,7 @@ internal static class Program
     private static readonly string Stamp = Guid.NewGuid().ToString("N").Substring(0, 8);
     private static string _master = "";
     private static string _cli = "";
+    private static string _stage = "admission";
     private static int _passed;
     private static int _executed;
     private static readonly List<string> Databases = new();
@@ -58,11 +59,16 @@ internal static class Program
                 throw new InvalidOperationException("VPS07B_LOCAL_SQL_TLS_NOT_VERIFIED");
             _master = b.ConnectionString;
 
+            _stage = "SQL-TLS-readiness";
             await WaitForSql();
+            _stage = "DbUp13-source-bootstrap";
             var baseline = await PrepareDbUp(13);
+            _stage = "DbUp13-independent-object-oracle";
             var baselineSignature = await DefinitionSignature(baseline);
 
+            _stage = "FM13-fresh-create";
             var fresh = await Create();
+            _stage = "FM13-fresh-migrate";
             await RunCli(fresh, 13, expectSuccess: true);
             await Check(fresh, 13);
             Assert(await DefinitionSignature(fresh) == baselineSignature,
@@ -77,7 +83,9 @@ internal static class Program
 
             foreach (var sourceVersion in new[] { 9, 10, 11, 12, 13 })
             {
+                _stage = "DbUp" + sourceVersion + "-source-bootstrap";
                 var db = sourceVersion == 13 ? baseline : await PrepareDbUp(sourceVersion);
+                _stage = "FM" + sourceVersion + "-to-13";
                 var beforeData = await SourceData(db);
                 var beforeHistory = await LegacyJournalPrefix(db, sourceVersion);
                 await RunCli(db, 13, expectSuccess: true);
@@ -174,7 +182,9 @@ EXEC @r=sys.sp_releaseapplock @Resource=N'MyDmsVn.SchemaMigration',
     private static async Task<string> PrepareDbUp(int version)
     {
         var db = await Create();
+        _stage = "DbUp" + version + "-restrict";
         await ExecMaster("ALTER DATABASE [" + db + "] SET RESTRICTED_USER WITH ROLLBACK IMMEDIATE;");
+        _stage = "DbUp" + version + "-apply-SQL";
         var upgrader = DeployChanges.To.SqlDatabase(For(db))
             .WithScriptsEmbeddedInAssembly(typeof(Program).Assembly, resource =>
             {
@@ -192,6 +202,7 @@ EXEC @r=sys.sp_releaseapplock @Resource=N'MyDmsVn.SchemaMigration',
         var result = upgrader.PerformUpgrade();
         Assert(result.Successful && result.Scripts.Count() == version,
             "VPS07B_DBUP_SOURCE_BOOTSTRAP_FAILED_" + version);
+        _stage = "DbUp" + version + "-seed";
         await Seed(db);
         Pass("original DbUp schema" + version + " snapshot and source seed");
         return db;
