@@ -179,6 +179,62 @@ public sealed class Vps05cDesktopRouteLiveParityTests
     }
 
     [Theory]
+    [InlineData("invalid")]
+    [InlineData("failure")]
+    public async Task Web6EligibilityErrorsMatchLiveNet48(string variant)
+    {
+        await using var fixture = await DesktopLiveFixture.StartAsync(web6Enabled: true,
+            web6Failure: variant == "failure");
+        string receipt;
+        if (variant == "invalid") receipt = "not-a-receipt";
+        else
+        {
+            using var issued = await fixture.SendWeb6Async("VPS01-RESEND-RECEIPT");
+            var issuedJson = Newtonsoft.Json.Linq.JObject.Parse(await issued.Content.ReadAsStringAsync());
+            receipt = (string)issuedJson["data"]!["receipt"]!;
+        }
+        using var response = await fixture.SendWeb6Async("VPS01-RESEND-ELIGIBILITY", receipt);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        AssertMatchesNet48("VPS01-RESEND-ELIGIBILITY", variant, response, bytes);
+    }
+
+    public static IEnumerable<object[]> EnabledWeb45Cases()
+    {
+        var cases = new[]
+        {
+            new[] { "VPS01-OPERATIONS-CONTEXT", "/api/v1/operations/context", "context" },
+            new[] { "VPS01-OPERATIONS-STATUS", "/api/v1/operations/" + DesktopState.Operation.ToString("D"), "status" },
+            new[] { "VPS01-RESOLUTION-CONTEXT", "/api/v2/operations/context", "context" },
+            new[] { "VPS01-RESOLUTION-STATUS", "/api/v2/operations/" + DesktopState.Operation.ToString("D") + "/resolution", "status" },
+        };
+        foreach (var item in cases)
+        foreach (var variant in new[] { "enabled", "invalid", "failure" })
+            yield return new object[] { item[0], item[1], item[2], variant };
+    }
+
+    [Theory]
+    [MemberData(nameof(EnabledWeb45Cases))]
+    public async Task EnabledWeb45RoutesMatchLiveNet48(string caseId, string path, string kind, string variant)
+    {
+        await using var fixture = await DesktopLiveFixture.StartAsync(web45Enabled: true,
+            operationFailure: variant == "failure");
+        using var response = await fixture.SendOperationAsync(path +
+            (variant == "invalid" ? "?unknown=1" : string.Empty), kind == "status");
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        AssertMatchesNet48(caseId, variant, response, bytes);
+    }
+
+    [Fact]
+    public async Task LoginWrongCredentialsMatchesLiveNet48()
+    {
+        await using var fixture = await DesktopLiveFixture.StartAsync(authControlProfile: true);
+        using var response = await fixture.SendControlAsync("POST", "/api/v1/auth/login",
+            "{\"username\":\"alice\",\"password\":\"wrong-secret\"}", false, false);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        AssertMatchesNet48("VPS01-AUTH-LOGIN", "wrong-credentials", response, bytes);
+    }
+
+    [Theory]
     [MemberData(nameof(LegacyDataRoutes))]
     public async Task LegacyDataRouteDispatchesThroughKestrelAndMatchesFrozenLiveNet48Corpus(
         string caseId, string method, string path, string? requestFile, string responseFile)
@@ -557,14 +613,17 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         public static async Task<DesktopLiveFixture> StartAsync(
             bool denyPermissions = false, bool throwHandlers = false,
             bool throwPermissionStore = false, bool authControlProfile = false,
-            string? controlFailure = null, bool web6Enabled = false)
+            string? controlFailure = null, bool web6Enabled = false,
+            bool web45Enabled = false, bool operationFailure = false,
+            bool web6Failure = false)
         {
             var clock = new FrozenClock();
             var options = new WebHostOptions("https://web2.mydmsvn.test", "https://web2.mydmsvn.test", "auth-tests",
                 "active", new Dictionary<string, byte[]>
                 {
                     ["active"] = Encoding.UTF8.GetBytes("active-test-key-at-least-32-bytes-long")
-                }, desktopApiEnabled: true, web5Enabled: web6Enabled,
+                }, desktopApiEnabled: true, web4Enabled: web45Enabled,
+                web5Enabled: web6Enabled || web45Enabled,
                 web6ResendEligibilityEnabled: web6Enabled,
                 web6CandidateId: web6Enabled ? "candidate-1" : null);
             var state = new DesktopState
@@ -574,6 +633,8 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 ThrowPermissionStore = throwPermissionStore,
                 AuthControlProfile = authControlProfile,
                 ControlFailure = controlFailure,
+                OperationFailure = operationFailure,
+                Web6Failure = web6Failure,
             };
             var errors = new ConcurrentQueue<Exception>();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Production" });
@@ -684,6 +745,19 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             return await _client.SendAsync(request);
         }
 
+        public async Task<HttpResponseMessage> SendOperationAsync(string path, bool status)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, path);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+            request.Headers.Add("X-Correlation-ID", Correlation);
+            if (status)
+            {
+                request.Headers.Add("X-MyDmsVn-Deployment-Epoch", DesktopState.Epoch.ToString("D"));
+                request.Headers.Add("X-MyDmsVn-Operation-Fingerprint", DesktopState.Fingerprint);
+            }
+            return await _client.SendAsync(request);
+        }
+
         public async ValueTask DisposeAsync()
         {
             _client.Dispose();
@@ -780,7 +854,8 @@ public sealed class Vps05cDesktopRouteLiveParityTests
 
     private sealed class DesktopState : IWebAuthSessionStore, IPermissionStore, IUserStore,
         IUserAccountValidator, ISecurityAuditSink, IUnitOfWorkFactory,
-        IWebOperationReadRepository, IWebOperationResendEligibilityRepository
+        IWebOperationReadRepository, IWebOperationResolutionRepository,
+        IWebOperationResendEligibilityRepository
     {
         public static readonly Guid Epoch = Guid.Parse("11111111-2222-4333-8444-555555555555");
         public static readonly Guid Operation = Guid.Parse("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
@@ -792,6 +867,8 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         public bool ThrowPermissionStore { get; init; }
         public bool AuthControlProfile { get; init; }
         public string? ControlFailure { get; init; }
+        public bool OperationFailure { get; init; }
+        public bool Web6Failure { get; init; }
         public bool Revoked { get; private set; }
         public Task<CurrentUser?> GetActiveUserAsync(Guid sessionId, int userId, CancellationToken token) =>
             Task.FromResult<CurrentUser?>(!Revoked && sessionId == Guid.Parse("11111111-1111-4111-8111-111111111111") && userId == 1
@@ -830,14 +907,26 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         }
         public IUnitOfWork Create() => new TestUnitOfWork(this);
         public Task<IUnitOfWork> CreateAsync(CancellationToken token) => Task.FromResult<IUnitOfWork>(Create());
-        public Task<Guid> ReadContextAsync(int actorUserId, Guid sessionId, CancellationToken token) => Task.FromResult(Epoch);
+        public Task<Guid> ReadContextAsync(int actorUserId, Guid sessionId, CancellationToken token) =>
+            OperationFailure ? throw new InvalidOperationException("secret SQL connection") : Task.FromResult(Epoch);
         public Task<WebOperationStatus?> ReadStatusAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
-            Guid operationId, byte[] expectedFingerprint, CancellationToken token) => throw new NotSupportedException();
+            Guid operationId, byte[] expectedFingerprint, CancellationToken token) => OperationFailure
+                ? throw new InvalidOperationException("secret SQL connection")
+                : Task.FromResult<WebOperationStatus?>(OperationStatus());
+        public Task<WebOperationResolution?> ReadResolutionAsync(int actorUserId, Guid sessionId,
+            Guid deploymentEpoch, Guid operationId, byte[] expectedFingerprint, CancellationToken token) =>
+            OperationFailure ? throw new InvalidOperationException("secret SQL connection") :
+                Task.FromResult<WebOperationResolution?>(new WebOperationResolution(OperationStatus()));
         public Task AuthorizeReceiptAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
             WebOperationKind kind, CancellationToken token) => Task.CompletedTask;
         public Task<WebOperationResolution?> ReadEligibilityAsync(int actorUserId, Guid sessionId,
             Guid deploymentEpoch, Guid operationId, WebOperationKind expectedKind, long? expectedTargetId,
-            byte[] expectedFingerprint, CancellationToken token) => Task.FromResult<WebOperationResolution?>(null);
+            byte[] expectedFingerprint, CancellationToken token) => Web6Failure
+                ? throw new InvalidOperationException("private-journal-read-denied")
+                : Task.FromResult<WebOperationResolution?>(null);
+        private static WebOperationStatus OperationStatus() => new(Operation, Epoch, WebOperationKind.SalesCreate,
+            null, Enumerable.Range(0, 32).Select(x => (byte)x).ToArray(), null,
+            new DateTime(2026, 10, 31, 9, 0, 0, DateTimeKind.Utc), "RESULT_EXPIRED", null);
 
         private sealed class TestUnitOfWork : IUnitOfWork
         {

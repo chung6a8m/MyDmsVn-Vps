@@ -5,6 +5,9 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using MyDmsVn.Server.Application.Operations;
+using MyDmsVn.Server.Application.Persistence;
 using MyDmsVn.Server.Application.Security;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -168,13 +171,15 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         foreach (var variant in new[] { "unauthenticated", "invalid", "failure" })
             observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == id), variant));
         observations.AddRange(await CaptureEnabledWeb6());
+        observations.AddRange(await CaptureEnabledWeb45());
+        observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-LOGIN"), "wrong-credentials"));
         foreach (var testCase in LegacyCases)
         foreach (var variant in new[] { "success", "permission", "invalid", "failure", "unauthenticated" })
             observations.Add(await CaptureLegacyData(testCase, variant));
 
-        Assert.Equal(248, observations.Count);
+        Assert.Equal(263, observations.Count);
         Assert.Equal(57, observations.Select(x => x.CaseId).Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(248, observations.Select(x => x.CaseId + "\n" + x.Variant)
+        Assert.Equal(263, observations.Select(x => x.CaseId + "\n" + x.Variant)
             .Distinct(StringComparer.Ordinal).Count());
 
         var actual = JsonConvert.SerializeObject(observations, Formatting.Indented);
@@ -266,6 +271,8 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
             else if (testCase.Id == "VPS01-AUTH-CAPABILITIES") path = "/api/v1/auth/capabilities?feature=sales-receipts";
             else path += "?unknown=1";
         }
+        if (variant == "wrong-credentials")
+            body = "{\"username\":\"alice\",\"password\":\"wrong-secret\"}";
         if (variant == "unauthenticated") { token = null; cookie = false; }
         using var request = new HttpRequestMessage(new HttpMethod(testCase.Method), AuthFixture.Origin + path);
         request.Headers.Add("X-Correlation-ID", Correlation);
@@ -308,7 +315,93 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         using (var eligibility = await probe.Eligibility(compact, request =>
             request.Headers.Add("X-Correlation-ID", Correlation)))
             result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "enabled", eligibility));
+        using (var invalid = await probe.Eligibility("not-a-receipt", request =>
+            request.Headers.Add("X-Correlation-ID", Correlation)))
+            result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "invalid", invalid));
+        probe.FailEligibilityRead = true;
+        using (var failure = await probe.Eligibility(compact, request =>
+            request.Headers.Add("X-Correlation-ID", Correlation)))
+            result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "failure", failure));
         return result;
+    }
+
+    private static async Task<IReadOnlyList<Observation>> CaptureEnabledWeb45()
+    {
+        var cases = new[]
+        {
+            new Case("VPS01-OPERATIONS-CONTEXT", "GET", "/api/v1/operations/context", null),
+            new Case("VPS01-OPERATIONS-STATUS", "GET", "/api/v1/operations/" + OperationProbe.Operation.ToString("D"), null),
+            new Case("VPS01-RESOLUTION-CONTEXT", "GET", "/api/v2/operations/context", null),
+            new Case("VPS01-RESOLUTION-STATUS", "GET", "/api/v2/operations/" + OperationProbe.Operation.ToString("D") + "/resolution", null),
+        };
+        var result = new List<Observation>();
+        foreach (var testCase in cases)
+        foreach (var variant in new[] { "enabled", "invalid", "failure" })
+        {
+            using var probe = new OperationProbe { Throw = variant == "failure" };
+            using var response = await probe.Get(testCase.Path + (variant == "invalid" ? "?unknown=1" : string.Empty),
+                testCase.Id.EndsWith("STATUS", StringComparison.Ordinal));
+            result.Add(await Observe(testCase.Id, variant, response));
+        }
+        return result;
+    }
+
+    private sealed class OperationProbe : IDisposable, IUnitOfWorkFactory,
+        IWebOperationReadRepository, IWebOperationResolutionRepository
+    {
+        internal static readonly Guid Epoch = Guid.Parse("11111111-2222-4333-8444-555555555555");
+        internal static readonly Guid Operation = Guid.Parse("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+        internal const string Fingerprint = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+        private readonly AuthFixture _host;
+        private string? _token;
+        internal bool Throw;
+        internal OperationProbe() => _host = new AuthFixture(
+            services => services.AddSingleton<IUnitOfWorkFactory>(this), web4Enabled: true, web5Enabled: true);
+        internal async Task<HttpResponseMessage> Get(string path, bool status)
+        {
+            if (_token == null)
+            {
+                using var login = await _host.Login();
+                _token = (string)JObject.Parse(await login.Content.ReadAsStringAsync())["data"]!["accessToken"]!;
+            }
+            using var request = new HttpRequestMessage(HttpMethod.Get, AuthFixture.Origin + path);
+            request.Headers.Add("Authorization", "Bearer " + _token);
+            request.Headers.Add("X-Correlation-ID", Correlation);
+            if (status)
+            {
+                request.Headers.Add("X-MyDmsVn-Deployment-Epoch", Epoch.ToString("D"));
+                request.Headers.Add("X-MyDmsVn-Operation-Fingerprint", Fingerprint);
+            }
+            return await _host.Server.HttpClient.SendAsync(request);
+        }
+        private static byte[] FingerprintBytes() => Enumerable.Range(0, 32).Select(x => (byte)x).ToArray();
+        private static WebOperationStatus Status() => new(Operation, Epoch, WebOperationKind.SalesCreate,
+            null, FingerprintBytes(), null, new DateTime(2026, 10, 31, 9, 0, 0, DateTimeKind.Utc),
+            "RESULT_EXPIRED", null);
+        public IUnitOfWork Create() => new Uow(this);
+        public Task<IUnitOfWork> CreateAsync(System.Threading.CancellationToken token) => Task.FromResult<IUnitOfWork>(Create());
+        public Task<Guid> ReadContextAsync(int actorUserId, Guid sessionId, System.Threading.CancellationToken token) =>
+            Throw ? throw new InvalidOperationException("secret SQL connection") : Task.FromResult(Epoch);
+        public Task<WebOperationStatus?> ReadStatusAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
+            Guid operationId, byte[] expectedFingerprint, System.Threading.CancellationToken token) =>
+            Throw ? throw new InvalidOperationException("secret SQL connection") : Task.FromResult<WebOperationStatus?>(Status());
+        public Task<WebOperationResolution?> ReadResolutionAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
+            Guid operationId, byte[] expectedFingerprint, System.Threading.CancellationToken token) =>
+            Throw ? throw new InvalidOperationException("secret SQL connection") :
+                Task.FromResult<WebOperationResolution?>(new WebOperationResolution(Status()));
+        public void Dispose() => _host.Dispose();
+        private sealed class Uow : IUnitOfWork
+        {
+            private readonly OperationProbe _probe;
+            internal Uow(OperationProbe probe) => _probe = probe;
+            public UnitOfWorkState State { get; private set; } = UnitOfWorkState.Created;
+            public void BeginTransaction() => State = UnitOfWorkState.ActiveTransaction;
+            public TRepository Repository<TRepository>() where TRepository : class =>
+                _probe as TRepository ?? throw new InvalidOperationException(typeof(TRepository).Name);
+            public void Commit() => State = UnitOfWorkState.Committed;
+            public void Rollback() => State = UnitOfWorkState.RolledBack;
+            public void Dispose() { if (State == UnitOfWorkState.ActiveTransaction) Rollback(); State = UnitOfWorkState.Disposed; }
+        }
     }
 
     private static async Task<Observation> Capture(Case testCase, string variant)
