@@ -1,4 +1,9 @@
-﻿using System.Collections.Generic;
+﻿#if NET10_0_OR_GREATER
+using LegacyApiJson = MyDmsVn.Server.Application.Tests.LegacyApiJsonOracle;
+#else
+using LegacyApiJson = MyDmsVn.Contracts.ApiJson;
+#endif
+using System.Collections.Generic;
 using ErrorOr;
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application;
@@ -126,7 +131,7 @@ namespace MyDmsVn.Server.Application.Tests
             var response = ApiResponseMapper.Map(result);
             var json = JsonConvert.SerializeObject(
                 response,
-                ApiJson.CreateSerializerSettings());
+                LegacyApiJson.CreateSerializerSettings());
 
             Assert.Equal(expectedStatus, response.Error!.Status);
             Assert.Equal(expectedCode, response.Error.Code);

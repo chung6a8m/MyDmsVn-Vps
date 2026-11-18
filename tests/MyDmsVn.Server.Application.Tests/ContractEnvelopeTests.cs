@@ -1,4 +1,9 @@
-﻿using System;
+﻿#if NET10_0_OR_GREATER
+using LegacyApiJson = MyDmsVn.Server.Application.Tests.LegacyApiJsonOracle;
+#else
+using LegacyApiJson = MyDmsVn.Contracts.ApiJson;
+#endif
+using System;
 using System.Collections.Generic;
 using System.IO;
 using ErrorOr;
@@ -62,7 +67,7 @@ namespace MyDmsVn.Server.Application.Tests
                             "lines[0].quantity"),
                     }));
 
-            var json = JsonConvert.SerializeObject(response, ApiJson.CreateSerializerSettings());
+            var json = JsonConvert.SerializeObject(response, LegacyApiJson.CreateSerializerSettings());
 
             Assert.Equal(
                 "{\"error\":{\"code\":\"ValidationError\",\"message\":\"The request is invalid.\",\"details\":[{\"code\":\"Validation.Required\",\"message\":\"Quantity is required.\",\"field\":\"lines[0].quantity\"}]}}",
@@ -79,7 +84,7 @@ namespace MyDmsVn.Server.Application.Tests
                     "InternalError",
                     "An unexpected error occurred.",
                     correlationId: correlationId));
-            var settings = ApiJson.CreateSerializerSettings();
+            var settings = LegacyApiJson.CreateSerializerSettings();
 
             var json = JsonConvert.SerializeObject(response, settings);
             var roundTrip = JsonConvert.DeserializeObject<ApiResponse<string>>(json, settings)!;
@@ -91,7 +96,7 @@ namespace MyDmsVn.Server.Application.Tests
         [Fact]
         public void Serializer_round_trips_success_failure_and_value_type_envelopes()
         {
-            var settings = ApiJson.CreateSerializerSettings();
+            var settings = LegacyApiJson.CreateSerializerSettings();
 
             var success = JsonConvert.DeserializeObject<ApiResponse<string>>(
                 "{\"data\":\"ready\"}",
@@ -124,9 +129,9 @@ namespace MyDmsVn.Server.Application.Tests
             var local = ApiResponseMapper.Map<string>(CreateError(type));
             var json = JsonConvert.SerializeObject(
                 local,
-                ApiJson.CreateSerializerSettings());
+                LegacyApiJson.CreateSerializerSettings());
 
-            var http = ApiJson.DeserializeResponse<string>(json, expectedStatus);
+            var http = LegacyApiJson.DeserializeResponse<string>(json, expectedStatus);
 
             Assert.Equal(local.IsSuccess, http.IsSuccess);
             Assert.Equal(local.Error!.Code, http.Error!.Code);
@@ -143,7 +148,7 @@ namespace MyDmsVn.Server.Application.Tests
             Assert.Throws<JsonSerializationException>(
                 () => JsonConvert.DeserializeObject<ApiResponse<string>>(
                     json,
-                    ApiJson.CreateSerializerSettings()));
+                    LegacyApiJson.CreateSerializerSettings()));
         }
 
         [Fact]
@@ -168,7 +173,7 @@ namespace MyDmsVn.Server.Application.Tests
                 1);
             var response = ApiResponse<PagedResult<StockBalanceRow>>.Success(page);
 
-            var json = JsonConvert.SerializeObject(response, ApiJson.CreateSerializerSettings());
+            var json = JsonConvert.SerializeObject(response, LegacyApiJson.CreateSerializerSettings());
 
             Assert.Equal(
                 "{\"data\":{\"items\":[{\"warehouseId\":2,\"warehouseCode\":\"WH-02\",\"warehouseName\":\"Warehouse 2\",\"warehouseIsActive\":false,\"productId\":7,\"productCode\":\"P-007\",\"productName\":\"Product 7\",\"productIsActive\":false,\"quantity\":12.3400,\"inventoryValue\":24.6800,\"averageUnitCost\":2.00000000}],\"pageNumber\":1,\"pageSize\":25,\"totalCount\":1}}",
@@ -178,7 +183,7 @@ namespace MyDmsVn.Server.Application.Tests
         [Fact]
         public void Inventory_read_contracts_round_trip_filters_and_historical_display_state()
         {
-            var settings = ApiJson.CreateSerializerSettings();
+            var settings = LegacyApiJson.CreateSerializerSettings();
             var balanceQuery = new StockBalanceQuery(2, 7, "archived", 3, 25);
             var cardQuery = new StockCardQuery(
                 2,
@@ -227,7 +232,7 @@ namespace MyDmsVn.Server.Application.Tests
         [Fact]
         public void Planned_p5_command_dtos_have_stable_golden_json()
         {
-            var settings = ApiJson.CreateSerializerSettings();
+            var settings = LegacyApiJson.CreateSerializerSettings();
 
             Assert.Equal(
                 "{\"code\":\"P-001\",\"name\":\"Product\",\"unit\":\"EA\"}",
@@ -330,7 +335,7 @@ namespace MyDmsVn.Server.Application.Tests
                 (DateTime?)null,
                 version,
                 Array.Empty<GoodsReceiptLineDto>());
-            var settings = ApiJson.CreateSerializerSettings();
+            var settings = LegacyApiJson.CreateSerializerSettings();
             var updateJson = JsonConvert.SerializeObject(updateRequest, settings);
             var postJson = JsonConvert.SerializeObject(postRequest, settings);
 
@@ -381,7 +386,7 @@ namespace MyDmsVn.Server.Application.Tests
                 false,
                 "E-005 - Operator",
                 true);
-            var settings = ApiJson.CreateSerializerSettings();
+            var settings = LegacyApiJson.CreateSerializerSettings();
 
             var requestJson = JsonConvert.SerializeObject(request, settings);
             var receiptJson = JsonConvert.SerializeObject(receipt, settings);
@@ -410,10 +415,10 @@ namespace MyDmsVn.Server.Application.Tests
                 null,
                 Array.Empty<SaveGoodsReceiptLineRequest>());
 
-            var json = JsonConvert.SerializeObject(request, ApiJson.CreateSerializerSettings());
+            var json = JsonConvert.SerializeObject(request, LegacyApiJson.CreateSerializerSettings());
             var roundTrip = JsonConvert.DeserializeObject<SaveGoodsReceiptRequest>(
                 json,
-                ApiJson.CreateSerializerSettings())!;
+                LegacyApiJson.CreateSerializerSettings())!;
 
             Assert.Contains("\"receiptDate\":\"2026-10-08\"", json);
             Assert.Equal(new DateTime(2026, 10, 8), roundTrip.ReceiptDate);
@@ -428,7 +433,7 @@ namespace MyDmsVn.Server.Application.Tests
                 "Posted",
                 new DateTime(2026, 10, 8, 1, 2, 3, DateTimeKind.Utc));
 
-            var json = JsonConvert.SerializeObject(response, ApiJson.CreateSerializerSettings());
+            var json = JsonConvert.SerializeObject(response, LegacyApiJson.CreateSerializerSettings());
 
             Assert.Equal(
                 "{\"receiptId\":42,\"status\":\"Posted\",\"postedAtUtc\":\"2026-10-08T01:02:03Z\"}",
