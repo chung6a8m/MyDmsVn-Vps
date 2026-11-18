@@ -35,7 +35,7 @@ The nonproduction protected Environment `vps09-fullstack-nonproduction` requires
 
 - Secret `VPS09_ISOLATED_SQL_ADMISSION` = `reviewed-isolated-sql13-only`; secret `VPS09_READONLY_SQL_ORACLE` with `Encrypt=True;TrustServerCertificate=False` and server certificate CA/hostname verification; secret `VPS09_JWT_AUDIENCE`.
 - Dedicated seeded nonproduction writer/denied/operator credentials `VPS09_WRITER_USERNAME`, `VPS09_WRITER_PASSWORD`, `VPS09_DENIED_USERNAME`, `VPS09_DENIED_PASSWORD`, `VPS09_OPERATOR_USERNAME`, `VPS09_OPERATOR_PASSWORD`; never reuse an admin, production or Oracle identity. `VPS09_CLEANUP_ATTESTATION=confirmed-owned-nonproduction-cleanup` is provided only after cleanup has actually completed.
-- Variable `VPS09_PUBLIC_ORIGIN` (canonical public HTTPS, no path/query); seed IDs `VPS09_CUSTOMER_ID`, `VPS09_WAREHOUSE_ID`, `VPS09_EMPLOYEE_ID`, `VPS09_PRODUCT_ID`; protected paths `VPS09_ROUTE_PLAN_PATH`, `VPS09_ORACLE_PLAN_PATH`, `VPS09_EVIDENCE_ROOT`, `VPS09_GUI_CHECKLIST_PATH`, `VPS09_LINUX_RECEIPT_PATH`; identities `VPS09_OPERATOR`, `VPS09_REVIEWER`, `VPS09_OWNER`. Operator must differ from reviewer/Owner. Operators must independently prove all seeds are isolated disposable fixtures.
+- Variable `VPS09_PUBLIC_ORIGIN` (canonical public HTTPS, no path/query); seed IDs `VPS09_CUSTOMER_ID`, `VPS09_WAREHOUSE_ID`, `VPS09_EMPLOYEE_ID`, `VPS09_PRODUCT_ID`; protected paths `VPS09_ROUTE_PLAN_PATH`, `VPS09_ORACLE_PLAN_PATH`, reviewed lowercase SHA-256 pins `VPS09_ROUTE_PLAN_SHA256`, `VPS09_ORACLE_PLAN_SHA256`, `VPS09_EVIDENCE_ROOT`, `VPS09_GUI_CHECKLIST_PATH`, `VPS09_LINUX_RECEIPT_PATH`; identities `VPS09_OPERATOR`, `VPS09_REVIEWER`, `VPS09_OWNER`. Operator must differ from reviewer/Owner. Operators must independently prove all seeds are isolated disposable fixtures.
 
 The second protected Environment `vps09-release-review` requires a separate Linux self-hosted runner labeled `vps09-reviewer`, independent human approval and admin-bypass protection. Its read-only variables: `VPS09_REVIEW_PACKET_PATH` (pre-staged complete packet directory), `VPS09_OWNER_PUBKEY_PATH` (trusted reviewed ED25519 PEM), `VPS09_OWNER_PUBKEY_SHA256` (lowercase SHA-256 of **literal PEM bytes**, fingerprint pinned outside the packet). No private signing key or SQL credential may be stored in the repository. The review runner checks *structural integrity and approved assertions*, not the truth of a real machine event.
 
@@ -92,7 +92,7 @@ Minimal shapes (illustrative placeholders only; not acceptance data):
 }
 ```
 
-The real files must list 293 and 12 entries respectively; these one-row snippets intentionally cannot pass admission.
+The real files must list 293 and 12 entries respectively; these one-row snippets intentionally cannot pass admission. An independent reviewer must hash and pin the complete protected route and Oracle plans in GitHub Environment variables before dispatch. The CLI pins the public origin and actor token sources, requires the tracked manifest and exact twelve Oracle registry names, and checks route coverage against that manifest again at summarize time. Never derive expected digests from the responses under test.
 
 Manual workflow can be invoked on main only after actual protected Environment installation and an independently reviewed exact SHA. Run `prepare`, complete the attended checklist and Linux receipt, confirm cleanup, then run `finalize`; use a new evidence directory for every candidate:
 
@@ -107,7 +107,7 @@ gh workflow run vps-09-evidence.yml --repo chung6a8m/MyDmsVn-Vps --ref main \
 
 If protected environments, runners, selected SQL seeds or source SHA are absent, the protected jobs should remain SKIPPED/NOT RUN, not PASS. Do not create or configure these environments using an unreviewed PR.
 
-The attended operator fills the generated checklist with nine distinct evidence digests: startup, login/session, permissions, sales workflow and inventory workflow at 100%; startup, login/session, Unknown recovery and logout at 125%. Validate it only from an interactive non-Session-0 process. The underlying screenshots/logs stay in protected storage and must be checked for secrets/customer data before retention; the independent reviewer rehashes them before accepting the checklist.
+Finalize requires the completed GUI checklist to match the reviewed source SHA, prepared operator/reviewer identities and the actual published Desktop executable SHA-256, not merely any syntactically valid nine-row checklist. The attended operator fills the generated checklist with nine distinct evidence digests: startup, login/session, permissions, sales workflow and inventory workflow at 100%; startup, login/session, Unknown recovery and logout at 125%. Validate it only from an interactive non-Session-0 process. The underlying screenshots/logs stay in protected storage and must be checked for secrets/customer data before retention; the independent reviewer rehashes them before accepting the checklist.
 
 ## Evidence packet and cryptographic contract
 

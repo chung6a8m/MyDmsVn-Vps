@@ -73,7 +73,11 @@ public sealed class RouteRunner
                 || header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase)
                 || header.Key.Equals("X-Forwarded-For", StringComparison.OrdinalIgnoreCase)
                 || header.Key.Equals("X-Forwarded-Proto", StringComparison.OrdinalIgnoreCase)
-                || header.Key.Equals("X-MyDmsVn-Proxy-Token", StringComparison.OrdinalIgnoreCase);
+                || header.Key.Equals("X-MyDmsVn-Proxy-Token", StringComparison.OrdinalIgnoreCase)
+                || header.Key.Equals("Forwarded", StringComparison.OrdinalIgnoreCase)
+                || header.Key.Equals("X-Real-IP", StringComparison.OrdinalIgnoreCase)
+                || header.Key.StartsWith("X-Forwarded-", StringComparison.OrdinalIgnoreCase)
+                || header.Key.StartsWith("X-Original-", StringComparison.OrdinalIgnoreCase);
             PreflightValidator.Block(!protectedHeader, "VPS09.ProtectedHeaderOverrideForbidden");
             PreflightValidator.Block(request.Headers.TryAddWithoutValidation(header.Key, header.Value),
                 "VPS09.RouteHeaderInvalid:" + header.Key);
@@ -103,7 +107,7 @@ public interface IOracleQueryExecutor
 public sealed class OracleRunner
 {
     private static readonly Regex Mutation = new(
-        @"\b(insert|update|delete|merge|drop|alter|create|truncate|exec(?:ute)?|grant|revoke|deny)\b",
+        @"\b(insert|update|delete|merge|drop|alter|create|truncate|exec(?:ute)?|grant|revoke|deny|into|openrowset|opendatasource|openquery|bulk|waitfor|dbcc|backup|restore|use)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private readonly IOracleQueryExecutor _executor;
 

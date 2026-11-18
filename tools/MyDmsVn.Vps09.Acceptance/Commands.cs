@@ -141,6 +141,8 @@ public static class CommandLine
         Func<string, string?> environment)
     {
         var input = Read<PreflightCommandInput>(inputPath);
+        PreflightValidator.Block(input.SqlOracleConnectionStringEnvironment == "VPS04A_SQL_ORACLE_CONNECTION_STRING",
+            "VPS09.SqlOracleCredentialSourceInvalid");
         var connection = RequiredEnvironment(environment, input.SqlOracleConnectionStringEnvironment);
         var state = git.Read();
         var receipt = PreflightValidator.Validate(new PreflightInput(
@@ -155,7 +157,20 @@ public static class CommandLine
         CancellationToken cancellationToken)
     {
         var input = Read<RoutesCommandInput>(inputPath);
+        PreflightValidator.Block(input.Origin == RequiredEnvironment(environment, "VPS09_PUBLIC_ORIGIN"),
+            "VPS09.RouteOriginNotApproved");
         ManifestAdmission.Validate(input);
+        var expectedActors = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["writer"] = "VPS09_WRITER_BEARER_TOKEN",
+            ["denied"] = "VPS09_DENIED_BEARER_TOKEN",
+            ["operator"] = "VPS09_OPERATOR_BEARER_TOKEN"
+        };
+        PreflightValidator.Block(input.ActorTokenEnvironment is not null
+            && input.ActorTokenEnvironment.Count == expectedActors.Count
+            && expectedActors.All(actor => input.ActorTokenEnvironment.TryGetValue(actor.Key, out var setting)
+                                      && setting == actor.Value),
+            "VPS09.ActorCredentialSourceInvalid");
         var tokens = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var actor in input.ActorTokenEnvironment)
             tokens.Add(actor.Key, RequiredEnvironment(environment, actor.Value));
@@ -178,6 +193,9 @@ public static class CommandLine
         CancellationToken cancellationToken)
     {
         var input = Read<OraclesCommandInput>(inputPath);
+        PreflightValidator.Block(input.SqlOracleConnectionStringEnvironment == "VPS04A_SQL_ORACLE_CONNECTION_STRING",
+            "VPS09.SqlOracleCredentialSourceInvalid");
+        ManifestAdmission.ValidateOracleRegistry(input.RequiredScenarios);
         PreflightValidator.Block(input.RequiredScenarios.Count == 12
                                  && input.Plans.Count == 12,
             "VPS09.SqlOracleCoverageGap");
@@ -196,8 +214,16 @@ public static class CommandLine
     private static void RunSummary(string inputPath, string outputPath)
     {
         var input = Read<SummaryCommandInput>(inputPath);
+        var routeDirectory = Path.GetDirectoryName(Path.GetFullPath(input.RouteEvidencePath))!;
+        var oracleDirectory = Path.GetDirectoryName(Path.GetFullPath(input.OracleEvidencePath))!;
+        PreflightValidator.Block(string.Equals(routeDirectory, oracleDirectory,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal),
+            "VPS09.SummaryEvidenceDirectoryMismatch");
+        var preflight = Read<PreflightReceipt>(Path.Combine(routeDirectory, "preflight-receipt.json"));
+        PreflightValidator.Block(input.SourceSha == preflight.SourceSha, "VPS09.SummarySourceShaMismatch");
         var routes = Read<List<RouteObservation>>(input.RouteEvidencePath);
         var oracles = Read<List<OracleObservation>>(input.OracleEvidencePath);
+        ManifestAdmission.ValidateSummaryCoverage(routes, input.RequiredOracleScenarios);
         var summary = SummaryBuilder.Build(input.SourceSha, routes, oracles,
             input.RequiredOracleScenarios, input.CleanupConfirmed);
         WriteNew(outputPath, summary);
@@ -253,8 +279,7 @@ public static class ManifestAdmission
     {
         PreflightValidator.Block(input.ExpectedProvenance == "independent-real-sql13-oracle",
             "VPS09.ExpectedProvenanceInvalid");
-        using var stream = File.OpenRead(input.ManifestPath);
-        var manifest = JsonSerializer.Deserialize<LiveManifest>(stream, Json);
+        var manifest = ReadReviewedManifest(input.ManifestPath);
         PreflightValidator.Block(manifest is not null && manifest.Scenarios.Count == 293
                                  && input.Cases.Count == 293,
             "VPS09.RouteObservationCoverageGap");
@@ -280,6 +305,66 @@ public static class ManifestAdmission
         }
     }
 
+    public static void ValidateOracleRegistry(IReadOnlyCollection<string> required)
+    {
+        var manifest = ReadReviewedManifest(ReviewedManifestPath());
+        PreflightValidator.Block(required is not null
+                                 && required.Count == 12
+                                 && required.Distinct(StringComparer.Ordinal).Count() == 12
+                                 && manifest.OracleScenarios.Count == 12
+                                 && required.ToHashSet(StringComparer.Ordinal)
+                                    .SetEquals(manifest.OracleScenarios),
+            "VPS09.SqlOracleRegistryMismatch");
+    }
+
+    public static void ValidateSummaryCoverage(
+        IReadOnlyCollection<RouteObservation> observed, IReadOnlyCollection<string> requiredOracles)
+    {
+        ValidateOracleRegistry(requiredOracles);
+        var manifest = ReadReviewedManifest(ReviewedManifestPath());
+        var expected = manifest.Scenarios.ToDictionary(item => (item.CaseId, item.Variant));
+        PreflightValidator.Block(expected.Count == 293 && observed.Count == 293,
+            "VPS09.RouteObservationCoverageGap");
+        var seen = new HashSet<(string, string)>();
+        foreach (var row in observed)
+        {
+            var pair = (row.CaseId, row.Variant);
+            PreflightValidator.Block(seen.Add(pair), "VPS09.RouteObservationDuplicate");
+            PreflightValidator.Block(expected.TryGetValue(pair, out var scenario)
+                                     && row.Status == scenario!.Expected.Status,
+                "VPS09.RouteObservationCoverageGap");
+        }
+        PreflightValidator.Block(seen.Count == expected.Count, "VPS09.RouteObservationCoverageGap");
+    }
+
+    private static string ReviewedManifestPath()
+    {
+        foreach (var start in new[] { Environment.CurrentDirectory, AppContext.BaseDirectory })
+        {
+            for (var directory = new DirectoryInfo(start); directory is not null; directory = directory.Parent)
+            {
+                var candidate = Path.Combine(directory.FullName, "docs", "testing",
+                    "vps-09-live-scenarios.json");
+                if (File.Exists(candidate)) return Path.GetFullPath(candidate);
+            }
+        }
+        throw new AcceptanceBlockedException("VPS09.ReviewedManifestMissing");
+    }
+
+    private static LiveManifest ReadReviewedManifest(string candidatePath)
+    {
+        var reviewed = ReviewedManifestPath();
+        PreflightValidator.Block(string.Equals(Path.GetFullPath(candidatePath), reviewed,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal),
+            "VPS09.ManifestPathUntrusted");
+        using var stream = File.OpenRead(reviewed);
+        var manifest = JsonSerializer.Deserialize<LiveManifest>(stream, Json);
+        PreflightValidator.Block(manifest is not null && manifest.Scenarios is not null
+                                 && manifest.OracleScenarios is not null,
+            "VPS09.ReviewedManifestInvalid");
+        return manifest!;
+    }
+
     private static bool MatchesTemplate(string template, string path)
     {
         const string parameterMarker = "__VPS09_ROUTE_PARAMETER__";
@@ -289,7 +374,7 @@ public static class ManifestAdmission
         return Regex.IsMatch(path, "^" + pattern + @"(?:\?.*)?$", RegexOptions.CultureInvariant);
     }
 
-    private sealed record LiveManifest(List<LiveScenario> Scenarios);
+    private sealed record LiveManifest(List<LiveScenario> Scenarios, List<string> OracleScenarios);
     private sealed record LiveScenario(string CaseId, string Variant, LiveRequest Request, LiveExpected Expected);
     private sealed record LiveRequest(string Method, string PathTemplate, string Actor);
     private sealed record LiveExpected(int Status);

@@ -47,6 +47,40 @@ public sealed class ManifestAdmissionTests
         Assert.Equal(293, cases.Count);
     }
 
+    [Fact]
+    public void SummaryCannotAcceptSelfDeclared293CasesWithoutCanonicalCoverage()
+    {
+        var fabricated = Enumerable.Range(0, 293).Select(index =>
+            new RouteObservation("invented-" + index, "success", 200,
+                new string('a', 64), "protected-real-sql13", "runner", "routes.json",
+                new string('a', 64), string.Empty)).ToArray();
+        var registry = ReadOracleRegistry();
+
+        var error = Assert.Throws<AcceptanceBlockedException>(() =>
+            ManifestAdmission.ValidateSummaryCoverage(fabricated, registry));
+
+        Assert.Equal("VPS09.RouteObservationCoverageGap", error.Code);
+    }
+
+    [Fact]
+    public void OracleRegistryCannotBeReplacedByArbitraryTwelveNames()
+    {
+        var fabricated = Enumerable.Range(1, 12).Select(index => "invented-" + index).ToArray();
+
+        var error = Assert.Throws<AcceptanceBlockedException>(() =>
+            ManifestAdmission.ValidateOracleRegistry(fabricated));
+
+        Assert.Equal("VPS09.SqlOracleRegistryMismatch", error.Code);
+    }
+
+    private static string[] ReadOracleRegistry()
+    {
+        var path = FindRepositoryFile("docs", "testing", "vps-09-live-scenarios.json");
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        return document.RootElement.GetProperty("oracleScenarios").EnumerateArray()
+            .Select(item => item.GetString()!).ToArray();
+    }
+
     private static string FindRepositoryFile(params string[] segments)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

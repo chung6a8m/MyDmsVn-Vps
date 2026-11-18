@@ -18,6 +18,10 @@ class Vps09EnvironmentPolicyTests(unittest.TestCase):
                          specs["vps09-fullstack-nonproduction"]["runnerLabels"])
         self.assertEqual(("self-hosted", "linux", "vps09-reviewer"),
                          specs["vps09-release-review"]["runnerLabels"])
+        self.assertIn("VPS09_ROUTE_PLAN_SHA256",
+                      specs["vps09-fullstack-nonproduction"]["requiredVariables"])
+        self.assertIn("VPS09_ORACLE_PLAN_SHA256",
+                      specs["vps09-fullstack-nonproduction"]["requiredVariables"])
         for spec in specs.values():
             self.assertEqual("main", spec["branch"])
             self.assertTrue(spec["preventSelfReview"])

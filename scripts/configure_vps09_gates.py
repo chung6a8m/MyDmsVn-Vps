@@ -56,7 +56,8 @@ def environment_specs() -> dict[str, dict[str, Any]]:
             "requiredVariables": {
                 "VPS09_PUBLIC_ORIGIN", "VPS09_CUSTOMER_ID", "VPS09_WAREHOUSE_ID",
                 "VPS09_EMPLOYEE_ID", "VPS09_PRODUCT_ID", "VPS09_ROUTE_PLAN_PATH",
-                "VPS09_ORACLE_PLAN_PATH", "VPS09_EVIDENCE_ROOT",
+                "VPS09_ORACLE_PLAN_PATH", "VPS09_ROUTE_PLAN_SHA256",
+                "VPS09_ORACLE_PLAN_SHA256", "VPS09_EVIDENCE_ROOT",
                 "VPS09_GUI_CHECKLIST_PATH", "VPS09_LINUX_RECEIPT_PATH",
                 "VPS09_OPERATOR", "VPS09_REVIEWER", "VPS09_OWNER",
             },

@@ -46,6 +46,7 @@ if (-not [Uri]::TryCreate($Origin, [UriKind]::Absolute, [ref]$uri) -or
 }
 $canonical = $uri.GetLeftPart([UriPartial]::Authority)
 if ($Origin.TrimEnd('/') -cne $canonical) { throw 'VPS09.RequireCanonicalPublicHttpsOrigin' }
+if ($env:VPS09_PUBLIC_ORIGIN -cne $canonical) { throw 'VPS09.RouteOriginNotApproved' }
 
 $evidence = [IO.Path]::GetFullPath($EvidenceDirectory)
 $cliDll = Join-Path $evidence 'acceptance-cli\MyDmsVn.Vps09.Acceptance.dll'
@@ -84,6 +85,12 @@ if ($Phase -eq 'Prepare') {
         -not (Test-Path -LiteralPath $RoutePlanPath -PathType Leaf)) { throw 'VPS09.RoutePlanMissing' }
     if ([string]::IsNullOrWhiteSpace($OraclePlanPath) -or
         -not (Test-Path -LiteralPath $OraclePlanPath -PathType Leaf)) { throw 'VPS09.OraclePlanMissing' }
+    if ($env:VPS09_ROUTE_PLAN_SHA256 -cnotmatch '^[0-9a-f]{64}$' -or
+        (Get-FileHash -LiteralPath $RoutePlanPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne
+            $env:VPS09_ROUTE_PLAN_SHA256) { throw 'VPS09.RoutePlanDigestNotApproved' }
+    if ($env:VPS09_ORACLE_PLAN_SHA256 -cnotmatch '^[0-9a-f]{64}$' -or
+        (Get-FileHash -LiteralPath $OraclePlanPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne
+            $env:VPS09_ORACLE_PLAN_SHA256) { throw 'VPS09.OraclePlanDigestNotApproved' }
     [IO.Directory]::CreateDirectory($evidence) | Out-Null
 
     $desktop = Join-Path $evidence 'desktop-net48-x86'
@@ -163,6 +170,20 @@ $retainedLinuxReceipt = Join-Path $evidence 'linux-receipt.json'
 if (Test-Path -LiteralPath $retainedLinuxReceipt) { throw 'VPS09.EvidenceFileMustBeNew' }
 [IO.File]::Copy([IO.Path]::GetFullPath($LinuxReceiptPath), $retainedLinuxReceipt, $false)
 
+$templatePath = Join-Path $evidence 'gui-checklist.template.json'
+$desktopExe = Join-Path $evidence 'desktop-net48-x86\MyDmsVn.Desktop.App.exe'
+if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf) -or
+    -not (Test-Path -LiteralPath $desktopExe -PathType Leaf)) { throw 'VPS09.PreparedDesktopEvidenceMissing' }
+$prepared = Get-Content -LiteralPath $templatePath -Raw | ConvertFrom-Json
+$completed = Get-Content -LiteralPath $GuiChecklistPath -Raw | ConvertFrom-Json
+$actualExeDigest = (Get-FileHash -LiteralPath $desktopExe -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($prepared.sourceSha -cne $ReviewedSha -or $completed.sourceSha -cne $ReviewedSha -or
+    $prepared.desktopExecutableSha256 -cne $actualExeDigest -or
+    $completed.desktopExecutableSha256 -cne $actualExeDigest -or
+    $prepared.operator -cne $Operator -or $completed.operator -cne $Operator -or
+    $prepared.reviewer -cne $Reviewer -or $completed.reviewer -cne $Reviewer) {
+    throw 'VPS09.GuiCandidateIdentityMismatch'
+}
 $guiReceipt = Join-Path $evidence 'gui-checklist-receipt.json'
 python scripts/vps09_gui_checklist.py validate --input ([IO.Path]::GetFullPath($GuiChecklistPath)) --output $guiReceipt
 if ($LASTEXITCODE -ne 0) { throw 'VPS09.GuiChecklistInvalid' }

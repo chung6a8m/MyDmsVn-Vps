@@ -68,6 +68,10 @@ public sealed class ExecutionTests
     [InlineData("X-Forwarded-For")]
     [InlineData("X-Forwarded-Proto")]
     [InlineData("X-MyDmsVn-Proxy-Token")]
+    [InlineData("X-Forwarded-Host")]
+    [InlineData("Forwarded")]
+    [InlineData("X-Original-Url")]
+    [InlineData("X-Real-IP")]
     public async Task RouteRunnerRefusesHeadersThatCouldBypassPublicNginx(string header)
     {
         var handler = new RecordingHandler(HttpStatusCode.OK, "{\"data\":true}");
@@ -112,6 +116,23 @@ public sealed class ExecutionTests
         var error = await Assert.ThrowsAsync<AcceptanceBlockedException>(() => runner.ExecuteAsync(
             new OraclePlan("cleanup", "DELETE FROM dbo.StockLedger", "{}"),
             "runner", "cleanup.json", CancellationToken.None));
+
+        Assert.Equal("VPS09.SqlOracleReadOnlyQueryRequired", error.Code);
+        Assert.Null(executor.Query);
+    }
+
+    [Theory]
+    [InlineData("SELECT * INTO dbo.UnreviewedTable FROM dbo.StockLedger")]
+    [InlineData("WITH src AS (SELECT 1 AS x) SELECT x INTO #temp FROM src")]
+    [InlineData("SELECT * FROM OPENROWSET(BULK 'C:\\file', SINGLE_BLOB) AS v")]
+    public async Task OracleRunnerRejectsSelectSideEffectsBeforeDatabaseAccess(string query)
+    {
+        var executor = new FakeOracleExecutor("{}");
+        var runner = new OracleRunner(executor);
+
+        var error = await Assert.ThrowsAsync<AcceptanceBlockedException>(() =>
+            runner.ExecuteAsync(new OraclePlan("cleanup", query, "{}"),
+                "runner", "cleanup.json", CancellationToken.None));
 
         Assert.Equal("VPS09.SqlOracleReadOnlyQueryRequired", error.Code);
         Assert.Null(executor.Query);
