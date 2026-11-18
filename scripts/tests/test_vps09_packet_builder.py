@@ -36,6 +36,18 @@ class Vps09PacketBuilderTests(unittest.TestCase):
         with self.assertRaisesRegex(PacketBlocked, "ArtifactPathInvalid"):
             build_index(self.root, SHA, ["../outside.json"])
 
+    def test_symlink_root_is_refused_before_resolve(self):
+        alias = self.root.parent / (self.root.name + "-symlink")
+        try:
+            alias.symlink_to(self.root, target_is_directory=True)
+        except (OSError, NotImplementedError) as error:
+            self.skipTest("Symlink creation unavailable: " + str(error))
+        try:
+            with self.assertRaisesRegex(PacketBlocked, "EvidenceRootInvalid"):
+                build_index(alias, SHA, ["route-observations.json"])
+        finally:
+            alias.unlink()
+
     def test_duplicate_artifact_is_refused(self):
         with self.assertRaisesRegex(PacketBlocked, "ArtifactDuplicate"):
             build_index(self.root, SHA,

@@ -28,8 +28,8 @@ def require(condition: bool, code: str) -> None:
 
 
 def build_index(root: Path, source_sha: str, artifacts: list[str]) -> dict[str, Any]:
-    root = root.resolve()
     require(root.is_dir() and not root.is_symlink(), "EvidenceRootInvalid")
+    root = root.resolve()
     require(SHA.fullmatch(source_sha) is not None, "SourceShaInvalid")
     require(bool(artifacts), "ArtifactListEmpty")
     seen: set[str] = set()

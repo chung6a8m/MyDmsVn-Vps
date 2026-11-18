@@ -172,7 +172,7 @@ public static class CommandLine
                                       && setting == actor.Value),
             "VPS09.ActorCredentialSourceInvalid");
         var tokens = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var actor in input.ActorTokenEnvironment)
+        foreach (var actor in input.ActorTokenEnvironment!)
             tokens.Add(actor.Key, RequiredEnvironment(environment, actor.Value));
         using var handler = new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false };
         using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(45) };
