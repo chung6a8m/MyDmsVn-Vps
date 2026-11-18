@@ -8,7 +8,11 @@ using System.Threading.Tasks;
 using ErrorOr;
 using FluentValidation;
 using FluentValidation.Results;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application.Identity;
 using MyDmsVn.Server.Application.Persistence;
@@ -258,6 +262,12 @@ internal static class GoodsReceiptVersion
 internal sealed class CreateGoodsReceiptDraftCommandHandler
     : IRequestHandler<CreateGoodsReceiptDraftCommand, ErrorOr<GoodsReceiptDto>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<GoodsReceiptDto>> IRequestHandler<CreateGoodsReceiptDraftCommand, ErrorOr<GoodsReceiptDto>>.Handle(CreateGoodsReceiptDraftCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<GoodsReceiptDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;
 
     public CreateGoodsReceiptDraftCommandHandler(IUnitOfWorkFactory unitOfWorkFactory) =>
@@ -343,6 +353,12 @@ internal sealed class CreateGoodsReceiptDraftCommandHandler
 internal sealed class UpdateGoodsReceiptDraftCommandHandler
     : IRequestHandler<UpdateGoodsReceiptDraftCommand, ErrorOr<GoodsReceiptDto>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<GoodsReceiptDto>> IRequestHandler<UpdateGoodsReceiptDraftCommand, ErrorOr<GoodsReceiptDto>>.Handle(UpdateGoodsReceiptDraftCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<GoodsReceiptDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;
     private readonly IUtcClock _clock;
 
@@ -421,6 +437,12 @@ internal sealed class UpdateGoodsReceiptDraftCommandHandler
 internal sealed class PostGoodsReceiptCommandHandler
     : IRequestHandler<PostGoodsReceiptCommand, ErrorOr<PostGoodsReceiptResponse>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<PostGoodsReceiptResponse>> IRequestHandler<PostGoodsReceiptCommand, ErrorOr<PostGoodsReceiptResponse>>.Handle(PostGoodsReceiptCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<PostGoodsReceiptResponse>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;
     private readonly IUtcClock _clock;
     private readonly ISecurityAuditWriter _auditWriter;

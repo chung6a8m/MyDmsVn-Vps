@@ -3,7 +3,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
 using FluentValidation;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application.Identity;
 using MyDmsVn.Server.Application.Persistence;
@@ -169,6 +173,12 @@ internal sealed class LookupProductsQueryValidator : AbstractValidator<LookupPro
 internal sealed class CreateProductCommandHandler
     : IRequestHandler<CreateProductCommand, ErrorOr<ProductDto>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<ProductDto>> IRequestHandler<CreateProductCommand, ErrorOr<ProductDto>>.Handle(CreateProductCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<ProductDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;
 
     public CreateProductCommandHandler(IUnitOfWorkFactory unitOfWorkFactory)
@@ -213,6 +223,12 @@ internal sealed class CreateProductCommandHandler
 internal sealed class ListProductsQueryHandler
     : IRequestHandler<ListProductsQuery, ErrorOr<PagedResult<ProductDto>>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<PagedResult<ProductDto>>> IRequestHandler<ListProductsQuery, ErrorOr<PagedResult<ProductDto>>>.Handle(ListProductsQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<PagedResult<ProductDto>>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IProductQueryService _queryService;
 
     public ListProductsQueryHandler(IProductQueryService queryService) =>
@@ -231,6 +247,12 @@ internal sealed class ListProductsQueryHandler
 internal sealed class UpdateProductCommandHandler
     : IRequestHandler<UpdateProductCommand, ErrorOr<ProductDto>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<ProductDto>> IRequestHandler<UpdateProductCommand, ErrorOr<ProductDto>>.Handle(UpdateProductCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<ProductDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;
     private readonly IUtcClock _clock;
 
@@ -284,6 +306,12 @@ internal sealed class UpdateProductCommandHandler
 internal sealed class SetProductActiveCommandHandler
     : IRequestHandler<SetProductActiveCommand, ErrorOr<UnitResponse>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<UnitResponse>> IRequestHandler<SetProductActiveCommand, ErrorOr<UnitResponse>>.Handle(SetProductActiveCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<UnitResponse>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;
     private readonly IUtcClock _clock;
 
@@ -323,6 +351,12 @@ internal sealed class SetProductActiveCommandHandler
 internal sealed class GetProductByIdQueryHandler
     : IRequestHandler<GetProductByIdQuery, ErrorOr<ProductDto>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<ProductDto>> IRequestHandler<GetProductByIdQuery, ErrorOr<ProductDto>>.Handle(GetProductByIdQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<ProductDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IProductQueryService _queryService;
 
     public GetProductByIdQueryHandler(IProductQueryService queryService) => _queryService = queryService;
@@ -344,6 +378,12 @@ internal sealed class GetProductByIdQueryHandler
 internal sealed class LookupProductsQueryHandler
     : IRequestHandler<LookupProductsQuery, ErrorOr<System.Collections.Generic.IReadOnlyList<CatalogLookupDto>>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<System.Collections.Generic.IReadOnlyList<CatalogLookupDto>>> IRequestHandler<LookupProductsQuery, ErrorOr<System.Collections.Generic.IReadOnlyList<CatalogLookupDto>>>.Handle(LookupProductsQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<System.Collections.Generic.IReadOnlyList<CatalogLookupDto>>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IProductQueryService _queryService;
 
     public LookupProductsQueryHandler(IProductQueryService queryService) => _queryService = queryService;

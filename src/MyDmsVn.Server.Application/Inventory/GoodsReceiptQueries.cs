@@ -3,7 +3,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
 using FluentValidation;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application.Security;
 using MyDmsVn.Server.Domain.Inventory;
@@ -78,6 +82,12 @@ internal sealed class ListGoodsReceiptsQueryValidator
 internal sealed class ListGoodsReceiptsQueryHandler
     : IRequestHandler<ListGoodsReceiptsQuery, ErrorOr<PagedResult<GoodsReceiptDto>>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<PagedResult<GoodsReceiptDto>>> IRequestHandler<ListGoodsReceiptsQuery, ErrorOr<PagedResult<GoodsReceiptDto>>>.Handle(ListGoodsReceiptsQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<PagedResult<GoodsReceiptDto>>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IGoodsReceiptQueryService _queryService;
 
     public ListGoodsReceiptsQueryHandler(IGoodsReceiptQueryService queryService) =>
@@ -92,6 +102,12 @@ internal sealed class ListGoodsReceiptsQueryHandler
 internal sealed class GetGoodsReceiptByIdQueryHandler
     : IRequestHandler<GetGoodsReceiptByIdQuery, ErrorOr<GoodsReceiptDto>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<GoodsReceiptDto>> IRequestHandler<GetGoodsReceiptByIdQuery, ErrorOr<GoodsReceiptDto>>.Handle(GetGoodsReceiptByIdQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<GoodsReceiptDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IGoodsReceiptQueryService _queryService;
 
     public GetGoodsReceiptByIdQueryHandler(IGoodsReceiptQueryService queryService) =>

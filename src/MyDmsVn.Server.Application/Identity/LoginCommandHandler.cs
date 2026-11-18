@@ -2,7 +2,11 @@
 using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Contracts;
 
 namespace MyDmsVn.Server.Application.Identity
@@ -10,6 +14,12 @@ namespace MyDmsVn.Server.Application.Identity
     internal sealed class LoginCommandHandler
         : IRequestHandler<LoginCommand, ErrorOr<CurrentUserDto>>
     {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<CurrentUserDto>> IRequestHandler<LoginCommand, ErrorOr<CurrentUserDto>>.Handle(LoginCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<CurrentUserDto>>(Handle(message, cancellationToken));
+#endif
+
         private readonly IUserStore _userStore;
         private readonly IPasswordHasher _passwordHasher;
         private readonly ILegacyPasswordVerifier _legacyPasswordVerifier;

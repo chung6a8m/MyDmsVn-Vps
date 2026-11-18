@@ -6,7 +6,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using FluentValidation;
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application.Security;
@@ -40,6 +44,12 @@ internal sealed class PostSalesReceiptCommandValidator : AbstractValidator<PostS
 
 internal sealed class PostSalesReceiptCommandHandler : IRequestHandler<PostSalesReceiptCommand, ErrorOr<PostSalesReceiptResponse>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<PostSalesReceiptResponse>> IRequestHandler<PostSalesReceiptCommand, ErrorOr<PostSalesReceiptResponse>>.Handle(PostSalesReceiptCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<PostSalesReceiptResponse>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _factory;
     private readonly IUtcClock _clock;
     private readonly ISecurityAuditWriter _audit;

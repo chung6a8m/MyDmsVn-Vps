@@ -4,7 +4,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
 using FluentValidation;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application.Persistence;
 using MyDmsVn.Server.Application.Security;
@@ -105,6 +109,12 @@ internal sealed class CreateCustomerCommandValidator : AbstractValidator<CreateC
 internal sealed class CreateWarehouseCommandHandler
     : IRequestHandler<CreateWarehouseCommand, ErrorOr<WarehouseDto>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<WarehouseDto>> IRequestHandler<CreateWarehouseCommand, ErrorOr<WarehouseDto>>.Handle(CreateWarehouseCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<WarehouseDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;
 
     public CreateWarehouseCommandHandler(IUnitOfWorkFactory unitOfWorkFactory) =>
@@ -139,6 +149,12 @@ internal sealed class CreateWarehouseCommandHandler
 internal sealed class CreateCustomerCommandHandler
     : IRequestHandler<CreateCustomerCommand, ErrorOr<CustomerDto>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<CustomerDto>> IRequestHandler<CreateCustomerCommand, ErrorOr<CustomerDto>>.Handle(CreateCustomerCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<CustomerDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;
 
     public CreateCustomerCommandHandler(IUnitOfWorkFactory unitOfWorkFactory) =>
@@ -198,6 +214,12 @@ internal sealed class CreateEmployeeCommandValidator : AbstractValidator<CreateE
 internal sealed class CreateEmployeeCommandHandler
     : IRequestHandler<CreateEmployeeCommand, ErrorOr<EmployeeDto>>
 {
+#if VPS06B_MEDIATOR
+    // Retain the legacy Task implementation; expose native ValueTask for generated dispatch.
+    ValueTask<ErrorOr<EmployeeDto>> IRequestHandler<CreateEmployeeCommand, ErrorOr<EmployeeDto>>.Handle(CreateEmployeeCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<EmployeeDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _unitOfWorkFactory;
 
     public CreateEmployeeCommandHandler(IUnitOfWorkFactory unitOfWorkFactory) =>
