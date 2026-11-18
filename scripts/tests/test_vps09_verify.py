@@ -69,7 +69,7 @@ class Vps09EvidenceGateTests(unittest.TestCase):
             } for scenario in spec["oracleScenarios"]]
         }
         self.attestation = {
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "repository": "chung6a8m/MyDmsVn-Vps",
             "headSha": SHA,
             "desktopSourceSha": SHA,
@@ -79,19 +79,28 @@ class Vps09EvidenceGateTests(unittest.TestCase):
                 "host": "linux-net10-systemd-nginx",
                 "sql": "reviewed-isolated-real-sql13",
                 "sqlTls": "verified",
-                "oracle": "independent-read-only",
-                "staging": "protected-independent-review",
+                "oracle": "separate-read-only",
+                "staging": "protected-single-owner-exception",
                 "cleanup": "confirmed",
                 "desktopExecutableSha256": HEX,
                 "linuxArtifactSha256": HEX,
                 "linuxMachineSha256": HEX,
                 "sqlInstanceSha256": HEX,
             },
-            "people": {"operator": "operator01", "reviewer": "reviewer02",
-                       "owner": "owner03"},
+            "governance": {
+                "mode": "single-owner-exception",
+                "decisionId": "OWN-VPS-04",
+                "assurance": "NO_INDEPENDENT_HUMAN_REVIEW",
+                "owner": "chung6a8m",
+                "firstPassRunnerSha256": HEX,
+                "secondPassRunnerSha256": "c" * 64,
+                "ownerPublicKeySha256": self.pub_hash,
+                "finalizedAtUtc": "2026-11-16T00:00:00Z",
+            },
             "releaseDecision": {
-                "status": "APPROVED_FOR_PRODUCTION", "owner": "owner03",
-                "date": "2026-11-18",
+                "status": "APPROVED_FOR_PRODUCTION", "owner": "chung6a8m",
+                "sourceSha": SHA,
+                "approvedAtUtc": "2026-11-17T00:00:00Z",
             },
             "routeObservations": "route-observations.json",
             "sqlOracle": "sql-oracle.json",
@@ -252,9 +261,25 @@ class Vps09EvidenceGateTests(unittest.TestCase):
         self.refresh_evidence()
         self.rejects("OracleCoverageGap")
 
-    def test_non_independent_reviewer_refused(self):
-        self.attestation["people"]["reviewer"] = "operator01"
-        self.rejects("ReviewMustBeIndependent")
+    def test_unapproved_governance_mode_refused(self):
+        self.attestation["governance"]["mode"] = "self-approved"
+        self.rejects("SingleOwnerGovernanceMissing")
+
+    def test_wrong_owner_decision_refused(self):
+        self.attestation["governance"]["decisionId"] = "OWN-VPS-03"
+        self.rejects("SingleOwnerGovernanceMissing")
+
+    def test_owner_key_must_match_trusted_key_refused(self):
+        self.attestation["governance"]["ownerPublicKeySha256"] = "d" * 64
+        self.rejects("OwnerKeyFingerprintMismatch")
+
+    def test_first_and_second_pass_runner_must_differ(self):
+        self.attestation["governance"]["secondPassRunnerSha256"] = HEX
+        self.rejects("RunnerSeparationRequired")
+
+    def test_cooling_off_shorter_than_24_hours_refused(self):
+        self.attestation["releaseDecision"]["approvedAtUtc"] = "2026-11-16T23:59:59Z"
+        self.rejects("OwnerCoolingOffIncomplete")
 
     def test_owner_release_not_approved_refused(self):
         self.attestation["releaseDecision"]["status"] = "SOURCE_ONLY"
@@ -325,16 +350,12 @@ class Vps09EvidenceGateTests(unittest.TestCase):
         self.refresh_evidence()
         self.rejects("RouteCaseStatusMismatch")
 
-    def test_casefold_operator_reviewer_identity_refused(self):
-        self.attestation["people"]["reviewer"] = "OPERATOR01"
-        self.rejects("ReviewMustBeIndependent")
+    def test_invalid_owner_decision_timestamp_refused(self):
+        self.attestation["releaseDecision"]["approvedAtUtc"] = "2026-99-99T00:00:00Z"
+        self.rejects("ReleaseDecisionTimestampInvalid")
 
-    def test_invalid_owner_decision_date_refused(self):
-        self.attestation["releaseDecision"]["date"] = "2026-99-99"
-        self.rejects("ReleaseDecisionDateInvalid")
-
-    def test_future_owner_decision_date_refused(self):
-        self.attestation["releaseDecision"]["date"] = "2099-01-01"
+    def test_future_owner_decision_timestamp_refused(self):
+        self.attestation["releaseDecision"]["approvedAtUtc"] = "2099-01-01T00:00:00Z"
         self.rejects("ReleaseDecisionInFuture")
 
 

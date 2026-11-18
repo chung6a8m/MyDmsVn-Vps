@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""VPS-09: fail-closed independent signed *evidence* verifier, not an E2E runner.
+"""VPS-09: fail-closed signed *evidence* verifier, not an E2E runner.
 
 A valid signature binds the named signer's assertions to file digests, not the
-truth of physical SQL/VPS/GUI operations. External review remains mandatory.
+truth of physical SQL/VPS/GUI operations. OWN-VPS-04 permits a narrowly scoped
+single-Owner closeout with explicit reduced assurance and compensating controls.
 """
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ import hashlib
 import json
 import re
 import subprocess
+from datetime import datetime, timedelta, timezone
 from tempfile import TemporaryDirectory
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -23,6 +25,7 @@ RUN_URL = re.compile(
     r"^https://github\.com/chung6a8m/MyDmsVn-Vps/actions/runs/[1-9][0-9]*$"
 )
 MAX_ARTIFACT_BYTES = 8 * 1024 * 1024
+UTC_TIMESTAMP = re.compile(r"^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 
 
 def require(ok: bool, message: str) -> None:
@@ -240,7 +243,7 @@ def validate_packet(folder: Path, expected_sha: str,
     require(SHA40.fullmatch(expected_sha) is not None, "ExpectedShaInvalid")
     raw = verify_signature(folder, trusted_key, trusted_digest)
     att = parse_json(raw.decode("utf-8"))
-    require(att.get("schemaVersion") == 1 and att.get("repository") == spec["repository"],
+    require(att.get("schemaVersion") == 2 and att.get("repository") == spec["repository"],
             "PacketSchemaOrRepository")
     require(att.get("headSha") == expected_sha
             and att.get("desktopSourceSha") == expected_sha
@@ -252,8 +255,8 @@ def validate_packet(folder: Path, expected_sha: str,
         "host": "linux-net10-systemd-nginx",
         "sql": "reviewed-isolated-real-sql13",
         "sqlTls": "verified",
-        "oracle": "independent-read-only",
-        "staging": "protected-independent-review",
+        "oracle": "separate-read-only",
+        "staging": "protected-single-owner-exception",
         "cleanup": "confirmed",
     }.items():
         require(env.get(name) == value, "EnvironmentNotAdmitted:" + name)
@@ -261,23 +264,40 @@ def validate_packet(folder: Path, expected_sha: str,
                  "linuxMachineSha256", "sqlInstanceSha256"):
         require(SHA256.fullmatch(str(env.get(name, ""))) is not None,
                 "EnvironmentHashMissing:" + name)
-    people = att.get("people", {})
-    require(all(isinstance(people.get(k), str) and len(people[k].strip()) >= 3
-                for k in ("operator", "reviewer", "owner")), "PeopleMissing")
-    require(people["operator"].casefold() != people["reviewer"].casefold() and
-            people["operator"].casefold() != people["owner"].casefold(),
-            "ReviewMustBeIndependent")
+    governance = att.get("governance", {})
+    require(governance.get("mode") == "single-owner-exception"
+            and governance.get("decisionId") == "OWN-VPS-04"
+            and governance.get("assurance") == "NO_INDEPENDENT_HUMAN_REVIEW"
+            and governance.get("owner") == "chung6a8m",
+            "SingleOwnerGovernanceMissing")
+    owner_key = str(governance.get("ownerPublicKeySha256", ""))
+    require(SHA256.fullmatch(owner_key) is not None
+            and owner_key == trusted_digest, "OwnerKeyFingerprintMismatch")
+    first_runner = str(governance.get("firstPassRunnerSha256", ""))
+    second_runner = str(governance.get("secondPassRunnerSha256", ""))
+    require(SHA256.fullmatch(first_runner) is not None
+            and SHA256.fullmatch(second_runner) is not None
+            and first_runner != second_runner, "RunnerSeparationRequired")
     decision = att.get("releaseDecision", {})
     require(decision.get("status") == "APPROVED_FOR_PRODUCTION"
-            and decision.get("owner") == people["owner"]
-            and re.fullmatch(r"20[0-9]{2}-[0-9]{2}-[0-9]{2}", str(decision.get("date", ""))),
+            and decision.get("owner") == governance["owner"]
+            and decision.get("sourceSha") == expected_sha,
             "ExplicitOwnerReleaseDecisionMissing")
-    from datetime import date
+    finalized_raw = str(governance.get("finalizedAtUtc", ""))
+    approved_raw = str(decision.get("approvedAtUtc", ""))
+    require(UTC_TIMESTAMP.fullmatch(finalized_raw) is not None
+            and UTC_TIMESTAMP.fullmatch(approved_raw) is not None,
+            "ReleaseDecisionTimestampInvalid")
     try:
-        decision_date = date.fromisoformat(decision["date"])
+        finalized_at = datetime.strptime(finalized_raw, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc)
+        approved_at = datetime.strptime(approved_raw, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc)
     except ValueError as error:
-        raise ValueError("VPS09.ReleaseDecisionDateInvalid") from error
-    require(decision_date <= date.today(), "ReleaseDecisionInFuture")
+        raise ValueError("VPS09.ReleaseDecisionTimestampInvalid") from error
+    require(approved_at <= datetime.now(timezone.utc), "ReleaseDecisionInFuture")
+    require(approved_at - finalized_at >= timedelta(hours=24),
+            "OwnerCoolingOffIncomplete")
     artifact_names = validate_artifacts(folder, att)
     required = {item["id"] for item in spec["gates"]}
     gates = att.get("gates")
@@ -342,8 +362,8 @@ def main() -> int:
             validate_packet(args.bundle, args.expected_sha,
                             args.trusted_key, args.trusted_key_sha256)
             print("VPS09_SIGNED_PACKET_STRUCTURE_PASS: signature, SHA, ledger, coverage, "
-                  "gate counters and Owner assertion; physical evidence still requires "
-                  "independent human review")
+                  "gate counters and Owner assertion; governance=OWN-VPS-04; "
+                  "assurance=NO_INDEPENDENT_HUMAN_REVIEW; physical evidence review remains manual")
     except (AttributeError, IndexError, KeyError, TypeError, ValueError, OSError, UnicodeError) as error:
         print(f"VPS09_FAIL_CLOSED: {error}")
         return 1
