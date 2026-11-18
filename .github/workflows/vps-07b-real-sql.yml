@@ -117,8 +117,8 @@ jobs:
         run: |
           set -euo pipefail
           dotnet tests/MyDmsVn.Vps07b.SqlOracle/bin/Release/net10.0/MyDmsVn.Vps07b.SqlOracle.dll all | tee vps07b-sql-cases.txt
-          grep -Fq 'VPS07B_REAL_SQL_PASS: discovered=54; executed=54; passed=54; failed=0; skipped=0;' vps07b-sql-cases.txt
-          test "$(grep -c '^VPS07B_CASE_PASS:' vps07b-sql-cases.txt)" = 54
+          grep -Fq 'VPS07B_REAL_SQL_PASS: discovered=58; executed=58; passed=58; failed=0; skipped=0;' vps07b-sql-cases.txt
+          test "$(grep -c '^VPS07B_CASE_PASS:' vps07b-sql-cases.txt)" = 58
       - name: Preserve exact real SQL case manifest
         if: always()
         uses: actions/upload-artifact@v6
