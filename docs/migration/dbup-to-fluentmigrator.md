@@ -44,5 +44,4 @@ fingerprints, and transaction-per-version semantics; no replay of applied SQL;
 two migrating processes, failure/interruption, retry, data preservation, backup
 and restore rehearsal. Unknown or partial states must be refused without mutation.
 
-**Evidence status:** new 07A source/contract gates are pending CI. Real-SQL
-07A/07B acceptance, stage deployment and production approval remain NOT VERIFIED.
+**Evidence status:** source/contract implementation passed 8/8 pre-evidence-commit CI workflows on `dd043ec2`, see [VPS-07A evidence](../evidence/vps-07a-fluentmigrator-foundation.md). Final-HEAD CI and review remain separate. The [VPS-07B real SQL journal bridge](https://github.com/chung6a8m/MyDmsVn-Vps/issues/25), protected staging, and production approval remain NOT VERIFIED.
