@@ -72,7 +72,7 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/vps08-trx"
           dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
             -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore \
-            --filter FullyQualifiedName~Vps08LoopbackProxyTests \
+            --filter FullyQualifiedName~Vps08Loopback \
             --logger "trx;LogFileName=vps08-proxy.trx" --results-directory "$GITHUB_WORKSPACE/vps08-trx"
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
@@ -83,8 +83,8 @@ jobs:
           node = ET.parse(f).getroot().find(f'./{ns}ResultSummary/{ns}Counters')
           assert node is not None, 'Missing native TRX counters'
           counts = {x:int(node.attrib[x]) for x in ['total','executed','passed','failed','notExecuted']}
-          assert counts == {'total':27,'executed':27,'passed':27,'failed':0,'notExecuted':0}, counts
-          print('VPS08_NATIVE_PROXY_PASS: discovered=27 executed=27 passed=27 failed=0 skipped=0')
+          assert counts == {'total':33,'executed':33,'passed':33,'failed':0,'notExecuted':0}, counts
+          print('VPS08_NATIVE_PROXY_PASS: discovered=33 executed=33 passed=33 failed=0 skipped=0')
           PY
       - name: Publish framework-dependent net10 host with locked runtime graph
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
