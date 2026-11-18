@@ -72,12 +72,19 @@ internal static class Program
             try { await RunCli(fresh, 13, expectSuccess: true); }
             catch (InvalidOperationException)
             {
-                // Safe test-only catalog shape probe, never reads client data.
-                Console.Error.WriteLine("VPS07B_FM_FRESH_DEFINITION_DIFF: independent=" +
-                    ((await DefinitionSignature(fresh)) == baselineSignature ? "EQUAL" : "DIFFERENT"));
-                const string journalIndexSql = @"SELECT STRING_AGG(CONCAT(name,N':',type_desc,N':',
-is_unique,N':',is_primary_key),N'|') WITHIN GROUP(ORDER BY index_id)
-FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.SchemaVersions') AND index_id>0;";
+                // Compare independent SQL object catalog signatures, never row data.
+                var reference = await DefinitionSignatureRows(baseline);
+                var migrated = await DefinitionSignatureRows(fresh);
+                Console.Error.WriteLine("VPS07B_FM_FRESH_DEFINITION_DIFF: missing=" +
+                    reference.Except(migrated, StringComparer.Ordinal).Count() +
+                    "; extra=" + migrated.Except(reference, StringComparer.Ordinal).Count());
+                foreach (var item in reference.Except(migrated, StringComparer.Ordinal).Take(8))
+                    Console.Error.WriteLine("VPS07B_MISSING: " + CatalogKey(item));
+                foreach (var item in migrated.Except(reference, StringComparer.Ordinal).Take(8))
+                    Console.Error.WriteLine("VPS07B_EXTRA: " + CatalogKey(item));
+                const string journalIndexSql = @"SELECT TOP 1 CONCAT(name COLLATE Latin1_General_100_BIN2,N':',
+type_desc COLLATE Latin1_General_100_BIN2,N':',is_unique,N':',is_primary_key)
+FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.SchemaVersions') AND index_id>0 ORDER BY index_id;";
                 Console.Error.WriteLine("VPS07B_SOURCE_DBUP_INDEX=" + await Text(baseline, journalIndexSql));
                 Console.Error.WriteLine("VPS07B_FRESH_JOURNAL_INDEX=" + await Text(fresh, journalIndexSql));
                 throw;
@@ -284,7 +291,10 @@ END;");
         return Hash(data);
     }
 
-    private static async Task<string> DefinitionSignature(string db)
+    private static async Task<string> DefinitionSignature(string db) =>
+        Hash(string.Join("\n", await DefinitionSignatureRows(db)));
+
+    private static async Task<List<string>> DefinitionSignatureRows(string db)
     {
         // Independent SQL catalog oracle: exclude FM journal only, then compare
         // live object definitions, column/index signatures and routines against
@@ -313,7 +323,7 @@ ORDER BY Sig;", c);
         using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
             signatures.Add(reader.GetString(0));
-        return Hash(string.Join("\n", signatures));
+        return signatures;
     }
 
     private static async Task<int> LegacyJournalPrefix(string db, int expected)
@@ -408,6 +418,14 @@ ORDER BY Sig;", c);
         using var c = new SqlConnection(For(db)); await c.OpenAsync();
         using var command = new SqlCommand(sql, c);
         return Convert.ToInt32(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+    }
+
+    private static string CatalogKey(string signature)
+    {
+        var parts = signature.Split('|');
+        var key = string.Join(".", parts.Take(Math.Min(3, parts.Length)));
+        var safe = new string(key.Where(c => char.IsLetterOrDigit(c) || c == '.' || c == '_').Take(70).ToArray());
+        return safe + ":" + Hash(signature).Substring(0, 12);
     }
 
     private static string Hash(string s) =>
