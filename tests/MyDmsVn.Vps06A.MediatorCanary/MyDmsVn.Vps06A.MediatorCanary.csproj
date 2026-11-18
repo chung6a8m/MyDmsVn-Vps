@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
     <AssemblyName>MyDmsVn.Vps06A.MediatorCanary</AssemblyName>
     <!-- Emitted source is build evidence, never checked in as hand-written code. -->
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>

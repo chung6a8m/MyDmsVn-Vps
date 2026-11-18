@@ -24,3 +24,7 @@ The only live roadmap status is [`docs/roadmap/README.md`](../roadmap/README.md)
 ## Initial generator checkpoint (not final acceptance)
 
 At code HEAD `6cbf4b3d8f22db25ce616a41d6fbf02869375d06`, [Ubuntu run #44234634724](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44234634724) passed SDK 10.0.404 generation and compilation with **4 generated C# files**, scoped DI plus **20/20 independent canary cases**, and both expected negative diagnostics (**MSG0005** missing and **MSG0001** duplicate handlers). Initial restore generated this lock; a later exact final HEAD must prove the strict **committed lockfile** and repeat all six required workflows.
+
+## Inventory guard for the new executable
+
+The unchanged VPS-00B project-count gate is intentionally re-inventoried **51→52** with an exact new-path allowlist; VPS-01 topology is **18→19 test-area projects**, still **14 xUnit v3 suites** plus **5 explicitly non-test executables/helpers**. Every preexisting suite, package boundary and minimum test floor remains in force. The checked-in source-inventory script reports all request-derivation, handler-interface, MediatR DI, sender and pipeline symbol occurrences (source path/line/expression and source hash) as a CI artifact; it is lexical and is **not** production SourceGenerator dispatch evidence. It excludes only the isolated VPS-06A canary to avoid counting the new technology as legacy MediatR usage.

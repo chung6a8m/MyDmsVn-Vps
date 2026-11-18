@@ -10,11 +10,18 @@ project_docs = {path: ET.parse(path).getroot() for path in projects}
 helpers = [path for path, doc in project_docs.items()
            if any(node.text == "false" for node in doc.iter("IsTestProject"))]
 suites = [path for path in projects if path not in helpers]
-assert len(projects) == 18 and len(helpers) == 4 and len(suites) == 14, \
-    "Test project inventory drift"
+assert len(projects) == 19 and len(helpers) == 5 and len(suites) == 14, \
+    "Test project inventory drift (VPS-06A adds exactly one non-xUnit net10 canary)"
 ci_bootstrap = root / "tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj"
 assert ci_bootstrap in helpers and ci_bootstrap not in suites, \
     "Original DbUp SQL13 bootstrap must remain an explicitly marked non-test tool"
+canary = root / "tests/MyDmsVn.Vps06A.MediatorCanary/MyDmsVn.Vps06A.MediatorCanary.csproj"
+assert canary in helpers and canary not in suites, "VPS-06A canary must not masquerade as xUnit tests"
+assert [n.text for n in project_docs[canary].iter("TargetFramework")] == ["net10.0"]
+assert [n.text for n in project_docs[canary].iter("OutputType")] == ["Exe"]
+assert "Mediator.SourceGenerator" in {
+    n.attrib["Include"] for n in project_docs[canary].iter("PackageReference")
+}
 assert [n.text for n in project_docs[ci_bootstrap].iter("TargetFramework")] == ["net10.0"]
 assert [n.text for n in project_docs[ci_bootstrap].iter("OutputType")] == ["Exe"]
 assert "dbup-sqlserver" in {n.attrib["Include"] for n in project_docs[ci_bootstrap].iter("PackageReference")}
@@ -78,7 +85,7 @@ for test_id, floor in expected_smoke_floors.items():
     assert smoke_matrix.count(row) == 1, f"Missing smoke floor {test_id}={floor}"
 assert smoke_matrix.count("minimum_tests:") == len(expected_smoke_floors), "Unexpected smoke floor inventory"
 
-print("VPS-01 static topology: PASS 13 legacy + 1 net10 executable xUnit v3 projects, 4 non-test helpers including one isolated CI bootstrap; 29 routes; 178 fixtures; 4 smoke floors")
+print("VPS-01 static topology: PASS 13 legacy + 1 net10 executable xUnit v3 projects, 5 non-test helpers (CI bootstrap + isolated VPS-06A generator canary); 29 routes; 178 fixtures; 4 smoke floors")
 
 
 # VPS-02 retains the 29 legacy routes; additions and Desktop mappings are versioned independently.
