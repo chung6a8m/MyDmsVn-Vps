@@ -60,9 +60,13 @@ def check_configs() -> None:
                  'flock -n 9 || abort', 'trusted_release "$root/$new_target" "$sha"',
                  'cmp -s -- "$source_dir/vps08-manifest.json"',
                  'systemctl is-active --quiet "$service"',
+                 '[[ "$restart_ok" == 1 ]] && probe "$new_target"',
+                 'if systemctl restart "$service" && probe "$current"',
                  'find "$root/$new_target" -type d -exec chmod 0755',
                  'find "$root/$new_target" -type f -exec chmod go-w,a+r'):
         require(item in rollout, "Missing rollout security guard: " + item)
+    require('systemctl restart "$service" || true' not in rollout,
+            "Never suppress a failed systemd restart during deploy or recovery")
     for forbidden in ("MYDMSVN_WEB_SQL_CONNECTION_STRING=", "MYDMSVN_WEB_JWT_KEYS=",
                       "MYDMSVN_VPS08_PROXY_TOKEN="):
         require(forbidden not in env, "Example environment must not contain secrets")
