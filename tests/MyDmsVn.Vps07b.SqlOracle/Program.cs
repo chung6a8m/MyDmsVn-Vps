@@ -350,7 +350,12 @@ VALUES(N'MyDmsVn.Server.DbMigrator.Scripts.014_Unexpected.sql',GETDATE());");
             await Exec(denied, "ALTER TABLE dbo.FluentMigratorVersionInfo DROP COLUMN InjectedFlag;");
             Assert(await JournalSignature(denied) == stable,
                 "VPS07B_BAD_FM_SHAPE_CLEANUP_MISMATCH");
-            Pass("tampered FM table definition refused");
+            await Exec(denied, "GRANT SELECT ON dbo.FluentMigratorVersionInfo TO public;");
+            await RunCli(denied, 13, expectSuccess: false);
+            await Exec(denied, "REVOKE SELECT ON dbo.FluentMigratorVersionInfo FROM public;");
+            Assert(await JournalSignature(denied) == stable,
+                "VPS07B_PUBLIC_JOURNAL_GRANT_CLEANUP_MISMATCH");
+            Pass("tampered FM table definition and public journal grant refused");
 
             var bogus = await Create();
             await Exec(bogus, "CREATE VIEW dbo.FluentMigratorVersionInfo AS SELECT CAST(1 AS bigint) AS Version;");
@@ -706,6 +711,14 @@ FROM sys.indexes WHERE OBJECTPROPERTY(object_id,'IsMSShipped')=0
  AND object_id<>ISNULL(OBJECT_ID(N'dbo.FluentMigratorVersionInfo'),-1)
 UNION ALL SELECT CONCAT(N'T|',name,N'|',is_disabled,N'|',is_instead_of_trigger) COLLATE Latin1_General_100_BIN2
 FROM sys.triggers WHERE is_ms_shipped=0
+UNION ALL SELECT CONCAT(N'R|',p.name,N'|',p.type_desc) COLLATE Latin1_General_100_BIN2
+FROM sys.database_principals p WHERE p.type=N'R' AND p.name LIKE N'MyDmsVn%'
+UNION ALL SELECT CONCAT(N'P|',USER_NAME(p.grantee_principal_id),N'|',p.permission_name,
+ N'|',p.state_desc,N'|',SCHEMA_NAME(o.schema_id),N'.',o.name)
+ COLLATE Latin1_General_100_BIN2
+FROM sys.database_permissions p
+JOIN sys.objects o ON p.class=1 AND p.major_id=o.object_id
+WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'MyDmsVnWebOperationOperatorRole')
 ORDER BY Sig;", c);
         using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())

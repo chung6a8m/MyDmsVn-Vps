@@ -44,6 +44,13 @@ ELSE SELECT CASE WHEN
     AND NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U'))
     AND NOT EXISTS(SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U') OR referenced_object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U'))
     AND NOT EXISTS(SELECT 1 FROM sys.triggers WHERE parent_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U'))
+    -- A journal must not be publicly readable or write-granted.
+    AND NOT EXISTS(SELECT 1 FROM sys.database_permissions p
+        WHERE p.class=1 AND p.major_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U')
+        AND p.state IN (N'G',N'W')
+        AND (p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'public')
+            OR p.permission_name IN (N'UPDATE',N'INSERT',N'DELETE',N'ALTER',
+                N'CONTROL',N'TAKE OWNERSHIP')))
     THEN 1 ELSE 0 END;";
         if (Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)) != 1)
             throw new InvalidOperationException("Schema.FluentMigratorJournalDefinitionMismatch");
