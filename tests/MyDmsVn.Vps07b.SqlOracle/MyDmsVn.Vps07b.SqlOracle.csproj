@@ -13,6 +13,6 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="../../src/MyDmsVn.Server.DbMigrator/Scripts/*.sql"
-      LogicalName="MyDmsVn.Vps07b.SqlOracle.Scripts.%(Filename)%(Extension)" />
+      LogicalName="MyDmsVn.Server.DbMigrator.Scripts.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

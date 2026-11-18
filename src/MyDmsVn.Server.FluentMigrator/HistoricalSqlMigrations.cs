@@ -21,13 +21,15 @@ public abstract class ImmutableSqlMigration : Migration
         if (ScriptName == "010_DirectSalesAndValuation.sql" && Vps07bExecutionScope.IsFresh)
             Execute.Sql("EXEC sys.sp_set_session_context @key=N'MyDmsVn.FreshInstall', @value=1, @read_only=1;");
 
-        // DbUp's GO splitter discards trailing CR/LF before sending a batch.
+        // DbUp's GO splitter discards delimiter-adjacent leading/trailing CR/LF.
         // Preserve this exact stored-module definition behavior: untrimmed FM
         // batches append CRLF to CREATE PROCEDURE/TRIGGER definitions, changing
         // native schema fingerprints despite immutable original SQL source.
-        // Strip only the separator-adjacent line ending, not SQL statements.
+        // SQL Server stores CREATE PROCEDURE/TRIGGER exactly, including leading
+        // blank lines. Strip only newline characters at batch boundaries,
+        // never SQL tokens or the immutable imported source bytes.
         foreach (var sqlBatch in ImmutableSqlScript.Batches(ScriptName))
-            Execute.Sql(sqlBatch.TrimEnd('\r', '\n'));
+            Execute.Sql(sqlBatch.Trim('\r', '\n'));
 
         // Both journals and the original business SQL are in one migration
         // transaction. VersionInfo is appended by the runner after Up().
