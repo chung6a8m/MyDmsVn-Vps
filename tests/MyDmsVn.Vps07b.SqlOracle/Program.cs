@@ -132,6 +132,7 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                 var beforeHistory = await LegacyJournalPrefix(db, sourceVersion);
                 await RunCli(db, 13, expectSuccess: true);
                 await Check(db, 13);
+                await AssertStockAndCogs(db);
                 Assert(beforeHistory == sourceVersion, "VPS07B_SOURCE_HISTORY_REWRITTEN");
                 Assert(await SourceData(db, sourceVersion) == beforeData, "VPS07B_SOURCE_DATA_LOST");
                 if (sourceVersion == 9)
@@ -199,6 +200,7 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                     == 0, "VPS07B_ROLLBACK_LEFT_LATE_OBJECT");
                 await RunCli(db, 13, expectSuccess: true);
                 await Check(db, 13);
+                await AssertStockAndCogs(db);
                 Assert(await SourceData(db, fault.source) == beforeRows, "VPS07B_RETRY_CHANGED_SOURCE_ROWS");
                 Assert(await DefinitionSignature(db) == baselineSignature,
                     "VPS07B_RETRY_DEFINITION_DRIFT");
@@ -236,6 +238,7 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                 "VPS07B_PROCESS_LOSS_CHANGED_SOURCE");
             await RunCli(interrupted, 13, expectSuccess: true);
             await Check(interrupted, 13);
+            await AssertStockAndCogs(interrupted);
             Assert(await SourceData(interrupted, 12) == interruptedData,
                 "VPS07B_PROCESS_LOSS_RETRY_CHANGED_SOURCE");
             Pass("two real CLI processes overlap: second refused while first owns app lock");
@@ -272,6 +275,7 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                 "' WITH CHECKSUM;");
             await RunCli(backupDb, 13, expectSuccess: true);
             await Check(backupDb, 13);
+            await AssertStockAndCogs(backupDb);
             Assert(await SourceData(backupDb, 12) == preBackupRows,
                 "VPS07B_PRE_RESTORE_DATA_MISMATCH");
             await ExecMaster("ALTER DATABASE [" + backupDb +
@@ -533,6 +537,38 @@ FROM dbo.Warehouses CROSS JOIN dbo.Products;
 INSERT dbo.StockValuationEntries(LedgerId,ValueChange)
 SELECT LedgerId,CAST(10 AS decimal(28,4)) FROM dbo.StockLedger;");
 
+        if (await Count(db, "SELECT CASE WHEN OBJECT_ID(N'dbo.SalesReceipts',N'U') IS NULL THEN 0 ELSE 1 END;") == 1)
+            await Exec(db, @"
+DECLARE @actor int=(SELECT UserId FROM dbo.Users WHERE Username=N'ci-operator');
+DECLARE @product int=(SELECT ProductId FROM dbo.Products WHERE Code=N'CI-PROD');
+DECLARE @warehouse int=(SELECT WarehouseId FROM dbo.Warehouses WHERE Code=N'CI-WH');
+DECLARE @employee int=(SELECT EmployeeId FROM dbo.Employees WHERE Code=N'CI-EMP');
+DECLARE @customer int=(SELECT CustomerId FROM dbo.Customers WHERE Code=N'CI-CUST');
+DECLARE @posted datetime2(7)=SYSUTCDATETIME();
+DECLARE @sale bigint,@line bigint,@ledger bigint;
+INSERT dbo.SalesReceipts(SaleNo,SaleDate,WarehouseId,EmployeeId,CustomerId,
+ Status,CreatedByUserId,PostedAtUtc,PostedByUserId)
+VALUES(N'CI-SALE',CONVERT(date,@posted),@warehouse,@employee,@customer,
+ 'Posted',@actor,@posted,@actor);
+SET @sale=SCOPE_IDENTITY();
+INSERT dbo.SalesReceiptLines(SaleId,[LineNo],ProductId,Qty,Unit,IsGift,
+ LineAmount,PostedUnitCost,CostAmount,UnitPrice,CreatedByUserId)
+VALUES(@sale,1,@product,CAST(1 AS decimal(18,4)),N'EA',0,
+ CAST(7 AS decimal(28,4)),CAST(2.5 AS decimal(28,8)),CAST(2.5 AS decimal(28,4)),
+ CAST(7 AS decimal(19,4)),@actor);
+SET @line=SCOPE_IDENTITY();
+INSERT dbo.StockLedger(WarehouseId,ProductId,DocumentType,DocumentId,DocumentLineId,
+ QuantityChange,PostedAtUtc,PostedByUserId)
+VALUES(@warehouse,@product,'SalesReceipt',@sale,@line,
+ CAST(-1 AS decimal(18,4)),@posted,@actor);
+SET @ledger=SCOPE_IDENTITY();
+INSERT dbo.StockValuationEntries(LedgerId,ValueChange)
+VALUES(@ledger,CAST(-2.5 AS decimal(28,4)));
+UPDATE dbo.StockBalances
+SET Quantity=Quantity-CAST(1 AS decimal(18,4)),
+ InventoryValue=InventoryValue-CAST(2.5 AS decimal(28,4))
+WHERE WarehouseId=@warehouse AND ProductId=@product;");
+
         if (await Count(db, "SELECT CASE WHEN OBJECT_ID(N'dbo.WebAuthSessions',N'U') IS NULL THEN 0 ELSE 1 END;") == 1)
             await Exec(db, @"
 DECLARE @actor int = (SELECT UserId FROM dbo.Users WHERE Username=N'ci-operator');
@@ -596,7 +632,11 @@ VALUES(@actor,@op,@epoch,1,1,1,NULL,@fingerprint,NULL,'CANCELLED',
  (SELECT WarehouseId,ProductId,InventoryValue FROM dbo.StockBalances
    ORDER BY WarehouseId,ProductId FOR JSON PATH),
  (SELECT LedgerId,ValueChange FROM dbo.StockValuationEntries
-   ORDER BY LedgerId FOR JSON PATH));");
+   ORDER BY LedgerId FOR JSON PATH),
+ (SELECT SaleId,SaleNo,SaleDate,Status,PostedAtUtc,PostedByUserId
+   FROM dbo.SalesReceipts ORDER BY SaleId FOR JSON PATH),
+ (SELECT SaleLineId,SaleId,Qty,IsGift,LineAmount,PostedUnitCost,CostAmount,UnitPrice
+   FROM dbo.SalesReceiptLines ORDER BY SaleLineId FOR JSON PATH));");
         if (preservedVersion >= 11)
             data += await Text(db, @"SELECT CONCAT(
  (SELECT SessionId,UserId,CreatedAtUtc,AbsoluteExpiresAtUtc,IdleExpiresAtUtc,RevokedAtUtc
@@ -615,6 +655,27 @@ VALUES(@actor,@op,@epoch,1,1,1,NULL,@fingerprint,NULL,'CANCELLED',
    EvidenceReference,OperatorDatabaseUser,OperatorLogin,DecidedAtUtc
   FROM dbo.WebOperationTerminalAudit ORDER BY ActorUserId,OperationId FOR JSON PATH);");
         return Hash(data);
+    }
+
+    private static async Task AssertStockAndCogs(string db)
+    {
+        // Independent reconciliation, not the application UoW. Decimal sums,
+        // posted-line COGS and both stock balances must agree after migration.
+        var compatible = await Count(db, @"
+SELECT CASE WHEN EXISTS(
+ SELECT 1 FROM dbo.StockBalances b
+ OUTER APPLY (SELECT SUM(CONVERT(decimal(38,4),QuantityChange)) Qty
+   FROM dbo.StockLedger e WHERE e.WarehouseId=b.WarehouseId AND e.ProductId=b.ProductId) q
+ OUTER APPLY (SELECT SUM(CONVERT(decimal(38,4),v.ValueChange)) Value
+   FROM dbo.StockLedger e JOIN dbo.StockValuationEntries v ON v.LedgerId=e.LedgerId
+   WHERE e.WarehouseId=b.WarehouseId AND e.ProductId=b.ProductId) val
+ WHERE b.Quantity<>ISNULL(q.Qty,0) OR b.InventoryValue<>ISNULL(val.Value,0)
+) OR EXISTS(
+ SELECT 1 FROM dbo.SalesReceiptLines l JOIN dbo.SalesReceipts h ON h.SaleId=l.SaleId
+ WHERE h.Status='Posted' AND (l.PostedUnitCost IS NULL OR l.CostAmount IS NULL
+   OR l.CostAmount<>ROUND(l.PostedUnitCost*l.Qty,4))
+) THEN 0 ELSE 1 END;");
+        Assert(compatible == 1, "VPS07B_INDEPENDENT_STOCK_COGS_RECONCILIATION_FAILED");
     }
 
     private static async Task<string> DefinitionSignature(string db) =>
