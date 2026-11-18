@@ -367,11 +367,11 @@ jobs:
           # VPS-06B independent native-dispatch SQL Oracle: after the original
           # 15/15 sequential rollback/retry, oversell and WEB2-WEB6 parity facts.
           # Read-only and exclusively admitted to this disposable SQL13 job.
-          (cd src/MyDmsVn.Server.AspNetCoreHost && \\
-            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \\
-            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \\
-            --filter 'FullyQualifiedName~Vps06bSqlGeneratedMediatorParityTests' \\
-            --logger 'trx;LogFileName=vps06b-sql-generated-mediator.trx' \\
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps06bSqlGeneratedMediatorParityTests' \
+            --logger 'trx;LogFileName=vps06b-sql-generated-mediator.trx' \
             --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
           python3 - <<'PY'
           from pathlib import Path
