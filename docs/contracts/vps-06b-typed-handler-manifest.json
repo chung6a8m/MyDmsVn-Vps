@@ -1,0 +1,332 @@
+{
+  "schemaVersion": 1,
+  "scope": "Production ASP.NET Core Host net10; excludes net48 and test-only handlers",
+  "compilerSymbol": "VPS06B_MEDIATOR",
+  "generatedMediatorVersion": "3.0.2",
+  "expectedHandlerContracts": 46,
+  "expectedHandlerClasses": 34,
+  "handlers": [
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogRequests.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.CreateCustomerCommandHandler",
+      "visibility": "internal",
+      "request": "CreateCustomerCommand",
+      "response": "ErrorOr<CustomerDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogRequests.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.CreateEmployeeCommandHandler",
+      "visibility": "internal",
+      "request": "CreateEmployeeCommand",
+      "response": "ErrorOr<EmployeeDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/ProductFeatures.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.CreateProductCommandHandler",
+      "visibility": "internal",
+      "request": "CreateProductCommand",
+      "response": "ErrorOr<ProductDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogRequests.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.CreateWarehouseCommandHandler",
+      "visibility": "internal",
+      "request": "CreateWarehouseCommand",
+      "response": "ErrorOr<WarehouseDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.CustomerFeatureHandlers",
+      "visibility": "internal",
+      "request": "GetCustomerByIdQuery",
+      "response": "ErrorOr<CustomerDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.CustomerFeatureHandlers",
+      "visibility": "internal",
+      "request": "ListCustomersQuery",
+      "response": "ErrorOr<PagedResult<CustomerDto>>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.CustomerFeatureHandlers",
+      "visibility": "internal",
+      "request": "LookupCustomersQuery",
+      "response": "ErrorOr<IReadOnlyList<CatalogLookupDto>>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.CustomerFeatureHandlers",
+      "visibility": "internal",
+      "request": "SetCustomerActiveCommand",
+      "response": "ErrorOr<UnitResponse>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.CustomerFeatureHandlers",
+      "visibility": "internal",
+      "request": "UpdateCustomerCommand",
+      "response": "ErrorOr<CustomerDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.EmployeeFeatureHandlers",
+      "visibility": "internal",
+      "request": "GetEmployeeByIdQuery",
+      "response": "ErrorOr<EmployeeDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.EmployeeFeatureHandlers",
+      "visibility": "internal",
+      "request": "ListEmployeesQuery",
+      "response": "ErrorOr<PagedResult<EmployeeDto>>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.EmployeeFeatureHandlers",
+      "visibility": "internal",
+      "request": "LookupEmployeesQuery",
+      "response": "ErrorOr<IReadOnlyList<CatalogLookupDto>>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.EmployeeFeatureHandlers",
+      "visibility": "internal",
+      "request": "SetEmployeeActiveCommand",
+      "response": "ErrorOr<UnitResponse>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.EmployeeFeatureHandlers",
+      "visibility": "internal",
+      "request": "UpdateEmployeeCommand",
+      "response": "ErrorOr<EmployeeDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/ProductFeatures.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.GetProductByIdQueryHandler",
+      "visibility": "internal",
+      "request": "GetProductByIdQuery",
+      "response": "ErrorOr<ProductDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/ProductFeatures.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.ListProductsQueryHandler",
+      "visibility": "internal",
+      "request": "ListProductsQuery",
+      "response": "ErrorOr<PagedResult<ProductDto>>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/ProductFeatures.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.LookupProductsQueryHandler",
+      "visibility": "internal",
+      "request": "LookupProductsQuery",
+      "response": "ErrorOr<System.Collections.Generic.IReadOnlyList<CatalogLookupDto>>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/ProductFeatures.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.SetProductActiveCommandHandler",
+      "visibility": "internal",
+      "request": "SetProductActiveCommand",
+      "response": "ErrorOr<UnitResponse>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/ProductFeatures.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.UpdateProductCommandHandler",
+      "visibility": "internal",
+      "request": "UpdateProductCommand",
+      "response": "ErrorOr<ProductDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.WarehouseFeatureHandlers",
+      "visibility": "internal",
+      "request": "GetWarehouseByIdQuery",
+      "response": "ErrorOr<WarehouseDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.WarehouseFeatureHandlers",
+      "visibility": "internal",
+      "request": "ListWarehousesQuery",
+      "response": "ErrorOr<PagedResult<WarehouseDto>>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.WarehouseFeatureHandlers",
+      "visibility": "internal",
+      "request": "LookupWarehousesQuery",
+      "response": "ErrorOr<IReadOnlyList<CatalogLookupDto>>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.WarehouseFeatureHandlers",
+      "visibility": "internal",
+      "request": "SetWarehouseActiveCommand",
+      "response": "ErrorOr<UnitResponse>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Catalog/OtherCatalogFeatureHandlers.cs",
+      "handler": "MyDmsVn.Server.Application.Catalog.WarehouseFeatureHandlers",
+      "visibility": "internal",
+      "request": "UpdateWarehouseCommand",
+      "response": "ErrorOr<WarehouseDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/GetFoundationStatusQueryHandler.cs",
+      "handler": "MyDmsVn.Server.Application.GetFoundationStatusQueryHandler",
+      "visibility": "internal",
+      "request": "GetFoundationStatusQuery",
+      "response": "ErrorOr<FoundationStatus>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Identity/GetCurrentUserQueryHandler.cs",
+      "handler": "MyDmsVn.Server.Application.Identity.GetCurrentUserQueryHandler",
+      "visibility": "internal",
+      "request": "GetCurrentUserQuery",
+      "response": "ErrorOr<CurrentUserDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Identity/LoginCommandHandler.cs",
+      "handler": "MyDmsVn.Server.Application.Identity.LoginCommandHandler",
+      "visibility": "internal",
+      "request": "LoginCommand",
+      "response": "ErrorOr<CurrentUserDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Inventory/GoodsReceiptFeatures.cs",
+      "handler": "MyDmsVn.Server.Application.Inventory.CreateGoodsReceiptDraftCommandHandler",
+      "visibility": "internal",
+      "request": "CreateGoodsReceiptDraftCommand",
+      "response": "ErrorOr<GoodsReceiptDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Inventory/GoodsReceiptQueries.cs",
+      "handler": "MyDmsVn.Server.Application.Inventory.GetGoodsReceiptByIdQueryHandler",
+      "visibility": "internal",
+      "request": "GetGoodsReceiptByIdQuery",
+      "response": "ErrorOr<GoodsReceiptDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Inventory/InventoryQueries.cs",
+      "handler": "MyDmsVn.Server.Application.Inventory.GetStockBalancesQueryHandler",
+      "visibility": "internal",
+      "request": "GetStockBalancesQuery",
+      "response": "ErrorOr<PagedResult<StockBalanceRow>>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Inventory/InventoryQueries.cs",
+      "handler": "MyDmsVn.Server.Application.Inventory.GetStockCardQueryHandler",
+      "visibility": "internal",
+      "request": "GetStockCardQuery",
+      "response": "ErrorOr<PagedResult<StockCardRow>>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Inventory/GoodsReceiptQueries.cs",
+      "handler": "MyDmsVn.Server.Application.Inventory.ListGoodsReceiptsQueryHandler",
+      "visibility": "internal",
+      "request": "ListGoodsReceiptsQuery",
+      "response": "ErrorOr<PagedResult<GoodsReceiptDto>>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Inventory/GoodsReceiptFeatures.cs",
+      "handler": "MyDmsVn.Server.Application.Inventory.PostGoodsReceiptCommandHandler",
+      "visibility": "internal",
+      "request": "PostGoodsReceiptCommand",
+      "response": "ErrorOr<PostGoodsReceiptResponse>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Inventory/GoodsReceiptFeatures.cs",
+      "handler": "MyDmsVn.Server.Application.Inventory.UpdateGoodsReceiptDraftCommandHandler",
+      "visibility": "internal",
+      "request": "UpdateGoodsReceiptDraftCommand",
+      "response": "ErrorOr<GoodsReceiptDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Sales/SalesReceiptFeatures.cs",
+      "handler": "MyDmsVn.Server.Application.Sales.CreateSalesReceiptDraftCommandHandler",
+      "visibility": "internal",
+      "request": "CreateSalesReceiptDraftCommand",
+      "response": "ErrorOr<SalesReceiptDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Sales/SalesReceiptQueries.cs",
+      "handler": "MyDmsVn.Server.Application.Sales.GetSalesReceiptByIdQueryHandler",
+      "visibility": "internal",
+      "request": "GetSalesReceiptByIdQuery",
+      "response": "ErrorOr<SalesReceiptDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Sales/SalesReceiptQueries.cs",
+      "handler": "MyDmsVn.Server.Application.Sales.ListSalesReceiptsQueryHandler",
+      "visibility": "internal",
+      "request": "ListSalesReceiptsQuery",
+      "response": "ErrorOr<SalesReceiptListPage>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Sales/PostSalesReceipt.cs",
+      "handler": "MyDmsVn.Server.Application.Sales.PostSalesReceiptCommandHandler",
+      "visibility": "internal",
+      "request": "PostSalesReceiptCommand",
+      "response": "ErrorOr<PostSalesReceiptResponse>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Sales/SalesReceiptFeatures.cs",
+      "handler": "MyDmsVn.Server.Application.Sales.UpdateSalesReceiptDraftCommandHandler",
+      "visibility": "internal",
+      "request": "UpdateSalesReceiptDraftCommand",
+      "response": "ErrorOr<SalesReceiptDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Security/PermissionAssignmentImport.cs",
+      "handler": "MyDmsVn.Server.Application.Security.ApplyPermissionAssignmentImportHandler",
+      "visibility": "internal",
+      "request": "ApplyPermissionAssignmentImportCommand",
+      "response": "ErrorOr<PermissionAssignmentImportResultDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Security/CheckPermissionQueryHandler.cs",
+      "handler": "MyDmsVn.Server.Application.Security.CheckPermissionQueryHandler",
+      "visibility": "internal",
+      "request": "CheckPermissionQuery",
+      "response": "ErrorOr<PermissionDecisionDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Security/ListPermissionCatalogQuery.cs",
+      "handler": "MyDmsVn.Server.Application.Security.ListPermissionCatalogQueryHandler",
+      "visibility": "internal",
+      "request": "ListPermissionCatalogQuery",
+      "response": "ErrorOr<PermissionCatalogDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Security/SecurityAdministration.cs",
+      "handler": "MyDmsVn.Server.Application.Security.ListSecurityRolesQueryHandler",
+      "visibility": "internal",
+      "request": "ListSecurityRolesQuery",
+      "response": "ErrorOr<IReadOnlyList<SecurityRoleDto>>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Security/SecurityAdministration.cs",
+      "handler": "MyDmsVn.Server.Application.Security.ListSecurityUsersQueryHandler",
+      "visibility": "internal",
+      "request": "ListSecurityUsersQuery",
+      "response": "ErrorOr<IReadOnlyList<SecurityUserDto>>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Security/SecurityAdministration.cs",
+      "handler": "MyDmsVn.Server.Application.Security.MutateSecurityAdministrationCommandHandler",
+      "visibility": "internal",
+      "request": "MutateSecurityAdministrationCommand",
+      "response": "ErrorOr<SecurityAdministrationResultDto>"
+    },
+    {
+      "file": "src/MyDmsVn.Server.Application/Security/PermissionAssignmentImport.cs",
+      "handler": "MyDmsVn.Server.Application.Security.PreviewPermissionAssignmentImportHandler",
+      "visibility": "internal",
+      "request": "PreviewPermissionAssignmentImportQuery",
+      "response": "ErrorOr<PermissionAssignmentImportPreviewDto>"
+    }
+  ]
+}
