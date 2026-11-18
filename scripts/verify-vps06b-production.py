@@ -84,16 +84,16 @@ def handler_pairs(value: str) -> list[tuple[str, str]]:
     return pairs
 
 def normalize_type(value: str) -> str:
-    return re.sub(r"\\s+", "", value)
+    return re.sub(r"\s+", "", value)
 
 seen = []
 for file in sorted({item["file"] for item in manifest["handlers"]}):
     relative = Path(file)
     assert relative.parts[0] == "src" and ".." not in relative.parts
     source = (root / relative).read_text(encoding="utf-8-sig")
-    ns = re.search(r"\\bnamespace\\s+([\\w.]+)\\s*[;{]", source)
+    ns = re.search(r"\bnamespace\s+([\w.]+)\s*[;{]", source)
     assert ns is not None, file
-    for match in re.finditer(r"\\b(internal|public)\\s+(?:sealed\\s+)?class\\s+(\\w+)\\s*:\\s*([\\s\\S]*?)\\s*\\{", source):
+    for match in re.finditer(r"\b(internal|public)\s+(?:sealed\s+)?class\s+(\w+)\s*:\s*([\s\S]*?)\s*\{", source):
         for request, response in handler_pairs(match.group(3)):
             seen.append((file, ns.group(1) + "." + match.group(2),
                 match.group(1), normalize_type(request), normalize_type(response)))
