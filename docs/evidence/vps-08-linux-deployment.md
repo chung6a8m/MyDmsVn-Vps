@@ -7,7 +7,7 @@
 ## Submitted source
 
 - Opt-in strict single-hop loopback proxy, secret-admitted header boundary with 127.0.0.1 only, no wildcard KnownProxies or unsafe framework flag. Existing direct HTTPS mode remains default.
-- Root-owned systemd/Nginx templates, LoadCredential and unprivileged account, protected audit root, manifest-verified release and atomic binary-only rollback. Review fixes: exclusive flock, trusted owner/mode checks for /opt and release ancestors, rejection of writable/special-mode artifact entries, non-writable installed files, service-active health guard, and full SQL-free real Kestrel forwarded-header/API admission tests.
+- Root-owned systemd/Nginx templates, LoadCredential and unprivileged account, protected audit root, manifest-verified release and atomic binary-only rollback. Review fixes: exclusive flock, trusted owner/mode checks for /opt and release ancestors, rejection of writable/special-mode artifact entries, non-writable installed files, exact systemd MainPID release-cwd health guard, Bash credential-path evaluation fix, and full SQL-free real Kestrel forwarded-header/API admission tests. The new executable shell regressions require live loading of all three systemd credentials and rejection of injected-newline/symlink credentials, stale process and invalid MainPID.
 - Native proxy, SQL TLS and live SQL-free Kestrel regressions (33 cases verified at earlier code HEAD; final HEAD pending), static source/refusal tests, exact SDK 10.0.404 locked publish, and separate manually dispatched protected Environment job.
 - Operator-specific Environment provisioning script and [Linux runbook](../runbooks/vps-08-linux-deployment.md).
 
@@ -25,6 +25,8 @@
 | F02 — component tests lacked verification that ASP.NET Core consumes forwarded headers before native strict transport admission | P1 | **FIXED AND CI VERIFIED:** `7c7e117`: 6 additional real Kestrel HTTP cases, 33/33 PASS in #44308489914. Real Nginx/TLS remains **NOT RUN** |
 | F03 — staging runner label alone could select the wrong machine; direct local bypass lacked staged probe | P1 | **FIXED IN SOURCE:** `1b0fdb2`: reviewed machine-id SHA-256 pin plus two mandatory direct-HTTP deny probes. Protected job **NOT RUN** |
 | F04 — failed/partial staging rollout could not be retried on the same reviewed SHA without an operator cleanup | P2 | **FIXED IN SOURCE:** `c35c1b1`: permit same-SHA retry only with identical verified manifest and root-owned existing release, no in-place overwrite. Actual retry/fault rehearsal **NOT RUN** |
+| F05 — Bash `local target="$1" name="$2" file="$CREDENTIALS_DIRECTORY/$name"` expands `$name` before assignment, preventing systemd credential loading and startup | P0 | **FIXED IN SOURCE:** `de245b2`: assign `name` before building the file path; executable shell fixture added in `6e911d8`. Final-HEAD CI and real systemd startup **NOT YET VERIFIED** |
+| F06 — public TLS and active service alone can accept a stale binary/process after rollout | P1 | **FIXED IN SOURCE:** `3eebcb6`: require systemd MainPID with `/proc/PID/cwd` resolving to the exact selected release, both on deploy and rollback. Executable negative simulation added in `6e911d8`; real fault injection **NOT RUN** |
 
 Neither an author's code changes nor a second-pass source check is an independent human deployment approval. A protected reviewer must inspect final diff, exact CI and real staging evidence separately.
 
@@ -32,7 +34,7 @@ Neither an author's code changes nor a second-pass source check is an independen
 
 | Gate | Present disposition | Needed to accept |
 | --- | --- | --- |
-| Static source/shell/manifest refusals | PENDING CI | Exact final HEAD, Python command/log, positive/negative outcome |
+| Static source/shell/manifest refusals, credential/runtime process simulations | PENDING FINAL-HEAD CI | Exact final HEAD, Python command/log, valid/malformed credential and stale binary tests |
 | Net10 proxy tests | PENDING CI | TRX 33/33 discovered/executed/passed, failed=0, skipped=0 |
 | Linux publish | PENDING CI | SDK10.0.404, locked restore, dependency graph, manifest and SHA artifact |
 | Prior Windows/net48, HTTP/SQL, Mediator/FluentMigrator regressions | PENDING CI | All mandatory workflow jobs SUCCESS on final doc-inclusive PR HEAD |
