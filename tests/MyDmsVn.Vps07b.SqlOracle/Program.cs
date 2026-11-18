@@ -35,7 +35,7 @@ internal static class Program
     private static string _master = "";
     private static string _cli = "";
     private static string _stage = "admission";
-    private const int RequiredSqlCaseCount = 51;
+    private const int RequiredSqlCaseCount = 53;
     private static int _passed;
     private static int _executed;
     private static readonly List<string> Databases = new();
@@ -459,6 +459,42 @@ EXEC @r=sys.sp_releaseapplock @Resource=N'MyDmsVn.SchemaMigration',
             Assert(await JournalSignatureOfLegacy(partial) == partialBefore,
                 "VPS07B_PARTIAL_SCHEMA_CHANGED_JOURNAL");
             Pass("partial schema rejected with legacy journal unchanged");
+
+            _stage = "dedicated-control-principal-positive";
+            var controlledDb = await PrepareDbUp(12);
+            var migrationLogin = "vps07b_ci_control_" + Stamp;
+            var migrationPassword = "CiDedicated@9" + Guid.NewGuid().ToString("N");
+            await ExecMaster("CREATE LOGIN [" + migrationLogin + "] WITH PASSWORD=N'" +
+                migrationPassword + "',CHECK_POLICY=ON;" +
+                "GRANT VIEW SERVER STATE TO [" + migrationLogin + "];" +
+                "GRANT VIEW ANY DEFINITION TO [" + migrationLogin + "];" +
+                "GRANT VIEW SERVER PERFORMANCE STATE TO [" + migrationLogin + "];");
+            await Exec(controlledDb, "CREATE USER [" + migrationLogin + "] FOR LOGIN [" +
+                migrationLogin + "]; GRANT CONTROL ON DATABASE::[" + controlledDb + "] TO [" +
+                migrationLogin + "]; ALTER ROLE db_owner ADD MEMBER [" + migrationLogin + "];");
+            // RESTRICTED_USER admits db_owner membership. The dedicated
+            // migration login is not sysadmin or used by the HTTP runtime.
+            var controlledConnection = new SqlConnectionStringBuilder(For(controlledDb))
+            {
+                UserID = migrationLogin,
+                Password = migrationPassword
+            }.ConnectionString;
+            var controlledData = await SourceData(controlledDb, 12);
+            await RunCli(controlledDb, 13, expectSuccess: true,
+                connectionOverride: controlledConnection);
+            await Check(controlledDb, 13);
+            await AssertStockAndCogs(controlledDb);
+            Assert(await SourceData(controlledDb, 12) == controlledData,
+                "VPS07B_CONTROL_IDENTITY_CHANGED_BUSINESS_DATA");
+            var committedHistory = await JournalSignature(controlledDb);
+            await RunCli(controlledDb, 13, expectSuccess: true,
+                connectionOverride: controlledConnection);
+            Assert(await JournalSignature(controlledDb) == committedHistory,
+                "VPS07B_CONTROL_IDENTITY_NOOP_REWROTE_JOURNAL");
+            await Exec(controlledDb, "ALTER ROLE db_owner DROP MEMBER [" +
+                migrationLogin + "]; DROP USER [" + migrationLogin + "];");
+            await ExecMaster("DROP LOGIN [" + migrationLogin + "];");
+            Pass("dedicated CONTROL SQL login restricted upgrade and idempotent no-op");
 
             _stage = "dedicated-migration-principal-control-negative";
             var underprivileged = await Create();

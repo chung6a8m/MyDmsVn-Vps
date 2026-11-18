@@ -25,7 +25,8 @@ DECLARE @bridgeValid bit = CASE WHEN EXISTS (
     SELECT 1 FROM sys.extended_properties
     WHERE class=0 AND major_id=0 AND minor_id=0
       AND name=N'MyDmsVn.FluentMigratorBridge'
-      AND CONVERT(nvarchar(32), value)=N'vps07b-v1') THEN 1 ELSE 0 END;
+      AND CONVERT(nvarchar(32), value) COLLATE Latin1_General_100_BIN2=N'vps07b-v1'
+      AND DATALENGTH(CONVERT(nvarchar(max),value))=DATALENGTH(N'vps07b-v1')) THEN 1 ELSE 0 END;
 IF OBJECT_ID(N'dbo.FluentMigratorVersionInfo', N'U') IS NULL
     SELECT CASE WHEN OBJECT_ID(N'dbo.FluentMigratorVersionInfo') IS NULL
         AND @bridgeCount=0 THEN 1 ELSE 0 END;
