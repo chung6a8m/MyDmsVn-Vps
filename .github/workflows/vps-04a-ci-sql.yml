@@ -364,6 +364,28 @@ jobs:
                 'WEB6 fail-closed only; no implied enabled WEB6 parity')
           PY
 
+          # VPS-06B independent native-dispatch SQL Oracle: after the original
+          # 15/15 sequential rollback/retry, oversell and WEB2-WEB6 parity facts.
+          # Read-only and exclusively admitted to this disposable SQL13 job.
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \\
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \\
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \\
+            --filter 'FullyQualifiedName~Vps06bSqlGeneratedMediatorParityTests' \\
+            --logger 'trx;LogFileName=vps06b-sql-generated-mediator.trx' \\
+            --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          path=Path('vps04a-ci-trx/vps06b-sql-generated-mediator.trx')
+          assert path.is_file(),'Missing VPS06B SQL oracle test TRX'
+          ns={'t':'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          counters=ET.parse(path).getroot().find('./t:ResultSummary/t:Counters',ns)
+          assert counters is not None
+          actual={k:int(counters.attrib[k]) for k in ('total','executed','passed','failed','notExecuted')}
+          assert actual=={'total':3,'executed':3,'passed':3,'failed':0,'notExecuted':0},actual
+          print('VPS06B_SQL_NATIVE_ORACLE_PASS 3/3: rollback, oversell race, scoped identity')
+          PY
+
           # VPS-04B executes separately from the historical WEB6-disabled
           # assertions above. Exact SQL13, seeded journal and verified HTTPS
           # remain in this disposable GitHub-hosted Linux job only.
