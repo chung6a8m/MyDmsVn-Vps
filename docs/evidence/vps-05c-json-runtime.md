@@ -2,7 +2,7 @@
 
 **Repository:** `chung6a8m/MyDmsVn-Vps` · **Issue:** [#15](https://github.com/chung6a8m/MyDmsVn-Vps/issues/15) · **Implementation:** [PR #17](https://github.com/chung6a8m/MyDmsVn-Vps/pull/17)
 **Baseline:** VPS-05B merged `main` `f2eeb62f19a5cb8177eb769d01dba4003a2621d8`.
-**Status:** CODE IMPLEMENTED / 293/293 LIVE DIFFERENTIAL PASS and all five CI workflows PASS at exact code-checkpoint HEAD `8e257eb5cd045c8f2360c7ae7f6bbda74f429f16`; new documentation-HEAD CI, independent final review and merge still required. **VPS-05 overall NOT COMPLETE until merge.**
+**Status:** **COMPLETE / MERGED within VPS-05C scope.** Independent final review and 5/5 mandatory workflows passed on exact final PR HEAD `1230efdf06a60412da077ce9d85f0d44cb0b5913`; PR #17 merged to `main` as `b4f7cb64e5474203fe0f132c39286b1d7c822e61` on 2026-11-18 03:06:44 UTC. VPS-08/09 release gates remain NOT VERIFIED.
 
 ## Production dependency change
 
@@ -33,10 +33,23 @@ The following results were independently checked against GitHub Actions logs/che
 
 The separate `approved-linux-sql` job is intentionally **SKIPPED**, **not PASS**, and is not a required gate for this PR's automatic CI. Protected Linux staging/systemd/reverse proxy/secrets and integrated Windows Desktop → Linux Host → real SQL release remain `NOT VERIFIED` (VPS-08/09).
 
-## Remaining acceptance boundaries
+## Independent final review, final-HEAD CI and merge (2026-11-18)
 
-1. **Fresh CI on the final documentation HEAD and independent review remain required before merge.** The code-checkpoint results above do not automatically transfer to a later SHA; cite that final SHA and all five successful workflows in the PR.
-2. **VPS-05C and VPS-05 become complete only after PR #17 is merged and that merge is recorded in the roadmap.**
-3. **Protected VPS staging/systemd/proxy/secrets and integrated Windows Desktop → Linux Host → real SQL release** remain `NOT VERIFIED` (VPS-08/09). Disposable CI SQL is not production or staging.
+The earlier `8e257eb` results above are historical implementation-checkpoint evidence, **not** the authoritative final review gate. PR #17 was reviewed on exact final HEAD `1230efdf06a60412da077ce9d85f0d44cb0b5913` (documentation-only correction after `8e257eb`). Review established that blockers B1 (live 57-route parity), B2 (evidence linkage) and F-01 (stale 279-case count and pending-CI wording) were resolved; [PR #17 final review](https://github.com/chung6a8m/MyDmsVn-Vps/pull/17) recorded **ACCEPT for VPS-05C merge scope only**, not release approval.
 
-The canonical status is [`docs/roadmap/README.md`](../roadmap/README.md). Re-evaluate this ledger on the final code/documentation SHA rather than claiming inherited PASS.
+| Required workflow, exact PR #17 final HEAD | Evidence | Verified conclusion |
+| --- | --- | --- |
+| Linux SDK 10.0.404, warning-as-error net10, runtime dependency and route gates | [run #44227546692](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44227546692) | **SUCCESS:** Application **366/366**; Host **660/660**; live SQL-free net48 OWIN vs net10 Kestrel **293/293** across 57 routes; published net10 `.deps.json` **0 Newtonsoft.Json**; no required test failed/skipped |
+| Disposable Linux SQL Server 2022, Kestrel HTTPS/TLS | [run #44227546705](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44227546705) | **SUCCESS:** **15/15** bounded real HTTPS→SQL13 tests, 24 selected WEB2–WEB6 SQL oracle scenarios and 3 separately enabled WEB6 security/recovery facts; **not protected staging**, **not all-route real-SQL** |
+| Windows Desktop net48 publish/dependency boundary | [run #44227546706](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44227546706) | **SUCCESS:** publish and dependency audit; **not attended GUI/SQL E2E** |
+| Windows xUnit v3 compile/discovery topology | [run #44227546729](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44227546729) | **SUCCESS:** 10/10 discovery jobs; discovery-only suites are not SQL or GUI execution |
+| Windows legacy net48 foundation, SQL-free smoke and independent OWIN oracle | [run #44227546680](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44227546680) | **SUCCESS:** 8/8 jobs; legacy HTTP Host **684/684**; net48 OWIN oracle **1/1**, asserting 293 observations / 57 routes |
+
+GitHub reports **five workflows SUCCESS on exact SHA `1230efdf`**; the optional protected `approved-linux-sql` job in the SQL-free workflow is **SKIPPED / NOT PASS**. No required acceptance job is treated as successful from an earlier commit. The **merge is separately verified**: [PR #17](https://github.com/chung6a8m/MyDmsVn-Vps/pull/17) closed as merged at `b4f7cb64e5474203fe0f132c39286b1d7c822e61` (2026-11-18 03:06:44 UTC). These are PR final-HEAD CI results, not an assertion of fresh CI on the merge commit or on this later documentation-only closeout commit.
+
+## Remaining release obligations — outside VPS-05
+
+- **VPS-06 / VPS-07 NOT STARTED:** Mediator 3.x and FluentMigrator conversions remain separate increments with their own independent review, CI and SQL/behavior oracles.
+- **VPS-08 NOT VERIFIED** ([Issue #11](https://github.com/chung6a8m/MyDmsVn-Vps/issues/11)): independently approved protected staging, systemd, reverse proxy/TLS/secrets, real VPS deployment and restart/rollback rehearsals. A skipped `approved-linux-sql` job is never a staging PASS.
+- **VPS-09 NOT VERIFIED** ([Issue #12](https://github.com/chung6a8m/MyDmsVn-Vps/issues/12)): exhaustive *real-SQL* dynamic responses on all 57 routes, fault/race/stock/COGS recovery and attended Windows Desktop→deployed Linux Host→SQL integrated release. The **293/293 live differential is SQL-free**; only the **15/15** bounded tests use disposable SQL, and neither establishes production readiness.
+- No production deployment, release approval or acceptance exception is inferred. The only live workstream status authority remains [`docs/roadmap/README.md`](../roadmap/README.md); this file is immutable-scope evidence for PR #17 and the subsequent documentation closeout.
