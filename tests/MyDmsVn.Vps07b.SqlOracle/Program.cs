@@ -145,6 +145,78 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                 Pass("exact" + sourceVersion + " to 13; source rows, schema and both journals");
             }
 
+            // Explicit target admission: a request for schema10/12 is not an
+            // implicit request to run all 13 versions.
+            foreach (var targetVersion in new[] { 10, 12 })
+            {
+                _stage = "FM-fresh-target-" + targetVersion;
+                var db = await Create();
+                var reference = await PrepareDbUp(targetVersion);
+                await RunCli(db, targetVersion, expectSuccess: true);
+                await Check(db, targetVersion);
+                Assert(await DefinitionSignature(db) == await DefinitionSignature(reference),
+                    "VPS07B_EXPLICIT_TARGET_SCHEMA_MISMATCH");
+                Pass("fresh install explicit target schema" + targetVersion);
+            }
+
+            // A single real database goes through both intermediate targets
+            // while source rows stay immutable and journals advance exactly.
+            _stage = "schema9-to-10-to-12-to-13";
+            var chained = await PrepareDbUp(9);
+            var chainedRows = await SourceData(chained);
+            foreach (var targetVersion in new[] { 10, 12, 13 })
+            {
+                await RunCli(chained, targetVersion, expectSuccess: true);
+                await Check(chained, targetVersion);
+                Assert(await SourceData(chained) == chainedRows,
+                    "VPS07B_INCREMENTAL_SOURCE_ROW_DRIFT");
+                Pass("incremental bridge to schema" + targetVersion);
+            }
+            Assert(await DefinitionSignature(chained) == baselineSignature,
+                "VPS07B_INCREMENTAL_FINAL_DEFINITION_DRIFT");
+
+            // Three actual SQL THROW failures, after first/middle/last SQL
+            // batch, prove FM rolls back BOTH journals and all business DDL.
+            foreach (var fault in new[] { (source: 9, script: 10, batch: 1),
+                                           (source: 12, script: 13, batch: 5),
+                                           (source: 12, script: 13, batch: 9) })
+            {
+                _stage = "rollback-fault-" + fault.script + "-" + fault.batch;
+                var db = await PrepareDbUp(fault.source);
+                var beforeLegacy = await JournalSignatureOfLegacy(db);
+                var beforeRows = await SourceData(db);
+                await RunCli(db, 13, expectSuccess: false,
+                    ciFault: fault.script + ":" + fault.batch, expectedCode: "sql=51750");
+                Assert(await JournalSignatureOfLegacy(db) == beforeLegacy,
+                    "VPS07B_ROLLBACK_CHANGED_LEGACY_JOURNAL");
+                Assert(await Count(db,
+                    "SELECT COUNT(*) FROM dbo.FluentMigratorVersionInfo;") == fault.source,
+                    "VPS07B_ROLLBACK_ADVANCED_FM_VERSION");
+                Assert(await SourceData(db) == beforeRows,
+                    "VPS07B_ROLLBACK_CHANGED_BUSINESS_ROWS");
+                Assert(await Count(db, "SELECT CASE WHEN OBJECT_ID(N'dbo.WebOperationTerminalAudit',N'U') IS NULL THEN 0 ELSE 1 END;")
+                    == 0, "VPS07B_ROLLBACK_LEFT_LATE_OBJECT");
+                await RunCli(db, 13, expectSuccess: true);
+                await Check(db, 13);
+                Assert(await SourceData(db) == beforeRows, "VPS07B_RETRY_CHANGED_SOURCE_ROWS");
+                Assert(await DefinitionSignature(db) == baselineSignature,
+                    "VPS07B_RETRY_DEFINITION_DRIFT");
+                Pass("batch fault " + fault.script + ":" + fault.batch + " rollback and same-source retry");
+            }
+
+            _stage = "writer-maintenance-negative";
+            var writersLive = await PrepareDbUp(12);
+            var priorHistory = await JournalSignatureOfLegacy(writersLive);
+            await ExecMaster("ALTER DATABASE [" + writersLive + "] SET MULTI_USER WITH ROLLBACK IMMEDIATE;");
+            await RunCli(writersLive, 13, expectSuccess: false,
+                expectedCode: "Migration.MaintenanceAccessRequired");
+            Assert(await JournalSignatureOfLegacy(writersLive) == priorHistory,
+                "VPS07B_LIVE_WRITER_CHANGED_JOURNAL");
+            Assert(await Count(writersLive,
+                "SELECT CASE WHEN OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U') IS NULL THEN 0 ELSE 1 END;") == 0,
+                "VPS07B_MAINTENANCE_REFUSAL_CREATED_JOURNAL");
+            Pass("missing restricted maintenance rejected before bridge");
+
             // Adversarial and concurrent admission probes use a dedicated,
             // already-upgraded disposable database. They never alter a user DB.
             var denied = baseline;
@@ -386,7 +458,8 @@ ORDER BY Sig;", c);
         Assert(index == expected, "VPS07B_FM_JOURNAL_COUNT");
     }
 
-    private static async Task RunCli(string db, int version, bool expectSuccess, bool approved = true)
+    private static async Task RunCli(string db, int version, bool expectSuccess, bool approved = true,
+        string? ciFault = null, string? expectedCode = null)
     {
         var psi = new ProcessStartInfo("dotnet") { RedirectStandardError = true,
             RedirectStandardOutput = true, UseShellExecute = false };
@@ -396,6 +469,10 @@ ORDER BY Sig;", c);
         psi.Environment["VPS07B_SQL_CONNECTION_STRING"] = For(db);
         psi.Environment["VPS07B_OPERATOR_APPROVAL"] =
             approved ? "approved-maintenance-and-verified-backup" : "";
+        if (!string.IsNullOrEmpty(ciFault))
+            psi.Environment["VPS07B_CI_FAULT"] = ciFault;
+        else
+            psi.Environment.Remove("VPS07B_CI_FAULT");
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("VPS07B_CHILD_NOT_STARTED");
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
@@ -417,6 +494,9 @@ ORDER BY Sig;", c);
         {
             Assert(process.ExitCode != 0 && !output.Contains("VPS07B_SQL_VERIFIED:",StringComparison.Ordinal),
                 "VPS07B_CLI_SHOULD_REFUSE");
+            if (!string.IsNullOrEmpty(expectedCode))
+                Assert(diagnostic.Contains(expectedCode, StringComparison.Ordinal),
+                    "VPS07B_WRONG_REFUSAL_CATEGORY_" + SafeCode(diagnostic));
         }
     }
 
