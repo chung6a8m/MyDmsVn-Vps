@@ -7,8 +7,8 @@
 ## Submitted source
 
 - Opt-in strict single-hop loopback proxy, secret-admitted header boundary with 127.0.0.1 only, no wildcard KnownProxies or unsafe framework flag. Existing direct HTTPS mode remains default.
-- Root-owned systemd/Nginx templates, LoadCredential and unprivileged account, protected audit root, manifest-verified release and atomic binary-only rollback.
-- Native proxy and SQL TLS security regressions (27 expected), static source/refusal tests, exact SDK 10.0.404 locked publish, and separate manually dispatched protected Environment job.
+- Root-owned systemd/Nginx templates, LoadCredential and unprivileged account, protected audit root, manifest-verified release and atomic binary-only rollback. Review fixes: exclusive flock, trusted owner/mode checks for /opt and release ancestors, rejection of writable/special-mode artifact entries, non-writable installed files, service-active health guard, and full SQL-free real Kestrel forwarded-header/API admission tests.
+- Native proxy, SQL TLS and live SQL-free Kestrel regressions (33 expected), static source/refusal tests, exact SDK 10.0.404 locked publish, and separate manually dispatched protected Environment job.
 - Operator-specific Environment provisioning script and [Linux runbook](../runbooks/vps-08-linux-deployment.md).
 
 ## Required evidence, never infer PASS
@@ -16,7 +16,7 @@
 | Gate | Present disposition | Needed to accept |
 | --- | --- | --- |
 | Static source/shell/manifest refusals | PENDING CI | Exact final HEAD, Python command/log, positive/negative outcome |
-| Net10 proxy tests | PENDING CI | TRX 27/27 discovered/executed/passed, failed=0, skipped=0 |
+| Net10 proxy tests | PENDING CI | TRX 33/33 discovered/executed/passed, failed=0, skipped=0 |
 | Linux publish | PENDING CI | SDK10.0.404, locked restore, dependency graph, manifest and SHA artifact |
 | Prior Windows/net48, HTTP/SQL, Mediator/FluentMigrator regressions | PENDING CI | All mandatory workflow jobs SUCCESS on final doc-inclusive PR HEAD |
 | Protected environment independent review/admin bypass/ref | NOT VERIFIED | Admin config output, reviewer identity, only main allowed, dedicated nonprod runner |
