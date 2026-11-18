@@ -34,9 +34,12 @@ public sealed class CanaryOperationException : Exception
     public string Code { get; }
 }
 
-public sealed class CanaryScope
+public sealed class CanaryScope : IDisposable
 {
     public Guid Id { get; } = Guid.NewGuid();
+    public bool Disposed { get; private set; }
+    public CancellationTokenSource? CancelOnValidation { get; set; }
+    public void Dispose() => Disposed = true;
     public bool Authenticated { get; set; } = true;
     public bool Active { get; set; } = true;
     public int? UserId { get; set; } = 101;
@@ -55,6 +58,7 @@ public sealed class ValidatorOverlapProbe
     {
         if (Interlocked.Increment(ref _active) > 1) Overlapped = true;
         state.Events.Add(label);
+        state.CancelOnValidation?.Cancel();
         try
         {
             await Task.Delay(4, cancellationToken).ConfigureAwait(false);

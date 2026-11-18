@@ -38,10 +38,17 @@ for path in sources:
             results[key].append({"path": relative, "line": line, "expression": snippet})
 
 counts = {k: len(entries) for k, entries in results.items()}
-assert counts["handler_symbols"] >= 8, counts
-assert counts["request_derivations"] >= 8, counts
-assert counts["pipeline_behaviors"] >= 3, counts
-assert counts["registration_calls"] >= 2, counts
+# Frozen at VPS-06A baseline main ba1c0049; intentional production handler
+# changes in VPS-06B require a reviewed inventory rebaseline, not silent drift.
+expected = {
+    "handler_symbols": 139,
+    "request_derivations": 62,
+    "pipeline_behaviors": 3,
+    "sender_interfaces": 171,
+    "sender_calls": 495,
+    "registration_calls": 99,
+}
+assert counts == expected, f"MediatR source inventory drift: expected {expected}; actual {counts}"
 report = {
     "schemaVersion": 1,
     "purpose": "VPS-06A lexical inventory; not a generated production handler count",

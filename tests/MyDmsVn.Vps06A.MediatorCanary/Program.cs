@@ -12,6 +12,7 @@ namespace MyDmsVn.Vps06A.MediatorCanary;
 
 internal static class Program
 {
+    private const int ExpectedChecks = 22;
     private static int _passed;
 
     public static async Task<int> Main()
@@ -171,6 +172,25 @@ internal static class Program
                     async () => await Send(scope, new CanaryRequest(1m) { Mode = "cancel" }, cts.Token));
                 Require(state.ReportedExceptions == 0, "cancellation was reported as error");
             });
+            await Check("mid-flight validation cancellation is propagated, not reported", async () =>
+            {
+                using var scope = provider.CreateScope();
+                using var cts = new CancellationTokenSource();
+                var state = scope.ServiceProvider.GetRequiredService<CanaryScope>();
+                state.CancelOnValidation = cts;
+                await RequireThrowsAsync<OperationCanceledException>(
+                    async () => await Send(scope, new CanaryRequest(1m), cts.Token));
+                Require(state.ReportedExceptions == 0, "validation cancellation logged as exception");
+                Trace(state, "exception", "authorization", "audit-admitted", "validation", "validator-positive");
+            });
+            await Check("scope disposal disposes scoped identity state", async () =>
+            {
+                CanaryScope state;
+                using (var scope = provider.CreateScope())
+                    state = scope.ServiceProvider.GetRequiredService<CanaryScope>();
+                Require(state.Disposed, "scoped dependency was not disposed");
+                await Task.CompletedTask;
+            });
             await Check("scoped mediators and identity/correlation never cross requests", async () =>
             {
                 using var first = provider.CreateScope();
@@ -191,7 +211,8 @@ internal static class Program
                 Require(state2.Audits.Single() == "Admitted:9:correlation-second", "second audit crossed scope");
                 Require(state1.Id != state2.Id, "scoped objects were shared");
             });
-            Console.WriteLine($"VPS06A_CANARY_PASS {_passed}/{_passed}, generator=3.0.2, scoped=true");
+            Require(_passed == ExpectedChecks, "strict executable case count drift");
+            Console.WriteLine($"VPS06A_CANARY_PASS {_passed}/{ExpectedChecks}, generator=3.0.2, scoped=true");
             return 0;
         }
         catch (Exception ex)
