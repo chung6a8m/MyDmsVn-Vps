@@ -252,14 +252,19 @@ internal sealed class DesktopParityFixture : IDisposable
             Add<SetCustomerActiveCommand, UnitResponse>(services, _ => UnitResponse.Value);
             Add<CheckPermissionQuery, PermissionDecisionDto>(services, r =>
                 new PermissionDecisionDto(r.PermissionKey, !State.Denied.Contains(r.PermissionKey)));
-            Add<ListPermissionCatalogQuery, PermissionCatalogDto>(services, _ => new PermissionCatalogDto("1", "digest", Array.Empty<PermissionCatalogItemDto>()));
-            Add<ListSecurityUsersQuery, IReadOnlyList<SecurityUserDto>>(services, _ => Array.Empty<SecurityUserDto>());
-            Add<ListSecurityRolesQuery, IReadOnlyList<SecurityRoleDto>>(services, _ => Array.Empty<SecurityRoleDto>());
+            Add<ListPermissionCatalogQuery, PermissionCatalogDto>(services, _ => new PermissionCatalogDto("1", "digest", new[]
+                { new PermissionCatalogItemDto("Security.Users.Manage", "Bảo mật", "Quản lý \"người dùng\"", "Active") }));
+            Add<ListSecurityUsersQuery, IReadOnlyList<SecurityUserDto>>(services, _ => new[]
+                { new SecurityUserDto(1, "alice", "Álice \"Admin\"", null, true, 9007199254740993L,
+                    new[] { 7 }, new[] { new SecurityDecisionDto("Security.Users.Manage", null) }, true) });
+            Add<ListSecurityRolesQuery, IReadOnlyList<SecurityRoleDto>>(services, _ => new[]
+                { new SecurityRoleDto(7, "Quản trị", true, 9007199254740993L, new[] { 1 }, new[] { "Security.Users.Manage" }) });
             Add<MutateSecurityAdministrationCommand, SecurityAdministrationResultDto>(services, _ => new SecurityAdministrationResultDto(1, true));
             Add<PreviewPermissionAssignmentImportQuery, PermissionAssignmentImportPreviewDto>(services, _ =>
                 new PermissionAssignmentImportPreviewDto(new ParsedPermissionAssignmentImportDto(1, PermissionImportTargetTypeDto.Role, 3,
-                    Array.Empty<PermissionAssignmentImportEntryDto>()), "Role", 0, "digest", Array.Empty<PermissionAssignmentImportEntryDto>()));
-            Add<ApplyPermissionAssignmentImportCommand, PermissionAssignmentImportResultDto>(services, _ => new PermissionAssignmentImportResultDto(2, 1, true));
+                    new[] { new PermissionAssignmentImportEntryDto("Báo cáo \"Đặc biệt\"\n", true) }), "Quản trị", 1, "digest",
+                    new[] { new PermissionAssignmentImportEntryDto("Báo cáo \"Đặc biệt\"\n", true) }));
+            Add<ApplyPermissionAssignmentImportCommand, PermissionAssignmentImportResultDto>(services, _ => new PermissionAssignmentImportResultDto(9007199254740993L, 1, true));
             Add<GetFoundationStatusQuery, FoundationStatus>(services, _ => new FoundationStatus(true, "net48"));
         }, options: options);
     }

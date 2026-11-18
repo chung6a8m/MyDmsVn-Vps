@@ -15,7 +15,7 @@ namespace MyDmsVn.Server.HttpHost.Tests;
 public sealed class Vps05cDesktopRouteNet48OracleTests
 {
     private const string Correlation = "vps05c_live_28";
-    private sealed class Case
+    private class Case
     {
         public Case(string id, string method, string path, string? body)
         {
@@ -31,10 +31,19 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         public string? Body { get; }
     }
 
+    private sealed class LegacyCase : Case
+    {
+        public LegacyCase(string id, string method, string path, string? requestFile, string responseFile)
+            : base(id, method, path, requestFile)
+        { ResponseFile = responseFile; }
+        public string ResponseFile { get; }
+    }
+
     private sealed class Observation
     {
         public Observation(string caseId, string variant, int status, string contentType,
-            string correlationId, string cacheControl, string bodyBase64)
+            string correlationId, string cacheControl, string pragma, string wwwAuthenticate,
+            string xContentTypeOptions, string hsts, string bodyBase64)
         {
             CaseId = caseId;
             Variant = variant;
@@ -42,6 +51,10 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
             ContentType = contentType;
             CorrelationId = correlationId;
             CacheControl = cacheControl;
+            Pragma = pragma;
+            WwwAuthenticate = wwwAuthenticate;
+            XContentTypeOptions = xContentTypeOptions;
+            Hsts = hsts;
             BodyBase64 = bodyBase64;
         }
 
@@ -51,6 +64,10 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         public string ContentType { get; }
         public string CorrelationId { get; }
         public string CacheControl { get; }
+        public string Pragma { get; }
+        public string WwwAuthenticate { get; }
+        public string XContentTypeOptions { get; }
+        public string Hsts { get; }
         public string BodyBase64 { get; }
     }
 
@@ -86,6 +103,43 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         new Case("VPS02-FOUNDATION", "GET", "/foundation/status?clientName=Desktop", null),
     };
 
+    private static readonly IReadOnlyList<Case> ControlCases = new[]
+    {
+        new Case("VPS01-HEALTH", "GET", "/api/v1/health", null),
+        new Case("VPS01-AUTH-LOGIN", "POST", "/api/v1/auth/login", "{\"username\":\"alice\",\"password\":\"correct-secret\"}"),
+        new Case("VPS01-AUTH-REFRESH", "POST", "/api/v1/auth/refresh", null),
+        new Case("VPS01-AUTH-LOGOUT", "POST", "/api/v1/auth/logout", null),
+        new Case("VPS01-AUTH-ME", "GET", "/api/v1/auth/me", null),
+        new Case("VPS01-AUTH-CAPABILITIES", "GET", "/api/v1/auth/capabilities?feature=sales-receipts", null),
+        new Case("VPS01-OPERATIONS-CONTEXT", "GET", "/api/v1/operations/context", null),
+        new Case("VPS01-OPERATIONS-STATUS", "GET", "/api/v1/operations/11111111-1111-4111-8111-111111111111", null),
+        new Case("VPS01-RESOLUTION-CONTEXT", "GET", "/api/v2/operations/context", null),
+        new Case("VPS01-RESOLUTION-STATUS", "GET", "/api/v2/operations/11111111-1111-4111-8111-111111111111/resolution", null),
+        new Case("VPS01-RESEND-CONTEXT", "GET", "/api/v3/operations/resend-context", null),
+        new Case("VPS01-RESEND-RECEIPT", "GET", "/api/v3/operations/11111111-1111-4111-8111-111111111111/resend-receipt", null),
+        new Case("VPS01-RESEND-ELIGIBILITY", "GET", "/api/v3/operations/11111111-1111-4111-8111-111111111111/resend-eligibility", null),
+    };
+
+    private static readonly IReadOnlyList<LegacyCase> LegacyCases = new[]
+    {
+        new LegacyCase("VPS01-SALES-LIST", "GET", "/sales-receipts", null, "sales-list-response.json"),
+        new LegacyCase("VPS01-SALES-GET", "GET", "/sales-receipts/9223372036854775807", null, "sales-get-posted-response.json"),
+        new LegacyCase("VPS01-SALES-CREATE", "POST", "/sales-receipts", "sales-create-request.json", "sales-create-response.json"),
+        new LegacyCase("VPS01-SALES-UPDATE", "PUT", "/sales-receipts/9223372036854775807/draft", "sales-update-request.json", "sales-update-response.json"),
+        new LegacyCase("VPS01-SALES-POST", "POST", "/sales-receipts/9223372036854775807/post", "sales-post-request.json", "sales-post-response.json"),
+        new LegacyCase("VPS01-LOOKUP-PRODUCTS", "GET", "/catalog/products/lookup?search=abc&limit=25", null, "catalog-products-response.json"),
+        new LegacyCase("VPS01-LOOKUP-CUSTOMERS", "GET", "/catalog/customers/lookup?search=abc&limit=25", null, "catalog-customers-response.json"),
+        new LegacyCase("VPS01-LOOKUP-WAREHOUSES", "GET", "/catalog/warehouses/lookup?search=abc&limit=25", null, "catalog-warehouses-response.json"),
+        new LegacyCase("VPS01-LOOKUP-EMPLOYEES", "GET", "/catalog/employees/lookup?search=abc&limit=25", null, "catalog-employees-response.json"),
+        new LegacyCase("VPS01-RECEIPT-LIST", "GET", "/goods-receipts?pageNumber=1&pageSize=25", null, "receipt-list-response.json"),
+        new LegacyCase("VPS01-RECEIPT-GET", "GET", "/goods-receipts/9007199254740993", null, "receipt-get-posted-response.json"),
+        new LegacyCase("VPS01-RECEIPT-CREATE", "POST", "/goods-receipts", "receipt-create-request.json", "receipt-create-response.json"),
+        new LegacyCase("VPS01-RECEIPT-UPDATE", "PUT", "/goods-receipts/9007199254740993/draft", "receipt-update-request.json", "receipt-update-response.json"),
+        new LegacyCase("VPS01-RECEIPT-POST", "POST", "/goods-receipts/9007199254740993/post", "receipt-post-request.json", "receipt-post-response.json"),
+        new LegacyCase("VPS01-INVENTORY-BALANCES", "GET", "/inventory/balances?pageNumber=1&pageSize=25", null, "balances-response.json"),
+        new LegacyCase("VPS01-INVENTORY-STOCK-CARD", "GET", "/inventory/stock-card?productId=104&warehouseId=102&pageNumber=1&pageSize=25", null, "stock-card-response.json"),
+    };
+
     [Fact]
     public async Task LiveNet48OwinResponsesMatchFrozenVps05cOracle()
     {
@@ -96,7 +150,17 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
             observations.Add(await Capture(testCase, "permission"));
             observations.Add(await Capture(testCase, "invalid"));
             observations.Add(await Capture(testCase, "failure"));
+            observations.Add(await Capture(testCase, "unauthenticated"));
         }
+        foreach (var testCase in ControlCases)
+            observations.Add(await CaptureControl(testCase));
+        foreach (var testCase in LegacyCases)
+            observations.Add(await CaptureLegacyData(testCase));
+
+        Assert.Equal(169, observations.Count);
+        Assert.Equal(57, observations.Select(x => x.CaseId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(169, observations.Select(x => x.CaseId + "\n" + x.Variant)
+            .Distinct(StringComparer.Ordinal).Count());
 
         var actual = JsonConvert.SerializeObject(observations, Formatting.Indented);
         if (Environment.GetEnvironmentVariable("MYDMSVN_UPDATE_VPS05C_ORACLE") == "approved")
@@ -111,6 +175,65 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         Assert.True(File.Exists(expectedPath), "Frozen net48 route oracle is missing.");
         Assert.True(JToken.DeepEquals(JToken.Parse(File.ReadAllText(expectedPath)), JToken.Parse(actual)),
             "Live net48 OWIN route observations differ from the frozen VPS-05C oracle.");
+    }
+
+    private static async Task<Observation> CaptureLegacyData(LegacyCase testCase)
+    {
+        var inventory = testCase.Id.IndexOf("RECEIPT", StringComparison.Ordinal) >= 0 ||
+            testCase.Id.IndexOf("INVENTORY", StringComparison.Ordinal) >= 0;
+        if (inventory)
+        {
+            using var fixture = new InventoryEndpointFixture { ResultFile = testCase.ResponseFile };
+            using var response = await fixture.Send(testCase.Method, testCase.Path,
+                testCase.Body == null ? null : InventoryEndpointCorpus.Text(testCase.Body), correlationId: Correlation);
+            return await Observe(testCase.Id, "success", response);
+        }
+
+        using (var fixture = new SalesWireFixture())
+        {
+            if (testCase.ResponseFile.StartsWith("sales-", StringComparison.Ordinal) &&
+                testCase.ResponseFile != "sales-list-response.json" && testCase.ResponseFile != "sales-post-response.json")
+                fixture.State.Detail = WireCorpus.Dto<MyDmsVn.Contracts.SalesReceiptDto>(testCase.ResponseFile);
+            if (testCase.Id.StartsWith("VPS01-LOOKUP-", StringComparison.Ordinal))
+            {
+                var catalog = testCase.Id.Substring("VPS01-LOOKUP-".Length).ToLowerInvariant();
+                fixture.State.Lookup = WireCorpus.From<IReadOnlyList<MyDmsVn.Contracts.CatalogLookupDto>>(
+                    WireCorpus.Json("catalog-" + catalog + "-response.json")["data"]!);
+            }
+            using var response = await fixture.Send(testCase.Method, testCase.Path,
+                testCase.Body == null ? null : WireCorpus.Text(testCase.Body), correlationId: Correlation);
+            return await Observe(testCase.Id, "success", response);
+        }
+    }
+
+    private static async Task<Observation> CaptureControl(Case testCase)
+    {
+        using var fixture = new AuthFixture();
+        string? token = null;
+        if (testCase.Id is "VPS01-AUTH-ME" or "VPS01-AUTH-CAPABILITIES" ||
+            testCase.Id.StartsWith("VPS01-OPERATIONS-", StringComparison.Ordinal) ||
+            testCase.Id.StartsWith("VPS01-RESOLUTION-", StringComparison.Ordinal) ||
+            testCase.Id.StartsWith("VPS01-RESEND-", StringComparison.Ordinal))
+        {
+            using var login = await fixture.Login();
+            token = (string)JObject.Parse(await login.Content.ReadAsStringAsync())["data"]!["accessToken"]!;
+        }
+
+        using var request = new HttpRequestMessage(new HttpMethod(testCase.Method), AuthFixture.Origin + testCase.Path);
+        request.Headers.Add("X-Correlation-ID", Correlation);
+        if (token != null) request.Headers.Add("Authorization", "Bearer " + token);
+        if (testCase.Method == "POST")
+        {
+            request.Headers.Add("Origin", AuthFixture.Origin);
+            request.Headers.Add("Sec-Fetch-Site", "same-origin");
+            request.Headers.Add("X-Requested-With", "XMLHttpRequest");
+        }
+        if (testCase.Id is "VPS01-AUTH-REFRESH" or "VPS01-AUTH-LOGOUT")
+            request.Headers.Add("Cookie", "__Host-mydmsvn-rt=" + AuthFixture.InitialRefresh);
+        if (testCase.Body != null)
+            request.Content = new StringContent(testCase.Body, Encoding.UTF8, "application/json");
+        using var response = await fixture.Server.HttpClient.SendAsync(request);
+        return await Observe(testCase.Id, "success", response);
     }
 
     private static async Task<Observation> Capture(Case testCase, string variant)
@@ -130,12 +253,28 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         }
         else if (variant == "failure") fixture.State.ThrowHandlers = true;
 
-        using var response = await fixture.Send(testCase.Method, path, body, correlationId: Correlation);
+        using var response = await fixture.Send(testCase.Method, path, body,
+            authenticated: variant != "unauthenticated", correlationId: Correlation);
+        return await Observe(testCase.Id, variant, response);
+    }
+
+    private static async Task<Observation> Observe(string caseId, string variant, HttpResponseMessage response)
+    {
         var bytes = await response.Content.ReadAsByteArrayAsync();
-        return new Observation(testCase.Id, variant, (int)response.StatusCode,
+        if (caseId is "VPS01-AUTH-LOGIN" or "VPS01-AUTH-REFRESH")
+        {
+            var json = JObject.Parse(Encoding.UTF8.GetString(bytes));
+            json["data"]!["accessToken"] = "<dynamic-jwt>";
+            bytes = Encoding.UTF8.GetBytes(json.ToString(Formatting.None));
+        }
+        return new Observation(caseId, variant, (int)response.StatusCode,
             response.Content.Headers.ContentType?.ToString() ?? string.Empty,
             response.Headers.TryGetValues("X-Correlation-ID", out var correlations) ? correlations.Single() : string.Empty,
             response.Headers.TryGetValues("Cache-Control", out var cache) ? string.Join(",", cache) : string.Empty,
+            response.Headers.TryGetValues("Pragma", out var pragma) ? string.Join(",", pragma) : string.Empty,
+            response.Headers.TryGetValues("WWW-Authenticate", out var authenticate) ? string.Join(",", authenticate) : string.Empty,
+            response.Headers.TryGetValues("X-Content-Type-Options", out var contentOptions) ? string.Join(",", contentOptions) : string.Empty,
+            response.Headers.TryGetValues("Strict-Transport-Security", out var hsts) ? string.Join(",", hsts) : string.Empty,
             Convert.ToBase64String(bytes));
     }
 

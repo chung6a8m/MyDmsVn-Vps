@@ -377,7 +377,8 @@ internal sealed class InventoryEndpointFixture : IDisposable, IPermissionStore
         Assert.Equal(1, userId);
         return Task.FromResult(new PermissionSnapshot(!Denied.Contains(permissionKey), false));
     }
-    public async Task<HttpResponseMessage> Send(string method, string route, string? body = null, bool authenticated = true, string? rawQuery = null, Action<HttpRequestMessage>? change = null)
+    public async Task<HttpResponseMessage> Send(string method, string route, string? body = null, bool authenticated = true, string? rawQuery = null,
+        Action<HttpRequestMessage>? change = null, string? correlationId = null)
     {
         if (authenticated && _token == null)
         {
@@ -387,6 +388,7 @@ internal sealed class InventoryEndpointFixture : IDisposable, IPermissionStore
         }
         using var request = new HttpRequestMessage(new HttpMethod(method), AuthFixture.Origin + "/api/v1" + route);
         if (authenticated) request.Headers.Add("Authorization", "Bearer " + _token);
+        if (correlationId != null) request.Headers.Add("X-Correlation-ID", correlationId);
         if (rawQuery != null) request.Headers.Add("X-Test-Raw-Query", rawQuery);
         if (method != "GET") { request.Headers.Add("Origin", AuthFixture.Origin); request.Headers.Add("Sec-Fetch-Site", "same-origin"); }
         if (body != null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");

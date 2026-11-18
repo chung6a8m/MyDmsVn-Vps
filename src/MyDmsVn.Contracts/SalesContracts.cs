@@ -197,7 +197,9 @@ public sealed class SalesReceiptDto
 
 public sealed class SalesReceiptListRequest
 {
+#if !NET10_0_OR_GREATER
     [JsonConstructor]
+#endif
     public SalesReceiptListRequest(DateTime? fromDate, DateTime? toDate, int? customerId, int? warehouseId, int? employeeId, string? status, int? productId, string? search, int? pageSize = null, string? cursor = null)
     {
         FromDate = fromDate.HasValue ? SalesCalendarDateJsonConverter.Normalize(fromDate.Value) : (DateTime?)null;
@@ -211,6 +213,13 @@ public sealed class SalesReceiptListRequest
         PageSize = pageSize ?? 50;
         Cursor = cursor;
     }
+#if NET10_0_OR_GREATER
+    [JsonConstructor]
+    private SalesReceiptListRequest(DateTime? fromDate, DateTime? toDate, int? customerId, int? warehouseId, int? employeeId, string? status, int? productId, string? search, int pageSize = 50, string? cursor = null)
+        : this(fromDate, toDate, customerId, warehouseId, employeeId, status, productId, search, (int?)pageSize, cursor)
+    {
+    }
+#endif
     [JsonConverter(typeof(SalesCalendarDateJsonConverter))]
     public DateTime? FromDate { get; }
     [JsonConverter(typeof(SalesCalendarDateJsonConverter))]
@@ -221,6 +230,9 @@ public sealed class SalesReceiptListRequest
     public string? Status { get; }
     public int? ProductId { get; }
     public string? Search { get; }
+#if NET10_0_OR_GREATER
+    [JsonConverter(typeof(SalesPageSizeJsonConverter))]
+#endif
     public int PageSize { get; }
     public string? Cursor { get; }
 }

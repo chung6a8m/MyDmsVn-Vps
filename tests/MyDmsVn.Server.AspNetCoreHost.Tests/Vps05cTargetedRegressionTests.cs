@@ -28,21 +28,28 @@ public sealed class Vps05cTargetedRegressionTests
     }
 
     [Fact]
-    public void NullableSalesListCalendarConverterRoundTripsValueNullAndRejectsTimestamp()
+    public void SalesListDtoPreservesNullableCalendarAndPageSizeConstructorSemanticsUnderStj()
     {
         var options = new JsonSerializerOptions
         {
-            Converters = { new SalesCalendarDateJsonConverter() },
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         };
 
-        DateTime? fromDate = new DateTime(2026, 11, 18, 23, 59, 58, DateTimeKind.Utc);
-        Assert.Equal("\"2026-11-18\"", JsonSerializer.Serialize(fromDate, options));
-        Assert.Equal("null", JsonSerializer.Serialize<DateTime?>(null, options));
-        var toDate = JsonSerializer.Deserialize<DateTime?>("\"2026-11-19\"", options);
-        Assert.Equal(new DateTime(2026, 11, 19), toDate);
-        Assert.Equal(DateTimeKind.Unspecified, toDate!.Value.Kind);
-        Assert.Null(JsonSerializer.Deserialize<DateTime?>("null", options));
-        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<DateTime?>(
-            "\"2026-11-19T00:00:00Z\"", options));
+        var request = JsonSerializer.Deserialize<SalesReceiptListRequest>(
+            "{\"fromDate\":null,\"toDate\":\"2026-11-19\",\"pageSize\":null}", options);
+        Assert.NotNull(request);
+        Assert.Null(request!.FromDate);
+        Assert.Equal(new DateTime(2026, 11, 19), request.ToDate);
+        Assert.Equal(DateTimeKind.Unspecified, request.ToDate!.Value.Kind);
+        Assert.Equal(50, request.PageSize);
+        Assert.Equal(50, JsonSerializer.Deserialize<SalesReceiptListRequest>(
+            "{\"fromDate\":null,\"toDate\":null}", options)!.PageSize);
+
+        var explicitPageSize = JsonSerializer.Deserialize<SalesReceiptListRequest>(
+            "{\"fromDate\":\"2026-11-18\",\"toDate\":null,\"pageSize\":25}", options);
+        Assert.Equal(25, explicitPageSize!.PageSize);
+        Assert.Equal("2026-11-18", explicitPageSize.FromDate!.Value.ToString("yyyy-MM-dd"));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<SalesReceiptListRequest>(
+            "{\"fromDate\":\"2026-11-19T00:00:00Z\",\"pageSize\":50}", options));
     }
 }

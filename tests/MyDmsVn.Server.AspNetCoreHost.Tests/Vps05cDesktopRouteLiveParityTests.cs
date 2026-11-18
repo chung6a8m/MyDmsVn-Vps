@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -20,9 +21,12 @@ using MyDmsVn.Contracts.Security;
 using MyDmsVn.Server.Application;
 using MyDmsVn.Server.Application.Catalog;
 using MyDmsVn.Server.Application.Identity;
+using MyDmsVn.Server.Application.Inventory;
+using MyDmsVn.Server.Application.Sales;
 using MyDmsVn.Server.Application.Security;
 using MyDmsVn.Server.HttpHost;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using Xunit;
 
 namespace MyDmsVn.Server.AspNetCoreHost.Tests;
@@ -67,6 +71,71 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         { "VPS02-IMPORT-APPLY", "POST", "/api/v1/security/import/apply", "{\"targetType\":1,\"targetId\":3,\"json\":\"{\\\"schemaVersion\\\":1,\\\"targetType\\\":\\\"Role\\\",\\\"targetId\\\":3,\\\"entries\\\":[]}\",\"expectedTargetRevision\":9007199254740993,\"expectedCatalogDigest\":\"digest\"}", "import-apply" },
         { "VPS02-FOUNDATION", "GET", "/api/v1/foundation/status?clientName=Desktop", null, "foundation" },
     };
+
+    public static TheoryData<string, string, string, string?, string> LegacyDataRoutes => new()
+    {
+        { "VPS01-SALES-LIST", "GET", "/api/v1/sales-receipts", null, "web2-v1/sales-list-response.json" },
+        { "VPS01-SALES-GET", "GET", "/api/v1/sales-receipts/9223372036854775807", null, "web2-v1/sales-get-posted-response.json" },
+        { "VPS01-SALES-CREATE", "POST", "/api/v1/sales-receipts", "web2-v1/sales-create-request.json", "web2-v1/sales-create-response.json" },
+        { "VPS01-SALES-UPDATE", "PUT", "/api/v1/sales-receipts/9223372036854775807/draft", "web2-v1/sales-update-request.json", "web2-v1/sales-update-response.json" },
+        { "VPS01-SALES-POST", "POST", "/api/v1/sales-receipts/9223372036854775807/post", "web2-v1/sales-post-request.json", "web2-v1/sales-post-response.json" },
+        { "VPS01-LOOKUP-PRODUCTS", "GET", "/api/v1/catalog/products/lookup?search=abc&limit=25", null, "web2-v1/catalog-products-response.json" },
+        { "VPS01-LOOKUP-CUSTOMERS", "GET", "/api/v1/catalog/customers/lookup?search=abc&limit=25", null, "web2-v1/catalog-customers-response.json" },
+        { "VPS01-LOOKUP-WAREHOUSES", "GET", "/api/v1/catalog/warehouses/lookup?search=abc&limit=25", null, "web2-v1/catalog-warehouses-response.json" },
+        { "VPS01-LOOKUP-EMPLOYEES", "GET", "/api/v1/catalog/employees/lookup?search=abc&limit=25", null, "web2-v1/catalog-employees-response.json" },
+        { "VPS01-RECEIPT-LIST", "GET", "/api/v1/goods-receipts?pageNumber=1&pageSize=25", null, "web3-v1/receipt-list-response.json" },
+        { "VPS01-RECEIPT-GET", "GET", "/api/v1/goods-receipts/9007199254740993", null, "web3-v1/receipt-get-posted-response.json" },
+        { "VPS01-RECEIPT-CREATE", "POST", "/api/v1/goods-receipts", "web3-v1/receipt-create-request.json", "web3-v1/receipt-create-response.json" },
+        { "VPS01-RECEIPT-UPDATE", "PUT", "/api/v1/goods-receipts/9007199254740993/draft", "web3-v1/receipt-update-request.json", "web3-v1/receipt-update-response.json" },
+        { "VPS01-RECEIPT-POST", "POST", "/api/v1/goods-receipts/9007199254740993/post", "web3-v1/receipt-post-request.json", "web3-v1/receipt-post-response.json" },
+        { "VPS01-INVENTORY-BALANCES", "GET", "/api/v1/inventory/balances?pageNumber=1&pageSize=25", null, "web3-v1/balances-response.json" },
+        { "VPS01-INVENTORY-STOCK-CARD", "GET", "/api/v1/inventory/stock-card?productId=104&warehouseId=102&pageNumber=1&pageSize=25", null, "web3-v1/stock-card-response.json" },
+    };
+
+    public static TheoryData<string, string, string, string?, bool, bool> LegacyControlRoutes => new()
+    {
+        { "VPS01-HEALTH", "GET", "/api/v1/health", null, false, false },
+        { "VPS01-AUTH-LOGIN", "POST", "/api/v1/auth/login", "{\"username\":\"alice\",\"password\":\"correct-secret\"}", false, false },
+        { "VPS01-AUTH-REFRESH", "POST", "/api/v1/auth/refresh", null, false, true },
+        { "VPS01-AUTH-LOGOUT", "POST", "/api/v1/auth/logout", null, false, true },
+        { "VPS01-AUTH-ME", "GET", "/api/v1/auth/me", null, true, false },
+        { "VPS01-AUTH-CAPABILITIES", "GET", "/api/v1/auth/capabilities?feature=sales-receipts", null, true, false },
+        { "VPS01-OPERATIONS-CONTEXT", "GET", "/api/v1/operations/context", null, true, false },
+        { "VPS01-OPERATIONS-STATUS", "GET", "/api/v1/operations/11111111-1111-4111-8111-111111111111", null, true, false },
+        { "VPS01-RESOLUTION-CONTEXT", "GET", "/api/v2/operations/context", null, true, false },
+        { "VPS01-RESOLUTION-STATUS", "GET", "/api/v2/operations/11111111-1111-4111-8111-111111111111/resolution", null, true, false },
+        { "VPS01-RESEND-CONTEXT", "GET", "/api/v3/operations/resend-context", null, true, false },
+        { "VPS01-RESEND-RECEIPT", "GET", "/api/v3/operations/11111111-1111-4111-8111-111111111111/resend-receipt", null, true, false },
+        { "VPS01-RESEND-ELIGIBILITY", "GET", "/api/v3/operations/11111111-1111-4111-8111-111111111111/resend-eligibility", null, true, false },
+    };
+
+    [Theory]
+    [MemberData(nameof(LegacyControlRoutes))]
+    public async Task LegacyControlRouteMatchesLiveNet48RawResponse(
+        string caseId, string method, string path, string? body, bool authenticated, bool cookie)
+    {
+        await using var fixture = await DesktopLiveFixture.StartAsync();
+        using var response = await fixture.SendControlAsync(method, path, body, authenticated, cookie);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        AssertMatchesNet48(caseId, "success", response, bytes);
+    }
+
+    [Theory]
+    [MemberData(nameof(LegacyDataRoutes))]
+    public async Task LegacyDataRouteDispatchesThroughKestrelAndMatchesFrozenLiveNet48Corpus(
+        string caseId, string method, string path, string? requestFile, string responseFile)
+    {
+        _ = responseFile;
+        await using var fixture = await DesktopLiveFixture.StartAsync();
+        var body = requestFile == null ? null : CorpusText(requestFile);
+        using var response = await fixture.SendAsync(method, path, body);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        var actual = Encoding.UTF8.GetString(bytes);
+        Assert.True(response.StatusCode == HttpStatusCode.OK,
+            caseId + ": " + actual + Environment.NewLine + fixture.LastException);
+        AssertMatchesNet48(caseId, "success", response, bytes);
+        Assert.NotNull(fixture.LastRequest);
+    }
 
     [Theory]
     [MemberData(nameof(Cases))]
@@ -156,6 +225,19 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         Assert.Equal(caseId == "VPS02-PERMISSION-CHECK" ? 0 : 1, fixture.HandlerCalls);
     }
 
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public async Task PreviouslyRouteOnlySignaturePreservesUnauthenticatedResponseAndSecurityHeaders(
+        string caseId, string method, string path, string? body, string expectedKind)
+    {
+        _ = expectedKind;
+        await using var fixture = await DesktopLiveFixture.StartAsync();
+        using var response = await fixture.SendAsync(method, path, body, authenticated: false);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        AssertMatchesNet48(caseId, "unauthenticated", response, bytes);
+        Assert.Equal(0, fixture.HandlerCalls);
+    }
+
     private static void AssertEnvelope(HttpResponseMessage response, string body, string code)
     {
         Assert.Equal(Correlation, response.Headers.GetValues("X-Correlation-ID").Single());
@@ -178,7 +260,27 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         Assert.Equal(expected.CacheControl,
             response.Headers.TryGetValues("Cache-Control", out var cache)
                 ? string.Join(",", cache) : string.Empty);
-        Assert.Equal(expected.BodyBase64, Convert.ToBase64String(body));
+        Assert.Equal(expected.Pragma,
+            response.Headers.TryGetValues("Pragma", out var pragma) ? string.Join(",", pragma) : string.Empty);
+        Assert.Equal(expected.WwwAuthenticate,
+            response.Headers.TryGetValues("WWW-Authenticate", out var authenticate) ? string.Join(",", authenticate) : string.Empty);
+        Assert.Equal(expected.XContentTypeOptions,
+            response.Headers.TryGetValues("X-Content-Type-Options", out var contentOptions) ? string.Join(",", contentOptions) : string.Empty);
+        Assert.Equal(expected.Hsts,
+            response.Headers.TryGetValues("Strict-Transport-Security", out var hsts) ? string.Join(",", hsts) : string.Empty);
+        if (caseId is "VPS01-AUTH-LOGIN" or "VPS01-AUTH-REFRESH")
+        {
+            var legacy = Newtonsoft.Json.Linq.JObject.Parse(
+                Encoding.UTF8.GetString(Convert.FromBase64String(expected.BodyBase64)));
+            var current = Newtonsoft.Json.Linq.JObject.Parse(Encoding.UTF8.GetString(body));
+            ((Newtonsoft.Json.Linq.JObject)legacy["data"]!).Property("accessToken")!.Remove();
+            ((Newtonsoft.Json.Linq.JObject)current["data"]!).Property("accessToken")!.Remove();
+            Assert.True(Newtonsoft.Json.Linq.JToken.DeepEquals(legacy, current), caseId);
+        }
+        else
+        {
+            Assert.Equal(expected.BodyBase64, Convert.ToBase64String(body));
+        }
     }
 
     private static readonly Lazy<IReadOnlyList<Net48Observation>> Net48Observations = new(() =>
@@ -196,6 +298,10 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         public string ContentType { get; set; } = string.Empty;
         public string CorrelationId { get; set; } = string.Empty;
         public string CacheControl { get; set; } = string.Empty;
+        public string Pragma { get; set; } = string.Empty;
+        public string WwwAuthenticate { get; set; } = string.Empty;
+        public string XContentTypeOptions { get; set; } = string.Empty;
+        public string Hsts { get; set; } = string.Empty;
         public string BodyBase64 { get; set; } = string.Empty;
     }
 
@@ -285,15 +391,54 @@ public sealed class Vps05cDesktopRouteLiveParityTests
     private static void AssertActive(int id, bool active)
     { Assert.Equal(1, id); Assert.False(active); }
 
+    private static string CorpusText(string relativePath) =>
+        File.ReadAllText(Path.Combine(LocateRoot(), "docs", "contracts", relativePath.Replace('/', Path.DirectorySeparatorChar)));
+
+    private static Newtonsoft.Json.Linq.JObject CorpusJson(string relativePath)
+    {
+        using var reader = new JsonTextReader(new StringReader(CorpusText(relativePath)))
+        { DateParseHandling = DateParseHandling.None };
+        return Newtonsoft.Json.Linq.JObject.Load(reader);
+    }
+
+    private static T CorpusData<T>(string relativePath) =>
+        JsonConvert.DeserializeObject<T>(CorpusJson(relativePath)["data"]!.ToString(),
+            CorpusSettings)!;
+
+    private static readonly JsonSerializerSettings CorpusSettings = new()
+    {
+        ContractResolver = new CamelCasePropertyNamesContractResolver(),
+        DateTimeZoneHandling = DateTimeZoneHandling.Utc,
+    };
+
+    private static GoodsReceiptDto ReceiptDetail(string relativePath)
+    {
+        return ReceiptDetail(CorpusJson(relativePath)["data"]!);
+    }
+
+    private static GoodsReceiptDto ReceiptDetail(Newtonsoft.Json.Linq.JToken data) => new(
+        long.Parse((string)data["receiptId"]!, CultureInfo.InvariantCulture),
+        (string)data["receiptNumber"]!,
+        DateTime.ParseExact((string)data["receiptDate"]!, "yyyy-MM-dd", CultureInfo.InvariantCulture),
+        (int)data["warehouseId"]!, (int)data["employeeId"]!, (string)data["status"]!,
+        (string?)data["note"],
+        data["postedAtUtc"]!.Type == Newtonsoft.Json.Linq.JTokenType.Null ? null :
+            DateTime.Parse((string)data["postedAtUtc"]!, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal),
+        (string)data["version"]!,
+        data["lines"]!.Select(line => new GoodsReceiptLineDto(
+            long.Parse((string)line["receiptLineId"]!, CultureInfo.InvariantCulture),
+            (int)line["lineNumber"]!, (int)line["productId"]!,
+            decimal.Parse((string)line["quantity"]!, CultureInfo.InvariantCulture),
+            decimal.Parse((string)line["unitCost"]!, CultureInfo.InvariantCulture),
+            (string?)line["productDisplayName"], (bool)line["productIsActive"]!)),
+        (string?)data["warehouseDisplayName"], (bool)data["warehouseIsActive"]!,
+        (string?)data["employeeDisplayName"], (bool)data["employeeIsActive"]!);
+
     private static ProductDto Product() => new(1, "P1", "Product", "kg", true);
     private static WarehouseDto Warehouse() => new(1, "W1", "Warehouse", null, true);
     private static EmployeeDto Employee() => new(1, "E1", "Employee", null, 1, true);
     private static CustomerDto Customer() => new(1, "C1", "Customer", null, null, null, true);
-    private static PermissionAssignmentImportPreviewDto ImportPreview() => new(
-        new ParsedPermissionAssignmentImportDto(1, PermissionImportTargetTypeDto.Role, 3,
-            Array.Empty<PermissionAssignmentImportEntryDto>()),
-        "Role", 0, "digest", Array.Empty<PermissionAssignmentImportEntryDto>());
-
     private sealed class DesktopLiveFixture : IAsyncDisposable
     {
         private static readonly Guid SessionId = Guid.Parse("11111111-1111-4111-8111-111111111111");
@@ -317,7 +462,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             bool throwPermissionStore = false)
         {
             var clock = new FrozenClock();
-            var options = new WebHostOptions("https://localhost", "https://localhost", "vps05c-live",
+            var options = new WebHostOptions("https://web2.mydmsvn.test", "https://web2.mydmsvn.test", "auth-tests",
                 "active", new Dictionary<string, byte[]>
                 {
                     ["active"] = Encoding.UTF8.GetBytes("active-test-key-at-least-32-bytes-long")
@@ -339,6 +484,11 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             builder.Services.AddSingleton<ISecurityAuditReadiness, CoreSecurityAuditReadiness>();
             builder.Services.AddSingleton<IWebAuthSessionStore>(state);
             builder.Services.AddSingleton<IPermissionStore>(state);
+            builder.Services.AddSingleton<IUserStore>(state);
+            builder.Services.AddSingleton<IUserAccountValidator>(state);
+            builder.Services.AddSingleton<ISecurityAuditSink>(state);
+            builder.Services.AddSingleton<IPasswordHasher, TestPasswords>();
+            builder.Services.AddSingleton<ILegacyPasswordVerifier, TestPasswords>();
             AddHandlers(builder.Services, state);
 
             var app = builder.Build();
@@ -352,7 +502,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 // Kestrel uses an ephemeral loopback HTTP listener only as an in-process
                 // test transport. Admission still sees the production public HTTPS origin.
                 context.Request.Scheme = "https";
-                context.Request.Host = new Microsoft.AspNetCore.Http.HostString("localhost");
+                context.Request.Host = new Microsoft.AspNetCore.Http.HostString("web2.mydmsvn.test");
                 await next().ConfigureAwait(false);
             });
             app.UseRouting();
@@ -363,23 +513,43 @@ public sealed class Vps05cDesktopRouteLiveParityTests
 
             var address = app.Services.GetRequiredService<IServer>()
                 .Features.Get<IServerAddressesFeature>()!.Addresses.Single();
-            var user = CurrentUser.Authenticated(1, "alice", "Alice", true);
+            var user = CurrentUser.Authenticated(1, "authoritative-alice", "Authoritative Alice", true);
             var session = new WebAuthSessionToken(SessionId, user,
                 "22222222-2222-4222-8222-222222222222", clock.UtcNow.AddDays(7), clock.UtcNow.AddDays(30));
             var token = new AccessTokenIssuer(options, clock).Issue(session).Value;
             return new DesktopLiveFixture(app, new HttpClient { BaseAddress = new Uri(address) }, token, errors, state);
         }
 
-        public async Task<HttpResponseMessage> SendAsync(string method, string path, string? body)
+        public async Task<HttpResponseMessage> SendAsync(string method, string path, string? body,
+            bool authenticated = true)
         {
             using var request = new HttpRequestMessage(new HttpMethod(method), path);
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+            if (authenticated)
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
             request.Headers.Add("X-Correlation-ID", Correlation);
             if (method is "POST" or "PUT")
             {
-                request.Headers.Add("Origin", "https://localhost");
+                request.Headers.Add("Origin", "https://web2.mydmsvn.test");
                 request.Headers.Add("Sec-Fetch-Site", "same-origin");
             }
+            if (body != null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+            return await _client.SendAsync(request);
+        }
+
+        public async Task<HttpResponseMessage> SendControlAsync(string method, string path, string? body,
+            bool authenticated, bool cookie)
+        {
+            using var request = new HttpRequestMessage(new HttpMethod(method), path);
+            request.Headers.Add("X-Correlation-ID", Correlation);
+            if (authenticated)
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+            if (method == "POST")
+            {
+                request.Headers.Add("Origin", "https://web2.mydmsvn.test");
+                request.Headers.Add("Sec-Fetch-Site", "same-origin");
+                request.Headers.Add("X-Requested-With", "XMLHttpRequest");
+            }
+            if (cookie) request.Headers.Add("Cookie", "__Host-mydmsvn-rt=22222222-2222-4222-8222-222222222222");
             if (body != null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
             return await _client.SendAsync(request);
         }
@@ -413,13 +583,42 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             Add<CreateCustomerCommand, CustomerDto>(services, state, _ => Customer());
             Add<UpdateCustomerCommand, CustomerDto>(services, state, _ => Customer());
             Add<SetCustomerActiveCommand, UnitResponse>(services, state, _ => UnitResponse.Value);
-            Add<ListPermissionCatalogQuery, PermissionCatalogDto>(services, state, _ => new("1", "digest", Array.Empty<PermissionCatalogItemDto>()));
-            Add<ListSecurityUsersQuery, IReadOnlyList<SecurityUserDto>>(services, state, _ => Array.Empty<SecurityUserDto>());
-            Add<ListSecurityRolesQuery, IReadOnlyList<SecurityRoleDto>>(services, state, _ => Array.Empty<SecurityRoleDto>());
+            Add<ListPermissionCatalogQuery, PermissionCatalogDto>(services, state, _ => new("1", "digest", new[]
+                { new PermissionCatalogItemDto("Security.Users.Manage", "Bảo mật", "Quản lý \"người dùng\"", "Active") }));
+            Add<ListSecurityUsersQuery, IReadOnlyList<SecurityUserDto>>(services, state, _ => new[]
+                { new SecurityUserDto(1, "alice", "Álice \"Admin\"", null, true, 9007199254740993L,
+                    new[] { 7 }, new[] { new SecurityDecisionDto("Security.Users.Manage", null) }, true) });
+            Add<ListSecurityRolesQuery, IReadOnlyList<SecurityRoleDto>>(services, state, _ => new[]
+                { new SecurityRoleDto(7, "Quản trị", true, 9007199254740993L, new[] { 1 }, new[] { "Security.Users.Manage" }) });
             Add<MutateSecurityAdministrationCommand, SecurityAdministrationResultDto>(services, state, _ => new(1, true));
-            Add<PreviewPermissionAssignmentImportQuery, PermissionAssignmentImportPreviewDto>(services, state, _ => ImportPreview());
-            Add<ApplyPermissionAssignmentImportCommand, PermissionAssignmentImportResultDto>(services, state, _ => new(2, 1, true));
+            Add<PreviewPermissionAssignmentImportQuery, PermissionAssignmentImportPreviewDto>(services, state, _ => new(
+                new ParsedPermissionAssignmentImportDto(1, PermissionImportTargetTypeDto.Role, 3,
+                    new[] { new PermissionAssignmentImportEntryDto("Báo cáo \"Đặc biệt\"\n", true) }),
+                "Quản trị", 1, "digest", new[] { new PermissionAssignmentImportEntryDto("Báo cáo \"Đặc biệt\"\n", true) }));
+            Add<ApplyPermissionAssignmentImportCommand, PermissionAssignmentImportResultDto>(services, state, _ => new(9007199254740993L, 1, true));
             Add<GetFoundationStatusQuery, FoundationStatus>(services, state, _ => new(true, "net48"));
+            Add<ListSalesReceiptsQuery, SalesReceiptListPage>(services, state, _ => CorpusData<SalesReceiptListPage>("web2-v1/sales-list-response.json"));
+            Add<GetSalesReceiptByIdQuery, SalesReceiptDto>(services, state, _ => CorpusData<SalesReceiptDto>("web2-v1/sales-get-posted-response.json"));
+            Add<CreateSalesReceiptDraftCommand, SalesReceiptDto>(services, state, _ => CorpusData<SalesReceiptDto>("web2-v1/sales-create-response.json"));
+            Add<UpdateSalesReceiptDraftCommand, SalesReceiptDto>(services, state, _ => CorpusData<SalesReceiptDto>("web2-v1/sales-update-response.json"));
+            Add<PostSalesReceiptCommand, PostSalesReceiptResponse>(services, state, _ => CorpusData<PostSalesReceiptResponse>("web2-v1/sales-post-response.json"));
+            Add<LookupProductsQuery, IReadOnlyList<CatalogLookupDto>>(services, state, _ => CorpusData<IReadOnlyList<CatalogLookupDto>>("web2-v1/catalog-products-response.json"));
+            Add<LookupCustomersQuery, IReadOnlyList<CatalogLookupDto>>(services, state, _ => CorpusData<IReadOnlyList<CatalogLookupDto>>("web2-v1/catalog-customers-response.json"));
+            Add<LookupWarehousesQuery, IReadOnlyList<CatalogLookupDto>>(services, state, _ => CorpusData<IReadOnlyList<CatalogLookupDto>>("web2-v1/catalog-warehouses-response.json"));
+            Add<LookupEmployeesQuery, IReadOnlyList<CatalogLookupDto>>(services, state, _ => CorpusData<IReadOnlyList<CatalogLookupDto>>("web2-v1/catalog-employees-response.json"));
+            Add<ListGoodsReceiptsQuery, PagedResult<GoodsReceiptDto>>(services, state, _ =>
+            {
+                var data = CorpusJson("web3-v1/receipt-list-response.json")["data"]!;
+                return new PagedResult<GoodsReceiptDto>(data["items"]!.Select(ReceiptDetail).ToArray(),
+                    (int)data["pageNumber"]!, (int)data["pageSize"]!,
+                    long.Parse((string)data["totalCount"]!, CultureInfo.InvariantCulture));
+            });
+            Add<GetGoodsReceiptByIdQuery, GoodsReceiptDto>(services, state, _ => ReceiptDetail("web3-v1/receipt-get-posted-response.json"));
+            Add<CreateGoodsReceiptDraftCommand, GoodsReceiptDto>(services, state, _ => ReceiptDetail("web3-v1/receipt-create-response.json"));
+            Add<UpdateGoodsReceiptDraftCommand, GoodsReceiptDto>(services, state, _ => ReceiptDetail("web3-v1/receipt-update-response.json"));
+            Add<PostGoodsReceiptCommand, PostGoodsReceiptResponse>(services, state, _ => CorpusData<PostGoodsReceiptResponse>("web3-v1/receipt-post-response.json"));
+            Add<GetStockBalancesQuery, PagedResult<StockBalanceRow>>(services, state, _ => CorpusData<PagedResult<StockBalanceRow>>("web3-v1/balances-response.json"));
+            Add<GetStockCardQuery, PagedResult<StockCardRow>>(services, state, _ => CorpusData<PagedResult<StockCardRow>>("web3-v1/stock-card-response.json"));
         }
 
         private static void Add<TRequest, TResult>(IServiceCollection services, DesktopState state,
@@ -446,22 +645,37 @@ public sealed class Vps05cDesktopRouteLiveParityTests
 
     private sealed class FrozenClock : IUtcClock
     {
-        public DateTime UtcNow => new(2026, 11, 18, 1, 0, 0, DateTimeKind.Utc);
+        public DateTime UtcNow => new(2026, 10, 31, 9, 0, 0, DateTimeKind.Utc);
     }
 
-    private sealed class DesktopState : IWebAuthSessionStore, IPermissionStore
+    private sealed class DesktopState : IWebAuthSessionStore, IPermissionStore, IUserStore,
+        IUserAccountValidator, ISecurityAuditSink
     {
         public List<object> Calls { get; } = new();
         public List<string> PermissionChecks { get; } = new();
         public bool DenyPermissions { get; init; }
         public bool ThrowHandlers { get; init; }
         public bool ThrowPermissionStore { get; init; }
+        public bool Revoked { get; private set; }
         public Task<CurrentUser?> GetActiveUserAsync(Guid sessionId, int userId, CancellationToken token) =>
-            Task.FromResult<CurrentUser?>(sessionId == Guid.Parse("11111111-1111-4111-8111-111111111111") && userId == 1
-                ? CurrentUser.Authenticated(1, "alice", "Alice", true) : null);
-        public Task<WebAuthSessionToken?> IssueAsync(int userId, CancellationToken token) => throw new NotSupportedException();
-        public Task<WebAuthSessionToken?> RotateAsync(string refreshToken, CancellationToken token) => throw new NotSupportedException();
-        public Task RevokeAsync(string refreshToken, CancellationToken token) => throw new NotSupportedException();
+            Task.FromResult<CurrentUser?>(!Revoked && sessionId == Guid.Parse("11111111-1111-4111-8111-111111111111") && userId == 1
+                ? CurrentUser.Authenticated(1, "authoritative-alice", "Authoritative Alice", true) : null);
+        public Task<WebAuthSessionToken?> IssueAsync(int userId, CancellationToken token) =>
+            Task.FromResult<WebAuthSessionToken?>(Token("22222222-2222-4222-8222-222222222222"));
+        public Task<WebAuthSessionToken?> RotateAsync(string refreshToken, CancellationToken token) =>
+            Task.FromResult<WebAuthSessionToken?>(Revoked ? null : Token("33333333-3333-4333-8333-333333333333"));
+        public Task RevokeAsync(string refreshToken, CancellationToken token) { Revoked = true; return Task.CompletedTask; }
+        public Task<UserAccount?> FindByNormalizedUsernameAsync(string name, CancellationToken token) =>
+            Task.FromResult<UserAccount?>(name == "ALICE" ? new UserAccount(1, "alice", "ALICE", "Alice", true, "test-hash", "", "test") : null);
+        public Task<bool> TryReplacePasswordAsync(PasswordReplacement replacement, CancellationToken token) =>
+            throw new NotSupportedException();
+        public Task<bool> IsActiveAsync(int userId, CancellationToken token) => Task.FromResult(!Revoked);
+        public Task WriteAsync(SecurityAuditEntry entry, CancellationToken token) => Task.CompletedTask;
+        private static WebAuthSessionToken Token(string refresh) => new(
+            Guid.Parse("11111111-1111-4111-8111-111111111111"),
+            CurrentUser.Authenticated(1, "authoritative-alice", "Authoritative Alice", true), refresh,
+            new DateTime(2026, 11, 7, 9, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 11, 30, 9, 0, 0, DateTimeKind.Utc));
         public Task<PermissionSnapshot> GetSnapshotAsync(int userId, string permissionKey, CancellationToken token)
         {
             if (ThrowPermissionStore)
@@ -470,5 +684,17 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             PermissionChecks.Add(permissionKey);
             return Task.FromResult(new PermissionSnapshot(!DenyPermissions, false));
         }
+    }
+
+    private sealed class TestPasswords : IPasswordHasher, ILegacyPasswordVerifier
+    {
+        public string Algorithm => "test";
+        public string Hash(string password) => password;
+        public bool Verify(string password, string passwordHash) =>
+            password == "correct-secret" && passwordHash == "test-hash";
+        public bool NeedsRehash(string passwordHash) => false;
+        public void VerifyForTiming(string password) { }
+        public bool Supports(string algorithm) => false;
+        public bool Verify(string algorithm, string password, string passwordHash, string passwordSalt) => false;
     }
 }
