@@ -1,0 +1,46 @@
+name: VPS-07B — Journal Bridge gated build and SQL acceptance
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps07b-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runner-compile:
+    name: SDK10.0.404 / explicit FluentMigrator Runner / source integrity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.404'
+      - name: Verify immutable SQL source and imported checksum
+        run: python3 scripts/verify-vps-07a.py
+      - name: Compile standalone net10 Runner and verify dependency tree
+        working-directory: src/MyDmsVn.Server.FluentMigrator.Cli
+        run: |
+          set -euo pipefail
+          test "$(dotnet --version)" = "10.0.404"
+          dotnet restore MyDmsVn.Server.FluentMigrator.Cli.csproj -p:Vps04Server=true --force-evaluate -v minimal
+          dotnet build MyDmsVn.Server.FluentMigrator.Cli.csproj -c Release -f net10.0 -p:Vps04Server=true --no-restore -warnaserror -v minimal
+          test -f packages.lock.json || { echo "::error::Missing NuGet lock file"; exit 1; }
+      - name: Preserve generated NuGet lock to freeze in review commit
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps07b-runner-lock
+          path: src/MyDmsVn.Server.FluentMigrator.Cli/packages.lock.json
+          if-no-files-found: warn
+      - name: Display lock in deterministic UTF-8 for explicit source pinning
+        if: success()
+        run: cat src/MyDmsVn.Server.FluentMigrator.Cli/packages.lock.json
