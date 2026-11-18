@@ -55,6 +55,8 @@ internal static class Program
         var superuser = Environment.GetEnvironmentVariable("MYDMSVN_WEB_SUPERUSER_USERNAME");
         if (string.IsNullOrWhiteSpace(connection) || string.IsNullOrWhiteSpace(superuser))
             throw new InvalidOperationException("Missing restricted web deployment settings.");
+        if (proxy != null)
+            LoopbackProxyBoundary.RequireSqlTls(connection!);
 
         // Keep the exact legacy schema/principal/superuser refusal gates, before opening a listener.
         using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)))

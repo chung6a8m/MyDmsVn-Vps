@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Data.SqlClient;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -40,6 +41,22 @@ internal static class LoopbackProxyBoundary
         if (token == null || !TokenPattern.IsMatch(token))
             throw new InvalidOperationException("Missing bounded proxy credential.");
         return new LoopbackProxySettings(new Uri(publicOrigin).Authority, token);
+    }
+
+    internal static void RequireSqlTls(string connectionString)
+    {
+        // Mandatory/Strict with a certificate trusted by the local OS. A proxy
+        // deployment must not accept explicit plaintext or trust-all SQL settings.
+        try
+        {
+            var options = new SqlConnectionStringBuilder(connectionString);
+            if (!(bool)options.Encrypt || options.TrustServerCertificate)
+                throw new InvalidOperationException("Verified SQL TLS is required.");
+        }
+        catch (ArgumentException)
+        {
+            throw new InvalidOperationException("Invalid SQL TLS settings.");
+        }
     }
 
     internal static void ConfigureForwardedHeaders(ForwardedHeadersOptions options)

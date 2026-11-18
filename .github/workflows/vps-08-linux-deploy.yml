@@ -72,8 +72,8 @@ jobs:
           node = ET.parse(f).getroot().find(f'./{ns}ResultSummary/{ns}Counters')
           assert node is not None, 'Missing native TRX counters'
           counts = {x:int(node.attrib[x]) for x in ['total','executed','passed','failed','notExecuted']}
-          assert counts == {'total':23,'executed':23,'passed':23,'failed':0,'notExecuted':0}, counts
-          print('VPS08_NATIVE_PROXY_PASS: discovered=23 executed=23 passed=23 failed=0 skipped=0')
+          assert counts == {'total':27,'executed':27,'passed':27,'failed':0,'notExecuted':0}, counts
+          print('VPS08_NATIVE_PROXY_PASS: discovered=27 executed=27 passed=27 failed=0 skipped=0')
           PY
       - name: Publish framework-dependent net10 host with locked runtime graph
         working-directory: src/MyDmsVn.Server.AspNetCoreHost

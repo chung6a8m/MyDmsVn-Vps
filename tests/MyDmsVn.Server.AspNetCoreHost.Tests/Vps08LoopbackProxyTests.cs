@@ -95,6 +95,24 @@ public sealed class Vps08LoopbackProxyTests
         Assert.Equal("no-store", c.Response.Headers.CacheControl.ToString());
     }
 
+    [Theory]
+    [InlineData("Encrypt=False;TrustServerCertificate=False")]
+    [InlineData("Encrypt=True;TrustServerCertificate=True")]
+    [InlineData("Encrypt=Optional;TrustServerCertificate=True")]
+    public void ProxyModeRejectsUnverifiedSqlTransport(string tlsSettings)
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            LoopbackProxyBoundary.RequireSqlTls(
+                "Server=db.internal.example;Database=mydmsvn;User ID=runtime;Password=placeholder;" + tlsSettings));
+    }
+
+    [Fact]
+    public void ProxyModeAdmitsVerifiedTlsSqlTransport()
+    {
+        LoopbackProxyBoundary.RequireSqlTls(
+            "Server=db.internal.example;Database=mydmsvn;User ID=runtime;Password=placeholder;Encrypt=True;TrustServerCertificate=False");
+    }
+
     [Fact]
     public void KnownProxyListIsOnlyIpv4LoopbackAndForwardsOnlyForAndProto()
     {
