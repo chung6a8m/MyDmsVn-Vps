@@ -10,8 +10,8 @@ project_docs = {path: ET.parse(path).getroot() for path in projects}
 helpers = [path for path, doc in project_docs.items()
            if any(node.text == "false" for node in doc.iter("IsTestProject"))]
 suites = [path for path in projects if path not in helpers]
-assert len(projects) == 21 and len(helpers) == 7 and len(suites) == 14, \
-    "Test project inventory drift (VPS-07A adds one non-xUnit net10 contract executable)"
+assert len(projects) == 22 and len(helpers) == 7 and len(suites) == 15, \
+    "Test project inventory drift (VPS-09 adds one net10 xUnit acceptance suite)"
 ci_bootstrap = root / "tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj"
 assert ci_bootstrap in helpers and ci_bootstrap not in suites, \
     "Original DbUp SQL13 bootstrap must remain an explicitly marked non-test tool"
@@ -41,7 +41,10 @@ for path in suites:
     target_frameworks = props("TargetFramework")
     if path.name == "MyDmsVn.Server.Application.Tests.csproj":
         assert target_frameworks == ["net48", "net10.0"], path
-    elif path.name == "MyDmsVn.Server.AspNetCoreHost.Tests.csproj":
+    elif path.name in {
+        "MyDmsVn.Server.AspNetCoreHost.Tests.csproj",
+        "MyDmsVn.Vps09.Acceptance.Tests.csproj",
+    }:
         assert target_frameworks == ["net10.0"], path
     else:
         assert target_frameworks == ["net48"], path
@@ -94,7 +97,7 @@ for test_id, floor in expected_smoke_floors.items():
     assert smoke_matrix.count(row) == 1, f"Missing smoke floor {test_id}={floor}"
 assert smoke_matrix.count("minimum_tests:") == len(expected_smoke_floors), "Unexpected smoke floor inventory"
 
-print("VPS-01 static topology: PASS 13 legacy + 1 net10 executable xUnit v3 projects, 7 non-test helpers (including VPS-07B SQL oracle); 29 routes; 178 fixtures; 4 smoke floors")
+print("VPS-01 static topology: PASS 13 legacy + 2 net10 executable xUnit v3 projects, 7 non-test helpers (including VPS-07B SQL oracle); 29 routes; 178 fixtures; 4 smoke floors")
 
 
 # VPS-02 retains the 29 legacy routes; additions and Desktop mappings are versioned independently.

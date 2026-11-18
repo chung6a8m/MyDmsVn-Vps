@@ -18,32 +18,96 @@ Before dispatch, the independent operator must obtain:
 
 ## Automated parts delivered by the VPS-09 implementation PR
 
+- `docs/testing/vps-09-live-scenarios.json` maps the frozen 57 routes and all unique 293 `(CaseId, Variant)` pairs to method/path template, actor, body/header recipes, preconditions, fault phase, expected status and independent-digest rule. Its twelve SQL Oracle definitions identify scenario/fault linkage. Environment-specific IDs, concrete request bodies and expected values remain in protected external plans, never in Git.
+- `tools/MyDmsVn.Vps09.Acceptance` is a .NET 10 external orchestrator with `preflight`, `routes`, `oracles` and `summarize`. It rejects a stale/dirty SHA, noncanonical or redirecting origin, unverified SQL TLS, actor gaps, duplicate/missing cases, response/Oracle diffs and incomplete cleanup. `summarize` emits `NOT_APPROVED_BY_TOOL`; it cannot sign a packet or issue a release decision.
+- `scripts/vps09_linux_receipt.py` and `scripts/vps09_gui_checklist.py` hash externally captured Linux and attended-GUI evidence. They validate fixed event/checkpoint sets and always leave physical evidence review required. `scripts/vps09_packet_builder.py` produces only an unsigned artifact hash index.
+- `scripts/Invoke-Vps09IntegratedAcceptance.ps1` publishes Desktop net48 x86 and the orchestrator at the exact clean SHA. `Prepare` logs in three protected actors, keeps bearer tokens only in process memory, executes 293 routes and 12 Oracles, and creates a 9-checkpoint GUI template. `Finalize` validates the operator-completed GUI and Linux receipts plus explicit owned-resource cleanup. No production API test hook is introduced.
 - `python3 scripts/vps09_verify.py inventory` checks the independently frozen 57-route / 293-pair inventory plus the 14-gate registry. It does **not** send any HTTP or SQL traffic. The signed verifier rejects duplicate JSON members and uses an immutable byte snapshot for OpenSSL signature verification, avoiding a path swap between verification and parsing. The verifier also rehashes the precise observation/SQL-Oracle JSON bytes it parses, so a file swapped after the artifact-ledger scan cannot pass.
 - `python3 -m unittest discover -s scripts/tests -p 'test_vps09_verify.py' -v` tests Ed25519 receipt admission and refusal (tampered signature, SHA, skipped gate, gaps, fake staging, SQL Oracle diff, symlink, missing CI, untrusted key and more). Synthetic fixtures can never serve as release evidence.
-- [.github/workflows/vps-09-evidence.yml](../../.github/workflows/vps-09-evidence.yml) runs the preceding Linux/Python source checks **and a Windows-2022 PowerShell parser / missing-approval refusal gate** on PR/main. Its manually dispatched protected Windows job performs **only a bounded x86 publish + real remote HTTPS/SQL suite (4 selected existing facts)**, never GUI or release closeout. The separate protected reviewer job validates a previously completed signed packet. Neither runs on normal PR or push.
+- [.github/workflows/vps-09-evidence.yml](../../.github/workflows/vps-09-evidence.yml) runs Linux/Python/.NET source checks **and a Windows-2022 PowerShell parser / missing-approval refusal gate** on PR/main. Manual phases are `bounded`, `prepare`, `finalize` and `review`; protected jobs never run on ordinary PR/push. The review phase only verifies a previously signed packet.
 - `scripts/Invoke-Vps09WindowsAcceptance.ps1` refuses missing opt-in, non-HTTPS/noncanonical origin, untrusted SQL Oracle TLS, moved SHA, any tracked or untracked source modification, a pre-existing evidence output directory, unpinned SDK, wrong x86 PE or skipped TRX. Its sanitized summary explicitly says that attended GUI, physical remote binary identity, 57-route real SQL and release are not verified. Never elevate 4/4 bounded tests into whole-system PASS.
 
-The full 293-route live-SQL runner, unattended Linux reboot/rollback orchestration and attended GUI are **not implemented by this source increment**; their real external evidence is mandatory before a signed full packet can pass. Do not create placeholder PASS rows.
+The tools automate request/Oracle execution and evidence structure, but they do not manufacture physical reboot/rollback or attended GUI proof. A human operator must perform those actions and an independent reviewer must inspect the originals. Do not create placeholder PASS rows.
 
 ## Protected workflow environment admission
 
 The nonproduction protected Environment `vps09-fullstack-nonproduction` requires independent reviewers, prevention of self-review, admin bypass disabled, exact main ref and a Windows self-hosted runner labeled `vps09-attended`. This runner must have actual GUI capabilities and verified separate SQL read-only Oracle access. Provision, through GitHub Environment (not source):
 
 - Secret `VPS09_ISOLATED_SQL_ADMISSION` = `reviewed-isolated-sql13-only`; secret `VPS09_READONLY_SQL_ORACLE` with `Encrypt=True;TrustServerCertificate=False` and server certificate CA/hostname verification; secret `VPS09_JWT_AUDIENCE`.
-- Dedicated seeded nonproduction writer/denied credentials `VPS09_WRITER_USERNAME`, `VPS09_WRITER_PASSWORD`, `VPS09_DENIED_USERNAME`, `VPS09_DENIED_PASSWORD`; never reuse an admin, production or Oracle identity.
-- Variable `VPS09_PUBLIC_ORIGIN` (canonical public HTTPS, no path/query); seed IDs `VPS09_CUSTOMER_ID`, `VPS09_WAREHOUSE_ID`, `VPS09_EMPLOYEE_ID`, `VPS09_PRODUCT_ID`. Operators must independently prove these are isolated disposable test fixtures.
+- Dedicated seeded nonproduction writer/denied/operator credentials `VPS09_WRITER_USERNAME`, `VPS09_WRITER_PASSWORD`, `VPS09_DENIED_USERNAME`, `VPS09_DENIED_PASSWORD`, `VPS09_OPERATOR_USERNAME`, `VPS09_OPERATOR_PASSWORD`; never reuse an admin, production or Oracle identity. `VPS09_CLEANUP_ATTESTATION=confirmed-owned-nonproduction-cleanup` is provided only after cleanup has actually completed.
+- Variable `VPS09_PUBLIC_ORIGIN` (canonical public HTTPS, no path/query); seed IDs `VPS09_CUSTOMER_ID`, `VPS09_WAREHOUSE_ID`, `VPS09_EMPLOYEE_ID`, `VPS09_PRODUCT_ID`; protected paths `VPS09_ROUTE_PLAN_PATH`, `VPS09_ORACLE_PLAN_PATH`, reviewed lowercase SHA-256 pins `VPS09_ROUTE_PLAN_SHA256`, `VPS09_ORACLE_PLAN_SHA256`, `VPS09_EVIDENCE_ROOT`, `VPS09_GUI_CHECKLIST_PATH`, `VPS09_LINUX_RECEIPT_PATH`; identities `VPS09_OPERATOR`, `VPS09_REVIEWER`, `VPS09_OWNER`. Operator must differ from reviewer/Owner. Operators must independently prove all seeds are isolated disposable fixtures.
 
 The second protected Environment `vps09-release-review` requires a separate Linux self-hosted runner labeled `vps09-reviewer`, independent human approval and admin-bypass protection. Its read-only variables: `VPS09_REVIEW_PACKET_PATH` (pre-staged complete packet directory), `VPS09_OWNER_PUBKEY_PATH` (trusted reviewed ED25519 PEM), `VPS09_OWNER_PUBKEY_SHA256` (lowercase SHA-256 of **literal PEM bytes**, fingerprint pinned outside the packet). No private signing key or SQL credential may be stored in the repository. The review runner checks *structural integrity and approved assertions*, not the truth of a real machine event.
 
-Manual workflow can be invoked on main only after actual protected Environment installation and an independently reviewed exact SHA:
+An independent operator can configure the branch/reviewer rule; an admin must separately disable bypass and provision the settings. Verification requires exact main, all setting names and exactly one online dedicated runner, but cannot inspect secret values or physical isolation:
+
+```bash
+python3 scripts/configure_vps09_gates.py configure \
+  --environment vps09-fullstack-nonproduction --reviewer OWNER_REVIEWER_LOGIN
+python3 scripts/configure_vps09_gates.py verify \
+  --environment vps09-fullstack-nonproduction --expected-sha EXACT_40_HEX_MAIN_SHA
+```
+
+The protected route plan contains exactly 293 concrete cases. Each case must match the tracked manifest and contains `caseId`, `variant`, `method`, concrete `/api/...` path, JSON body or null, actor, non-secret headers, expected status and a 64-hex expected body digest derived independently from real-SQL source/oracle rules. It maps actors to protected process environment names, for example `writer -> VPS09_WRITER_BEARER_TOKEN`; never place a bearer token in the file. The Oracle plan contains exactly twelve unique scenarios, read-only single-statement `SELECT`/`WITH` queries and independently prepared canonical expected rows. Mutating or multi-statement Oracle SQL is refused.
+
+Minimal shapes (illustrative placeholders only; not acceptance data):
+
+```json
+{
+  "manifestPath": "C:/reviewed/docs/testing/vps-09-live-scenarios.json",
+  "origin": "https://staging.example",
+  "runner": "windows-attended-machine-hash",
+  "evidenceArtifact": "route-observations.json",
+  "expectedProvenance": "independent-real-sql13-oracle",
+  "actorTokenEnvironment": {
+    "writer": "VPS09_WRITER_BEARER_TOKEN",
+    "denied": "VPS09_DENIED_BEARER_TOKEN",
+    "operator": "VPS09_OPERATOR_BEARER_TOKEN"
+  },
+  "cases": [{
+    "caseId": "VPS02-EXAMPLE",
+    "variant": "success",
+    "method": "POST",
+    "path": "/api/v1/example/123",
+    "body": "{\"ownedFixtureId\":123}",
+    "actor": "writer",
+    "headers": { "X-Correlation-Id": "candidate-owned-id" },
+    "expectedStatus": 200,
+    "expectedBodySha256": "64-lowercase-hex-from-independent-oracle"
+  }]
+}
+```
+
+```json
+{
+  "sqlOracleConnectionStringEnvironment": "VPS04A_SQL_ORACLE_CONNECTION_STRING",
+  "runner": "windows-attended-machine-hash",
+  "evidenceArtifactPrefix": "oracle-",
+  "requiredScenarios": ["all-twelve-registry-names"],
+  "plans": [{
+    "scenario": "one-registry-name",
+    "query": "SELECT ... FROM ... WHERE OwnedFixtureId = 123 ORDER BY ...",
+    "expectedCanonicalJson": "[{\"Column\":\"independently-derived-value\"}]"
+  }]
+}
+```
+
+The real files must list 293 and 12 entries respectively; these one-row snippets intentionally cannot pass admission. An independent reviewer must hash and pin the complete protected route and Oracle plans in GitHub Environment variables before dispatch. The CLI pins the public origin and actor token sources, requires the tracked manifest and exact twelve Oracle registry names, and checks route coverage against that manifest again at summarize time. Never derive expected digests from the responses under test.
+
+Manual workflow can be invoked on main only after actual protected Environment installation and an independently reviewed exact SHA. Run `prepare`, complete the attended checklist and Linux receipt, confirm cleanup, then run `finalize`; use a new evidence directory for every candidate:
 
 ```bash
 gh workflow run vps-09-evidence.yml --repo chung6a8m/MyDmsVn-Vps --ref main \
   -f reviewed_sha=EXACT_40_HEX_MAIN_SHA \
-  -f approved_scope=reviewed-isolated-fullstack-only
+  -f approved_scope=reviewed-isolated-fullstack-only -f acceptance_phase=prepare
+gh workflow run vps-09-evidence.yml --repo chung6a8m/MyDmsVn-Vps --ref main \
+  -f reviewed_sha=EXACT_40_HEX_MAIN_SHA \
+  -f approved_scope=reviewed-isolated-fullstack-only -f acceptance_phase=finalize
 ```
 
 If protected environments, runners, selected SQL seeds or source SHA are absent, the protected jobs should remain SKIPPED/NOT RUN, not PASS. Do not create or configure these environments using an unreviewed PR.
+
+Finalize requires the completed GUI checklist to match the reviewed source SHA, prepared operator/reviewer identities and the actual published Desktop executable SHA-256, not merely any syntactically valid nine-row checklist. The attended operator fills the generated checklist with nine distinct evidence digests: startup, login/session, permissions, sales workflow and inventory workflow at 100%; startup, login/session, Unknown recovery and logout at 125%. Validate it only from an interactive non-Session-0 process. The underlying screenshots/logs stay in protected storage and must be checked for secrets/customer data before retention; the independent reviewer rehashes them before accepting the checklist.
 
 ## Evidence packet and cryptographic contract
 
