@@ -142,6 +142,10 @@ def validate_observations(folder: Path, att: dict[str, Any],
             "RouteObservationProvenance")
     cases = rows.get("cases")
     require(isinstance(cases, list), "RouteCasesMissing")
+    frozen_status = {
+        (row["CaseId"], row["Variant"]): row["Status"]
+        for row in document(ROOT / document(SPEC_PATH)["frozenObservations"])
+    }
     actual: set[tuple[str, str]] = set()
     for row in cases:
         key = (row.get("caseId"), row.get("variant"))
@@ -155,7 +159,8 @@ def validate_observations(folder: Path, att: dict[str, Any],
                 and actual_hash == expected, "RouteCasePayloadMismatch")
         status = row.get("httpStatus")
         require(type(status) is int and 100 <= status <= 599
-                and status == row.get("expectedHttpStatus"), "RouteCaseStatusMismatch")
+                and status == row.get("expectedHttpStatus")
+                and status == frozen_status[key], "RouteCaseStatusMismatch")
     require(actual == expected_pairs, "RouteCaseCoverageGap")
 
 
@@ -213,17 +218,25 @@ def validate_packet(folder: Path, expected_sha: str,
     people = att.get("people", {})
     require(all(isinstance(people.get(k), str) and len(people[k].strip()) >= 3
                 for k in ("operator", "reviewer", "owner")), "PeopleMissing")
-    require(people["operator"] != people["reviewer"] and
-            people["operator"] != people["owner"], "ReviewMustBeIndependent")
+    require(people["operator"].casefold() != people["reviewer"].casefold() and
+            people["operator"].casefold() != people["owner"].casefold(),
+            "ReviewMustBeIndependent")
     decision = att.get("releaseDecision", {})
     require(decision.get("status") == "APPROVED_FOR_PRODUCTION"
             and decision.get("owner") == people["owner"]
             and re.fullmatch(r"20[0-9]{2}-[0-9]{2}-[0-9]{2}", str(decision.get("date", ""))),
             "ExplicitOwnerReleaseDecisionMissing")
+    from datetime import date
+    try:
+        decision_date = date.fromisoformat(decision["date"])
+    except ValueError as error:
+        raise ValueError("VPS09.ReleaseDecisionDateInvalid") from error
+    require(decision_date <= date.today(), "ReleaseDecisionInFuture")
     artifact_names = validate_artifacts(folder, att)
     required = {item["id"] for item in spec["gates"]}
     gates = att.get("gates")
     require(isinstance(gates, dict) and set(gates) == required, "GateSetIncomplete")
+    first_evidence: set[str] = set()
     for gate_id, gate in gates.items():
         require(gate.get("status") == "PASS", "GateNotPassed:" + gate_id)
         values = [gate.get(k) for k in ("discovered", "executed", "passed", "failed", "skipped")]
@@ -234,20 +247,26 @@ def validate_packet(folder: Path, expected_sha: str,
         require(isinstance(evidence, list) and bool(evidence) and
                 all(name in artifact_names for name in evidence),
                 "GateEvidenceMissing:" + gate_id)
+        require(evidence[0] not in first_evidence, "GatePrimaryEvidenceReused:" + gate_id)
+        first_evidence.add(evidence[0])
         require(isinstance(gate.get("runner"), str) and bool(gate["runner"].strip()),
                 "GateRunnerMissing:" + gate_id)
     ci = att.get("ciRuns")
     require(isinstance(ci, list), "CiRunsMissing")
     ci_names: set[str] = set()
+    ci_urls: set[str] = set()
     for entry in ci:
         name = entry.get("workflow")
         require(name in spec["requiredWorkflowFiles"] and name not in ci_names,
                 "CiWorkflowExtraOrDuplicate")
         ci_names.add(name)
+        url = str(entry.get("url", ""))
         require(entry.get("sourceSha") == expected_sha and
                 entry.get("conclusion") == "success" and
-                RUN_URL.fullmatch(str(entry.get("url", ""))) is not None,
+                RUN_URL.fullmatch(url) is not None,
                 "CiNotVerifiedOnExactHead")
+        require(url not in ci_urls, "CiRunUrlReused")
+        ci_urls.add(url)
     require(ci_names == set(spec["requiredWorkflowFiles"]), "CiWorkflowMissing")
     validate_observations(folder, att, pairs)
     validate_oracle(folder, att, spec["oracleScenarios"])
@@ -275,7 +294,7 @@ def main() -> int:
             print("VPS09_SIGNED_PACKET_STRUCTURE_PASS: signature, SHA, ledger, coverage, "
                   "gate counters and Owner assertion; physical evidence still requires "
                   "independent human review")
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError, OSError) as error:
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError, OSError, UnicodeError) as error:
         print(f"VPS09_FAIL_CLOSED: {error}")
         return 1
     return 0

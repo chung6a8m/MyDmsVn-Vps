@@ -37,6 +37,10 @@ class Vps09EvidenceGateTests(unittest.TestCase):
         self.pub_hash = hashlib.sha256(self.public.read_bytes()).hexdigest()
         spec, _, pairs = verifier.inventory()
         self.spec = spec
+        frozen_status = {
+            (row["CaseId"], row["Variant"]): row["Status"]
+            for row in verifier.document(verifier.ROOT / spec["frozenObservations"])
+        }
         self.observations = {
             "sourceSha": SHA,
             "executionClass": "protected-real-sql13",
@@ -44,8 +48,8 @@ class Vps09EvidenceGateTests(unittest.TestCase):
                 "caseId": case,
                 "variant": variant,
                 "status": "PASS",
-                "httpStatus": 200,
-                "expectedHttpStatus": 200,
+                "httpStatus": frozen_status[(case, variant)],
+                "expectedHttpStatus": frozen_status[(case, variant)],
                 "expectedPayloadSha256": HEX,
                 "actualPayloadSha256": HEX,
                 "diff": [],
@@ -93,12 +97,13 @@ class Vps09EvidenceGateTests(unittest.TestCase):
             "gates": {row["id"]: {
                 "status": "PASS", "discovered": 2, "executed": 2, "passed": 2,
                 "failed": 0, "skipped": 0, "runner": "synthetic-negative-test",
-                "evidence": ["other-evidence.txt"],
+                "evidence": ["gates/" + row["id"] + ".json"],
             } for row in spec["gates"]},
             "ciRuns": [{
                 "workflow": name, "sourceSha": SHA, "conclusion": "success",
-                "url": "https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/123456",
-            } for name in spec["requiredWorkflowFiles"]],
+                "url": "https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/"
+                       + str(123456 + index),
+            } for index, name in enumerate(spec["requiredWorkflowFiles"])],
             "artifacts": {},
         }
         self.refresh_evidence()
@@ -108,7 +113,12 @@ class Vps09EvidenceGateTests(unittest.TestCase):
         write_json(self.packet / "sql-oracle.json", self.oracle)
         (self.packet / "other-evidence.txt").write_text(
             "SYNTHETIC FIXTURE: NOT LIVE ACCEPTANCE\n", encoding="utf-8")
-        for name in ("route-observations.json", "sql-oracle.json", "other-evidence.txt"):
+        names = ["route-observations.json", "sql-oracle.json", "other-evidence.txt"]
+        for row in self.spec["gates"]:
+            name = "gates/" + row["id"] + ".json"
+            write_json(self.packet / name, {"gate": row["id"], "synthetic": True})
+            names.append(name)
+        for name in names:
             blob = (self.packet / name).read_bytes()
             self.attestation["artifacts"][name] = {
                 "bytes": len(blob), "sha256": hashlib.sha256(blob).hexdigest(),
@@ -221,6 +231,36 @@ class Vps09EvidenceGateTests(unittest.TestCase):
     def test_missing_required_ci_workflow_refused(self):
         self.attestation["ciRuns"].pop()
         self.rejects("CiWorkflowMissing")
+
+    def test_duplicate_ci_run_url_refused(self):
+        self.attestation["ciRuns"][0]["url"] = self.attestation["ciRuns"][1]["url"]
+        self.rejects("CiRunUrlReused")
+
+    def test_reused_gate_primary_evidence_refused(self):
+        self.attestation["gates"]["VPS09-12"]["evidence"] = [
+            self.attestation["gates"]["VPS09-11"]["evidence"][0]
+        ]
+        self.rejects("GatePrimaryEvidenceReused")
+
+    def test_wrong_http_status_against_frozen_contract_refused(self):
+        case = self.observations["cases"][0]
+        alternative = 400 if case["httpStatus"] != 400 else 200
+        case["httpStatus"] = alternative
+        case["expectedHttpStatus"] = alternative
+        self.refresh_evidence()
+        self.rejects("RouteCaseStatusMismatch")
+
+    def test_casefold_operator_reviewer_identity_refused(self):
+        self.attestation["people"]["reviewer"] = "OPERATOR01"
+        self.rejects("ReviewMustBeIndependent")
+
+    def test_invalid_owner_decision_date_refused(self):
+        self.attestation["releaseDecision"]["date"] = "2026-99-99"
+        self.rejects("ReleaseDecisionDateInvalid")
+
+    def test_future_owner_decision_date_refused(self):
+        self.attestation["releaseDecision"]["date"] = "2099-01-01"
+        self.rejects("ReleaseDecisionInFuture")
 
 
 if __name__ == "__main__":
