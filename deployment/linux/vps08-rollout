@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# VPS-08 root-owned atomic symlink deployment; no automatic schema migration.
+# Install this helper and vps08-manifest.py under /usr/local/libexec/.
+# sudo vps08-rollout deploy /trusted/package 40HEX_SHA https://staging.example/api/v1/health
+# sudo vps08-rollout rollback 40HEX_SHA https://staging.example/api/v1/health
+set -euo pipefail
+umask 077
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+root=/opt/mydmsvn
+service=mydmsvn-vps.service
+
+abort() { printf 'VPS-08 rollout refused; review local operator evidence.\n' >&2; exit 1; }
+[[ "$EUID" == 0 ]] || abort
+[[ $# -ge 3 ]] || abort
+action="$1"; shift
+[[ "$action" == deploy || "$action" == rollback ]] || abort
+
+if [[ "$action" == deploy ]]; then
+  [[ $# == 3 ]] || abort
+  source_dir="$(realpath -e -- "$1")" || abort
+  sha="$2"; probe_url="$3"
+else
+  [[ $# == 2 ]] || abort
+  source_dir=""
+  sha="$1"; probe_url="$2"
+fi
+[[ "$sha" =~ ^[0-9a-f]{40}$ ]] || abort
+[[ "$probe_url" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?/api/v1/health$ ]] || abort
+[[ -d "$root/releases" && ! -L "$root/releases" ]] || abort
+[[ -d "$root" && ! -L "$root" ]] || abort
+[[ "$(stat -c '%u' "$root")" == 0 && "$(stat -c '%u' "$root/releases")" == 0 ]] || abort
+[[ -x /usr/bin/python3 && -f /usr/local/libexec/vps08-manifest.py ]] || abort
+
+probe() {
+  local i
+  for i in $(seq 1 24); do
+    if curl --fail --silent --show-error --max-time 4 --proto '=https' --tlsv1.2 "$probe_url" \
+         >/dev/null 2>/dev/null; then return 0; fi
+    sleep 2
+  done
+  return 1
+}
+swap() {
+  local target="$1" temp="$root/.current-$$"
+  [[ ! -e "$temp" && ! -L "$temp" ]] || abort
+  ln -s -- "$target" "$temp" || abort
+  mv -Tf -- "$temp" "$root/current" || abort
+}
+current=""
+if [[ -L "$root/current" ]]; then
+  current="$(readlink -- "$root/current")"
+  [[ "$current" =~ ^releases/[0-9a-f]{40}$ && -d "$root/$current" ]] || abort
+elif [[ -e "$root/current" ]]; then
+  abort
+fi
+
+new_target="releases/$sha"
+if [[ "$action" == deploy ]]; then
+  [[ -d "$source_dir" && ! -L "$source_dir" ]] || abort
+  [[ "$source_dir" != "$root/"* && "$source_dir" != "$root" ]] || abort
+  python3 /usr/local/libexec/vps08-manifest.py verify "$source_dir" "$sha" >/dev/null || abort
+  [[ ! -e "$root/$new_target" ]] || abort
+  mkdir -m 0755 -- "$root/$new_target"
+  cp -a -- "$source_dir/." "$root/$new_target/"
+  chown -R root:root "$root/$new_target"
+  python3 /usr/local/libexec/vps08-manifest.py verify "$root/$new_target" "$sha" >/dev/null || abort
+else
+  [[ -d "$root/$new_target" && ! -L "$root/$new_target" ]] || abort
+  python3 /usr/local/libexec/vps08-manifest.py verify "$root/$new_target" "$sha" >/dev/null || abort
+  [[ "$current" != "$new_target" ]] || abort
+fi
+swap "$new_target"
+systemctl restart "$service" || true
+if probe; then
+  printf 'VPS08_ROLLOUT_PASS: action=%s sha=%s health=verified_tls\n' "$action" "$sha"
+  exit 0
+fi
+# Restore only the previously pinned verified local release; never mutate the database.
+if [[ -n "$current" ]]; then
+  prior_sha="${current#releases/}"
+  python3 /usr/local/libexec/vps08-manifest.py verify "$root/$current" "$prior_sha" >/dev/null || abort
+  swap "$current"
+  systemctl restart "$service" || true
+  if probe; then printf 'VPS08_ROLLOUT_RECOVERED: restored=%s health=verified_tls\n' "$prior_sha"; fi
+else
+  rm -f -- "$root/current"
+  systemctl stop "$service" || true
+fi
+abort
