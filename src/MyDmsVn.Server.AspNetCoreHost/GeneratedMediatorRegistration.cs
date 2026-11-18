@@ -18,7 +18,7 @@ internal static class GeneratedMediatorRegistration
             options.PipelineBehaviors =
             [
                 typeof(ExceptionHandlingBehavior<,>),
-                typeof(Security.AuthorizationBehavior<,>),
+                typeof(MyDmsVn.Server.Application.Security.AuthorizationBehavior<,>),
                 typeof(ValidationBehavior<,>)
             ];
         });

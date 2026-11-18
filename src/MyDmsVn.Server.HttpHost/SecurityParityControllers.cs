@@ -4,7 +4,11 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Contracts;
 using MyDmsVn.Contracts.Security;
 using MyDmsVn.Server.Application;

@@ -18,6 +18,7 @@ namespace MyDmsVn.Server.Application
                 services.TryAddSingleton(
                     new SuperuserIdentityPolicy(configuredSuperuserUsername));
             }
+#if !VPS06B_MEDIATOR
             services.AddMediatR(
                 configuration =>
                 {
@@ -26,6 +27,7 @@ namespace MyDmsVn.Server.Application
                     configuration.AddOpenBehavior(typeof(AuthorizationBehavior<,>));
                     configuration.AddOpenBehavior(typeof(ValidationBehavior<,>));
                 });
+#endif
             services.AddValidatorsFromAssemblyContaining<GetFoundationStatusQuery>(
                 includeInternalTypes: true);
             services.AddSingleton<IFoundationProbe, FoundationProbe>();

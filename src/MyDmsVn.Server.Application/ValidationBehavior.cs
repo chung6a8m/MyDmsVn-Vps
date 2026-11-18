@@ -5,7 +5,11 @@ using System.Threading.Tasks;
 using ErrorOr;
 using FluentValidation;
 using FluentValidation.Results;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 
 namespace MyDmsVn.Server.Application
 {
@@ -21,14 +25,21 @@ namespace MyDmsVn.Server.Application
             _validators = validators.ToArray();
         }
 
+#if VPS06B_MEDIATOR
+        public async ValueTask<TResponse> Handle(
+            TRequest request,
+            MessageHandlerDelegate<TRequest, TResponse> next,
+            CancellationToken cancellationToken)
+#else
         public async Task<TResponse> Handle(
             TRequest request,
             RequestHandlerDelegate<TResponse> next,
             CancellationToken cancellationToken)
+#endif
         {
             if (_validators.Count == 0)
             {
-                return await next().ConfigureAwait(false);
+                return await InvokeNext(next, request, cancellationToken).ConfigureAwait(false);
             }
 
             var failures = new List<ValidationFailure>();
@@ -43,7 +54,7 @@ namespace MyDmsVn.Server.Application
 
             if (failures.Count == 0)
             {
-                return await next().ConfigureAwait(false);
+                return await InvokeNext(next, request, cancellationToken).ConfigureAwait(false);
             }
 
             var errors = failures
@@ -60,5 +71,19 @@ namespace MyDmsVn.Server.Application
 
             return request.FromErrors(errors);
         }
+#if VPS06B_MEDIATOR
+        private static ValueTask<TResponse> InvokeNext(
+            MessageHandlerDelegate<TRequest, TResponse> next,
+            TRequest request,
+            CancellationToken cancellationToken)
+            => next(request, cancellationToken);
+#else
+        private static Task<TResponse> InvokeNext(
+            RequestHandlerDelegate<TResponse> next,
+            TRequest request,
+            CancellationToken cancellationToken)
+            => next();
+#endif
+
     }
 }

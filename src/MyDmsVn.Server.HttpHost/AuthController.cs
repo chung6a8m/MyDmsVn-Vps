@@ -8,7 +8,11 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using Microsoft.Owin;
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application;
