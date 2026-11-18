@@ -27,6 +27,7 @@ internal static class Program
             return 2;
         }
 
+        var stage = "configuration";
         try
         {
             var secret = Environment.GetEnvironmentVariable("VPS07B_SQL_CONNECTION_STRING");
@@ -34,8 +35,11 @@ internal static class Program
                 throw new Vps07bRefusal("Migration.ConnectionRequired");
             var target = int.Parse(args[1].Substring(6), CultureInfo.InvariantCulture);
             using var session = new Vps07bGuardedSession(secret, target);
+            stage = "preflight";
             var admitted = session.Admit();
+            stage = "bridge";
             session.Bridge(admitted);
+            stage = "fluent-migrator-up";
             using (Vps07bExecutionScope.Enter(admitted.IsFresh))
             {
                 var services = new ServiceCollection()
@@ -49,6 +53,7 @@ internal static class Program
                 using var scope = provider.CreateScope();
                 scope.ServiceProvider.GetRequiredService<IMigrationRunner>().MigrateUp(target);
             }
+            stage = "post-migrate-native-proof";
             session.VerifyAfterRun(target);
             Console.WriteLine("VPS07B_SQL_VERIFIED: target=schema" + target +
                 "; source=schema" + admitted.Version + "; 2 journals reconciled.");
@@ -64,10 +69,16 @@ internal static class Program
             Console.Error.WriteLine(ex.Code + ": restricted maintenance admission refused.");
             return 4;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Intentionally suppress SqlException text (contains SQL / login / identifiers).
-            Console.Error.WriteLine("Migration.Failed: SQL transaction, journal and fingerprint must be reconciled before retry.");
+            // Intentionally suppress exception text: SqlClient/FM may embed SQL or
+            // connection credentials. Only fixed stage, type and error numbers.
+            var underlying = ex;
+            for (var depth = 0; depth < 6 && underlying.InnerException != null; depth++)
+                underlying = underlying.InnerException;
+            var number = underlying is SqlException sql ? sql.Number.ToString(CultureInfo.InvariantCulture) : "none";
+            Console.Error.WriteLine("Migration.Failed: stage=" + stage + "; type=" +
+                underlying.GetType().Name + "; sql=" + number + "; no acceptance.");
             return 1;
         }
     }

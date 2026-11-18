@@ -358,7 +358,8 @@ ORDER BY Sig;", c);
         if (expectSuccess)
         {
             Assert(process.ExitCode == 0 && output.Contains("VPS07B_SQL_VERIFIED:",StringComparison.Ordinal),
-                "VPS07B_CLI_FAILED_" + process.ExitCode + "_" + SafeCode(diagnostic));
+                "VPS07B_CLI_FAILED_" + process.ExitCode + "_" + SafeCode(diagnostic) + "_" +
+                new string(diagnostic.TakeWhile(c => c != '\n' && c != '\r').Where(c => char.IsLetterOrDigit(c) || c == '=' || c == ';' || c == '.' || c == ' ' || c == '_').Take(160).ToArray()));
         }
         else
         {
