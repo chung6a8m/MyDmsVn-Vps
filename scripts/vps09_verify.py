@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import subprocess
+from tempfile import TemporaryDirectory
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -29,8 +30,25 @@ def require(ok: bool, message: str) -> None:
         raise ValueError("VPS09." + message)
 
 
+def reject_duplicate_members(members: list[tuple[str, Any]]) -> dict[str, Any]:
+    obj: dict[str, Any] = {}
+    for name, value in members:
+        require(name not in obj, "DuplicateJsonMember:" + name)
+        obj[name] = value
+    return obj
+
+
+def reject_nonfinite_number(value: str) -> None:
+    raise ValueError("VPS09.NonFiniteJsonNumber:" + value)
+
+
+def parse_json(raw: str) -> Any:
+    return json.loads(raw, object_pairs_hook=reject_duplicate_members,
+                      parse_constant=reject_nonfinite_number)
+
+
 def document(path: Path) -> Any:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return parse_json(path.read_text(encoding="utf-8"))
 
 
 def inventory() -> tuple[dict[str, Any], set[tuple[str, str]], set[tuple[str, str]]]:
@@ -107,30 +125,42 @@ def verify_signature(folder: Path, public_key: Path, expected_key_digest: str) -
     require(SHA256.fullmatch(expected_key_digest) is not None,
             "TrustedKeyFingerprintMissing")
     require(public_key.is_file() and not public_key.is_symlink(), "TrustedKeyMissing")
-    require(sha256(public_key.read_bytes()) == expected_key_digest,
-            "TrustedKeyFingerprintMismatch")
+    key_bytes = public_key.read_bytes()
+    require(sha256(key_bytes) == expected_key_digest, "TrustedKeyFingerprintMismatch")
     payload = folder / "attestation.json"
     signature = folder / "attestation.sig"
     require(payload.is_file() and signature.is_file()
             and not payload.is_symlink() and not signature.is_symlink(),
             "SignedAttestationMissing")
-    require(0 < payload.stat().st_size <= MAX_ARTIFACT_BYTES
-            and signature.stat().st_size == 64, "SignatureSizeInvalid")
+    signed_payload = payload.read_bytes()
+    signed_signature = signature.read_bytes()
+    require(0 < len(signed_payload) <= MAX_ARTIFACT_BYTES
+            and len(signed_signature) == 64, "SignatureSizeInvalid")
     try:
-        key_info = subprocess.run(
-            ["openssl", "pkey", "-pubin", "-in", str(public_key), "-text_pub", "-noout"],
-            check=False, capture_output=True, timeout=12)
-        require(key_info.returncode == 0 and b"ED25519" in key_info.stdout.upper(),
-                "KeyMustBeEd25519")
-        verified = subprocess.run(
-            ["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", str(public_key),
-             "-rawin", "-in", str(payload), "-sigfile", str(signature)],
-            check=False, capture_output=True, timeout=12)
-        require(verified.returncode == 0, "SignatureInvalid")
+        # OpenSSL must verify the exact bytes that we subsequently parse. Never
+        # re-read a caller-controlled pathname after signature verification.
+        with TemporaryDirectory(prefix="vps09-verify-") as scratch:
+            anchor = Path(scratch)
+            key_copy = anchor / "trusted.pub"
+            payload_copy = anchor / "attestation.json"
+            signature_copy = anchor / "attestation.sig"
+            key_copy.write_bytes(key_bytes)
+            payload_copy.write_bytes(signed_payload)
+            signature_copy.write_bytes(signed_signature)
+            key_info = subprocess.run(
+                ["openssl", "pkey", "-pubin", "-in", str(key_copy),
+                 "-text_pub", "-noout"],
+                check=False, capture_output=True, timeout=12)
+            require(key_info.returncode == 0 and b"ED25519" in key_info.stdout.upper(),
+                    "KeyMustBeEd25519")
+            verified = subprocess.run(
+                ["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", str(key_copy),
+                 "-rawin", "-in", str(payload_copy), "-sigfile", str(signature_copy)],
+                check=False, capture_output=True, timeout=12)
+            require(verified.returncode == 0, "SignatureInvalid")
     except (OSError, subprocess.TimeoutExpired) as error:
         raise ValueError("VPS09.SignatureVerifierUnavailable") from error
-    return payload.read_bytes()
-
+    return signed_payload
 
 def validate_observations(folder: Path, att: dict[str, Any],
                           expected_pairs: set[tuple[str, str]]) -> None:
@@ -193,7 +223,7 @@ def validate_packet(folder: Path, expected_sha: str,
     spec, _, pairs = inventory()
     require(SHA40.fullmatch(expected_sha) is not None, "ExpectedShaInvalid")
     raw = verify_signature(folder, trusted_key, trusted_digest)
-    att = json.loads(raw)
+    att = parse_json(raw.decode("utf-8"))
     require(att.get("schemaVersion") == 1 and att.get("repository") == spec["repository"],
             "PacketSchemaOrRepository")
     require(att.get("headSha") == expected_sha

@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -125,12 +126,15 @@ class Vps09EvidenceGateTests(unittest.TestCase):
                 "bytes": len(blob), "sha256": hashlib.sha256(blob).hexdigest(),
             }
 
-    def sign(self):
-        write_json(self.packet / "attestation.json", self.attestation)
+    def sign_raw(self, raw):
+        (self.packet / "attestation.json").write_text(raw, encoding="utf-8")
         subprocess.run(["openssl", "pkeyutl", "-sign", "-inkey", str(self.key),
                         "-rawin", "-in", str(self.packet / "attestation.json"),
                         "-out", str(self.packet / "attestation.sig")],
                        check=True, capture_output=True)
+
+    def sign(self):
+        self.sign_raw(json.dumps(self.attestation, indent=2) + "\n")
 
     def verify(self):
         verifier.validate_packet(self.packet, SHA, self.public, self.pub_hash)
@@ -143,6 +147,44 @@ class Vps09EvidenceGateTests(unittest.TestCase):
     def test_valid_synthetic_packet_only_validates_structure(self):
         self.sign()
         self.verify()
+
+    def test_duplicate_member_in_signed_attestation_refused(self):
+        raw = json.dumps(self.attestation, indent=2) + "\n"
+        raw = raw.replace('  "headSha": ',
+                          '  "headSha": "' + SHA + '",\n  "headSha": ', 1)
+        self.sign_raw(raw)
+        with self.assertRaisesRegex(ValueError, "DuplicateJsonMember:headSha"):
+            self.verify()
+
+    def test_duplicate_member_in_hashed_oracle_refused(self):
+        raw = json.dumps(self.oracle, indent=2) + "\n"
+        raw = raw.replace('  "sourceSha": ',
+                          '  "sourceSha": "' + SHA + '",\n  "sourceSha": ', 1)
+        target = self.packet / "sql-oracle.json"
+        target.write_text(raw, encoding="utf-8")
+        blob = target.read_bytes()
+        self.attestation["artifacts"]["sql-oracle.json"] = {
+            "bytes": len(blob), "sha256": hashlib.sha256(blob).hexdigest(),
+        }
+        self.rejects("DuplicateJsonMember:sourceSha")
+
+    def test_attestation_swap_after_openssl_verification_cannot_change_parsed_bytes(self):
+        self.sign()
+        target = self.packet / "attestation.json"
+        original = target.read_bytes()
+        altered = copy.deepcopy(self.attestation)
+        altered["releaseDecision"]["status"] = "DENIED"
+        real_run = subprocess.run
+
+        def swap_after_verify(args, *rest, **kwargs):
+            result = real_run(args, *rest, **kwargs)
+            if "-verify" in args and result.returncode == 0:
+                target.write_text(json.dumps(altered) + "\n", encoding="utf-8")
+            return result
+
+        with patch.object(verifier.subprocess, "run", side_effect=swap_after_verify):
+            signed = verifier.verify_signature(self.packet, self.public, self.pub_hash)
+        self.assertEqual(original, signed)
 
     def test_wrong_trusted_public_key_fingerprint(self):
         self.sign()

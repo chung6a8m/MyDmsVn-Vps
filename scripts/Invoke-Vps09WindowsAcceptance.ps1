@@ -19,8 +19,8 @@ if ($env:VPS04A_LIVE_ALLOW_MUTATION -cne 'approved-nonproduction-only' -or $env:
 }
 $sha = (git rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $sha -cne $ReviewedSha) { throw 'VPS09.ReviewedGitShaMismatch' }
-$dirty = @(git status --porcelain --untracked-files=no)
-if ($LASTEXITCODE -ne 0 -or $dirty.Count -gt 0) { throw 'VPS09.TrackedSourceMustBeClean' }
+$dirty = @(git status --porcelain --untracked-files=all)
+if ($LASTEXITCODE -ne 0 -or $dirty.Count -gt 0) { throw 'VPS09.SourceTreeMustBeClean' }
 $uri = $null
 if (-not [Uri]::TryCreate($Origin, [UriKind]::Absolute, [ref]$uri) -or
     $uri.Scheme -cne 'https' -or $uri.AbsolutePath -ne '/' -or
@@ -61,9 +61,12 @@ if ($encKeys.Count -ne 1 -or $trustKeys.Count -ne 1 -or
     throw 'VPS09.SqlOracleTlsNotVerified'
 }
 $report = [IO.Path]::GetFullPath($EvidenceDirectory)
-New-Item -ItemType Directory -Path $report -Force | Out-Null
+# Refuse a reused runner output directory: stale TRX or publish files must
+# never be eligible for this execution's 4/4 test and binary claims.
+if (Test-Path -LiteralPath $report) { throw 'VPS09.EvidenceDirectoryMustBeNew' }
+New-Item -ItemType Directory -Path $report | Out-Null
 $desktop = Join-Path $report 'desktop-net48-x86'
-New-Item -ItemType Directory -Path $desktop -Force | Out-Null
+New-Item -ItemType Directory -Path $desktop | Out-Null
 
 # TLS is never disabled. A green health response alone does not bind remote SHA.
 $response = Invoke-WebRequest -Uri "$canonical/api/v1/health" -Method Get -MaximumRedirection 0 -TimeoutSec 15
