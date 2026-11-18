@@ -39,6 +39,8 @@ public abstract class ImmutableSqlMigration : Migration
             // FM must roll back this batch, its predecessors and both journals.
             if (Vps07bExecutionScope.ShouldInjectFault(version, batchIndex))
                 Execute.Sql("THROW 51750, 'VPS07B isolated rollback oracle.', 1;");
+            if (Vps07bExecutionScope.ShouldSuspendForKill(version, batchIndex))
+                Execute.Sql("WAITFOR DELAY '00:00:20'; THROW 51751, 'VPS07B CI process-loss sentinel.', 1;");
         }
 
         // Both journals and the original business SQL are in one migration

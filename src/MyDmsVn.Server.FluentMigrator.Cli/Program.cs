@@ -36,6 +36,7 @@ internal static class Program
             var target = int.Parse(args[1].Substring(6), CultureInfo.InvariantCulture);
             var faultVersion = 0;
             var faultBatch = 0;
+            var hang = false;
             var fault = Environment.GetEnvironmentVariable("VPS07B_CI_FAULT");
             if (!string.IsNullOrEmpty(fault))
             {
@@ -50,11 +51,13 @@ internal static class Program
                     ciConnection.TrustServerCertificate || ciConnection.Encrypt.ToString() != "True")
                     throw new Vps07bRefusal("Migration.CiFaultScopeRefused");
                 var tokens = fault.Split(':');
-                if (tokens.Length != 2 ||
+                if ((tokens.Length != 2 && tokens.Length != 3) ||
+                    (tokens.Length == 3 && tokens[2] != "hang") ||
                     !int.TryParse(tokens[0], NumberStyles.None, CultureInfo.InvariantCulture, out faultVersion) ||
                     !int.TryParse(tokens[1], NumberStyles.None, CultureInfo.InvariantCulture, out faultBatch) ||
                     faultVersion < 1 || faultVersion > 13 || faultBatch < 1 || faultBatch > 9)
                     throw new Vps07bRefusal("Migration.InvalidCiFault");
+                hang = tokens.Length == 3;
             }
             using var session = new Vps07bGuardedSession(secret, target);
             stage = "preflight";
@@ -62,7 +65,7 @@ internal static class Program
             stage = "bridge";
             session.Bridge(admitted);
             stage = "fluent-migrator-up";
-            using (Vps07bExecutionScope.Enter(admitted.IsFresh, faultVersion, faultBatch))
+            using (Vps07bExecutionScope.Enter(admitted.IsFresh, faultVersion, faultBatch, hang))
             {
                 var services = new ServiceCollection()
                     .AddFluentMigratorCore()
