@@ -1,0 +1,71 @@
+name: VPS-06B — production net10 generated Mediator strict gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps-06b-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  production-generated:
+    name: SDK10.0.404 generated 46-handler manifest, scoped pipeline, published deps
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.404'
+      - name: Strict production locked restore and generated compile
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          test "$(dotnet --version)" = "10.0.404"
+          dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode -v minimal
+          dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore -warnaserror -v minimal
+      - name: Inspect actual compiler-emitted source and immutable locked graph
+        run: python3 scripts/verify-vps06b-production.py --stage source
+      - name: Strict Host test lock and native generated dispatcher acceptance
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode -v minimal
+          dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore --filter FullyQualifiedName~Vps06bGeneratedMediatorTests --logger "trx;LogFileName=vps06b-generated-mediator.trx" --results-directory "$GITHUB_WORKSPACE/vps06b-trx"
+      - name: Strict product manifest execution 5/5 and no skips
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          path=Path('vps06b-trx/vps06b-generated-mediator.trx')
+          assert path.is_file()
+          ns={'t':'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          counts=ET.parse(path).getroot().find('./t:ResultSummary/t:Counters',ns)
+          assert counts is not None
+          actual={k:int(counts.attrib[k]) for k in ['total','executed','passed','failed','notExecuted']}
+          assert actual == dict(total=5,executed=5,passed=5,failed=0,notExecuted=0), actual
+          print('VPS06B_PRODUCT_MANIFEST_PASS',actual)
+          PY
+      - name: Publish actual production net10 Host and reject MediatR from deps
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet publish MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore -warnaserror -o "$GITHUB_WORKSPACE/vps06b-publish" -v minimal
+          python3 ../../scripts/verify-vps06b-production.py --stage published --publish-dir "$GITHUB_WORKSPACE/vps06b-publish"
+      - name: Preserve source generation, strict runtime manifest and test evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps06b-production-generated-mediator
+          path: |
+            src/MyDmsVn.Server.AspNetCoreHost/obj/mediator-generated/**/*.cs
+            src/MyDmsVn.Server.Application/packages.vps06b.lock.json
+            src/MyDmsVn.Server.Infrastructure/packages.vps06b.lock.json
+            src/MyDmsVn.Server.AspNetCoreHost/packages.vps06b.lock.json
+            tests/MyDmsVn.Server.AspNetCoreHost.Tests/packages.vps06b.lock.json
+            vps06b-publish/*.deps.json
+            vps06b-trx/*.trx
+          if-no-files-found: warn
