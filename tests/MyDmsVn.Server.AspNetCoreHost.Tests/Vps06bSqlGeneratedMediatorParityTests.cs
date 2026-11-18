@@ -134,7 +134,7 @@ public sealed class Vps06bSqlGeneratedMediatorParityTests
         await Task.WhenAll(authorized.Concat(anonymous));
         foreach (var task in authorized)
         {
-            var (status, json) = task.Result;
+            var (status, json) = await task;
             using (json)
             {
                 Assert.Equal(200, status);
@@ -143,7 +143,7 @@ public sealed class Vps06bSqlGeneratedMediatorParityTests
         }
         foreach (var task in anonymous)
         {
-            var (status, json) = task.Result;
+            var (status, json) = await task;
             using (json)
             {
                 Assert.Equal(401, status);
