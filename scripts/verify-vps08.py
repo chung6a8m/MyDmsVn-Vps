@@ -130,6 +130,7 @@ def check_rollout_process_identity() -> None:
         "set -euo pipefail\n"
         "root=/opt/mydmsvn\n"
         "service=mydmsvn-vps.service\n"
+        "probe_url=https://example.test/api/v1/health\n"
         'systemctl() { case "$1" in is-active) return 0;; show) printf "%s\n" "$SIM_PID";; *) return 1;; esac; }\n'
         'readlink() { printf "%s\n" "$SIM_CWD"; }\n'
         'curl() { return 0; }\n'
