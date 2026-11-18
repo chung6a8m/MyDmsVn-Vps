@@ -56,9 +56,14 @@ trusted_release() {
 }
 
 probe() {
-  local i
+  local expected_target="$1" i pid
   for i in $(seq 1 24); do
+    pid="$(systemctl show -p MainPID --value "$service" 2>/dev/null)" || pid=""
+    # An active systemd unit and a healthy HTTPS endpoint alone do not
+    # prove the process is running the selected immutable release.
     if systemctl is-active --quiet "$service" &&
+       [[ "$pid" =~ ^[1-9][0-9]*$ ]] &&
+       [[ "$(readlink -e -- "/proc/$pid/cwd" 2>/dev/null)" == "$root/$expected_target" ]] &&
        curl --fail --silent --show-error --max-time 4 --proto '=https' --tlsv1.2 "$probe_url" \
          >/dev/null 2>/dev/null; then return 0; fi
     sleep 2
@@ -106,7 +111,7 @@ else
 fi
 swap "$new_target"
 systemctl restart "$service" || true
-if probe; then
+if probe "$new_target"; then
   printf 'VPS08_ROLLOUT_PASS: action=%s sha=%s health=verified_tls\n' "$action" "$sha"
   exit 0
 fi
@@ -116,7 +121,7 @@ if [[ -n "$current" ]]; then
   trusted_release "$root/$current" "$prior_sha"
   swap "$current"
   systemctl restart "$service" || true
-  if probe; then printf 'VPS08_ROLLOUT_RECOVERED: restored=%s health=verified_tls\n' "$prior_sha"; fi
+  if probe "$current"; then printf 'VPS08_ROLLOUT_RECOVERED: restored=%s health=verified_tls\n' "$prior_sha"; fi
 else
   rm -f -- "$root/current"
   systemctl stop "$service" || true
