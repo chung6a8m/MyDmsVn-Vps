@@ -35,7 +35,7 @@ internal static class Program
     private static string _master = "";
     private static string _cli = "";
     private static string _stage = "admission";
-    private const int RequiredSqlCaseCount = 47;
+    private const int RequiredSqlCaseCount = 51;
     private static int _passed;
     private static int _executed;
     private static readonly List<string> Databases = new();
@@ -392,6 +392,46 @@ ON dbo.FluentMigratorVersionInfo(Version);");
                 "SELECT CASE WHEN OBJECT_ID(N'dbo.SchemaVersions',N'U') IS NULL THEN 0 ELSE 1 END;") == 0,
                 "VPS07B_ORPHAN_JOURNAL_CREATED_LEGACY");
             Pass("FM journal without DbUp provenance refused");
+
+            // A second durable database-level proof must survive the bridge:
+            // deleting the FM table after cutover is NOT a legitimate
+            // first-time DbUp source and must never auto-restamp 1..13.
+            _stage = "missing-after-bridge-and-marker-tamper";
+            var missingFm = await PrepareDbUp(12);
+            await RunCli(missingFm, 13, expectSuccess: true);
+            await Check(missingFm, 13);
+            var retained = await SourceData(missingFm, 12);
+            var retainedLegacy = await JournalSignatureOfLegacy(missingFm);
+            await Exec(missingFm, "DROP TABLE dbo.FluentMigratorVersionInfo;");
+            await RunCli(missingFm, 13, expectSuccess: false,
+                expectedCode: "Migration.MissingFluentMigratorJournalAfterBridge");
+            Assert(await Count(missingFm,
+                "SELECT CASE WHEN OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U') IS NULL THEN 0 ELSE 1 END;") == 0,
+                "VPS07B_MISSING_FM_JOURNAL_RECREATED");
+            Assert(await JournalSignatureOfLegacy(missingFm) == retainedLegacy &&
+                await SourceData(missingFm, 12) == retained,
+                "VPS07B_MISSING_FM_JOURNAL_MUTATED_BUSINESS");
+            Pass("previously bridged database with deleted FM journal refused");
+
+            await Exec(denied, @"EXEC sys.sp_updateextendedproperty
+@name=N'MyDmsVn.FluentMigratorBridge',@value=N'forged';");
+            await RunCli(denied, 13, expectSuccess: false,
+                expectedCode: "Migration.TamperedFluentMigratorBridgeMarker");
+            await Exec(denied, @"EXEC sys.sp_updateextendedproperty
+@name=N'MyDmsVn.FluentMigratorBridge',@value=N'vps07b-v1';");
+            Assert(await JournalSignature(denied) == stable,
+                "VPS07B_TAMPERED_MARKER_RESTORATION_FAILED");
+            Pass("forged durable cutover marker refused");
+
+            await Exec(denied, @"EXEC sys.sp_dropextendedproperty
+@name=N'MyDmsVn.FluentMigratorBridge';");
+            await RunCli(denied, 13, expectSuccess: false,
+                expectedCode: "Migration.MissingFluentMigratorBridgeMarker");
+            await Exec(denied, @"EXEC sys.sp_addextendedproperty
+@name=N'MyDmsVn.FluentMigratorBridge',@value=N'vps07b-v1';");
+            Assert(await JournalSignature(denied) == stable,
+                "VPS07B_MISSING_MARKER_RESTORATION_FAILED");
+            Pass("missing marker with present FM journal refused");
 
             // Separate session owns the app lock. Runner must fail immediately.
             using (var locked = new SqlConnection(For(denied)))
@@ -881,7 +921,10 @@ AND (r.wait_type LIKE N'WAITFOR%' OR r.command=N'WAITFOR');") > 0)
  (SELECT Id,ScriptName,CONVERT(varchar(33),Applied,126) AS Applied
    FROM dbo.SchemaVersions ORDER BY Id FOR JSON PATH),
  (SELECT Version,Description,CONVERT(varchar(33),AppliedOn,126) AS AppliedOn
-   FROM dbo.FluentMigratorVersionInfo ORDER BY Version FOR JSON PATH));"));
+   FROM dbo.FluentMigratorVersionInfo ORDER BY Version FOR JSON PATH),
+ (SELECT CONVERT(nvarchar(32),value) AS BridgeMarker FROM sys.extended_properties
+   WHERE class=0 AND major_id=0 AND minor_id=0
+     AND name=N'MyDmsVn.FluentMigratorBridge' FOR JSON PATH));"));
 
     private static async Task<string> JournalSignatureOfLegacy(string db) =>
         Hash(await Text(db, @"SELECT Id,ScriptName,CONVERT(varchar(33),Applied,126) AS Applied
