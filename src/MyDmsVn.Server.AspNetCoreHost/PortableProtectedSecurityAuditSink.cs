@@ -9,8 +9,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32.SafeHandles;
 using MyDmsVn.Server.Application.Identity;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Encodings.Web;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -76,16 +76,22 @@ internal sealed class PortableProtectedSecurityAuditSink : ISecurityAuditSink
         var correlation = entry.CorrelationId != null &&
             Regex.IsMatch(entry.CorrelationId, @"\A[A-Za-z0-9_-]{1,128}\z")
                 ? entry.CorrelationId : null;
-        var record = new JObject
+        // Stable, explicitly ordered, allowlisted audit shape. Include both
+        // nullable fields rather than inheriting ambient JSON null-ignore policy.
+        var record = new
         {
-            ["category"] = category,
-            ["action"] = Enum.IsDefined(typeof(SecurityAuditAction), entry.Action) ? entry.Action.ToString() : "Unknown",
-            ["outcome"] = Enum.IsDefined(typeof(SecurityAuditOutcome), entry.Outcome) ? entry.Outcome.ToString() : "Unknown",
-            ["userId"] = entry.UserId > 0 ? entry.UserId : null,
-            ["correlationId"] = correlation,
-            ["utc"] = entry.OccurredAtUtc.ToString("O", CultureInfo.InvariantCulture)
+            category,
+            action = Enum.IsDefined(typeof(SecurityAuditAction), entry.Action) ? entry.Action.ToString() : "Unknown",
+            outcome = Enum.IsDefined(typeof(SecurityAuditOutcome), entry.Outcome) ? entry.Outcome.ToString() : "Unknown",
+            userId = entry.UserId > 0 ? (int?)entry.UserId : null,
+            correlationId = correlation,
+            utc = entry.OccurredAtUtc.ToString("O", CultureInfo.InvariantCulture)
         };
-        var line = Encoding.UTF8.GetBytes(record.ToString(Formatting.None) + "\n");
+        var line = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(record, new JsonSerializerOptions
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            WriteIndented = false
+        }) + "\n");
         lock (_writeLock)
         {
             cancellationToken.ThrowIfCancellationRequested();
