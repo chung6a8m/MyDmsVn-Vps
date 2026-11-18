@@ -100,6 +100,12 @@ internal static class Program
                 (counters.Success ? " " + counters.Value : ""));
             return 4;
         }
+        catch (InvalidOperationException ex)
+            when (string.Equals(ex.Message, "Schema.FluentMigratorJournalDefinitionMismatch", StringComparison.Ordinal))
+        {
+            Console.Error.WriteLine("Migration.FluentMigratorJournalDefinitionMismatch: journal definition refused.");
+            return 4;
+        }
         catch (Exception ex)
         {
             // Intentionally suppress exception text: SqlClient/FM may embed SQL or

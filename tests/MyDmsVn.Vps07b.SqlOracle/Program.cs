@@ -321,7 +321,8 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
             var denied = baseline;
             var stable = await JournalSignature(denied);
             await Exec(denied, "UPDATE dbo.FluentMigratorVersionInfo SET Description=N'TAMPERED' WHERE Version=1;");
-            await RunCli(denied, 13, expectSuccess: false);
+            await RunCli(denied, 13, expectSuccess: false,
+                expectedCode: "Migration.UnknownFluentMigratorJournal");
             Assert(await Count(denied, "SELECT COUNT(*) FROM dbo.FluentMigratorVersionInfo;") == 13,
                 "VPS07B_TAMPERED_JOURNAL_CHANGED");
             await Exec(denied, "UPDATE dbo.FluentMigratorVersionInfo SET Description=N'001_PersistenceFoundation.sql' WHERE Version=1;");
@@ -329,7 +330,8 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
             Pass("tampered journal refused before mutation");
 
             await Exec(denied, "CREATE TABLE dbo.Vps07bUnknownObject(Id int NOT NULL);");
-            await RunCli(denied, 13, expectSuccess: false);
+            await RunCli(denied, 13, expectSuccess: false,
+                expectedCode: "Migration.NativeSchemaFingerprintRefused");
             await Exec(denied, "DROP TABLE dbo.Vps07bUnknownObject;");
             Assert(await JournalSignature(denied) == stable,
                 "VPS07B_UNKNOWN_SCHEMA_CHANGED_HISTORY");
@@ -367,14 +369,16 @@ VALUES(N'MyDmsVn.Server.DbMigrator.Scripts.014_Unexpected.sql',GETDATE());");
             Pass("future DbUp journal refused");
 
             await Exec(denied, "ALTER TABLE dbo.FluentMigratorVersionInfo ADD InjectedFlag bit NULL;");
-            await RunCli(denied, 13, expectSuccess: false);
+            await RunCli(denied, 13, expectSuccess: false,
+                expectedCode: "Migration.FluentMigratorJournalDefinitionMismatch");
             Assert(await Count(denied, "SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo') AND name=N'InjectedFlag';") == 1,
                 "VPS07B_BAD_FM_SHAPE_UNEXPECTED_MUTATION");
             await Exec(denied, "ALTER TABLE dbo.FluentMigratorVersionInfo DROP COLUMN InjectedFlag;");
             Assert(await JournalSignature(denied) == stable,
                 "VPS07B_BAD_FM_SHAPE_CLEANUP_MISMATCH");
             await Exec(denied, "GRANT SELECT ON dbo.FluentMigratorVersionInfo TO public;");
-            await RunCli(denied, 13, expectSuccess: false);
+            await RunCli(denied, 13, expectSuccess: false,
+                expectedCode: "Migration.PublicObjectGrantRefused");
             await Exec(denied, "REVOKE SELECT ON dbo.FluentMigratorVersionInfo FROM public;");
             Assert(await JournalSignature(denied) == stable,
                 "VPS07B_PUBLIC_JOURNAL_GRANT_CLEANUP_MISMATCH");
@@ -450,7 +454,8 @@ EXEC @r=sys.sp_getapplock @Resource=N'MyDmsVn.SchemaMigration',
  @LockMode=N'Exclusive',@LockOwner=N'Session',@LockTimeout=0; SELECT @r;", locked);
                 Assert(Convert.ToInt32(await acquire.ExecuteScalarAsync(), CultureInfo.InvariantCulture) >= 0,
                     "VPS07B_ORACLE_LOCK_FAILED");
-                await RunCli(denied, 13, expectSuccess: false);
+                await RunCli(denied, 13, expectSuccess: false,
+                    expectedCode: "Migration.AlreadyRunning");
                 using var release = new SqlCommand(@"DECLARE @r int;
 EXEC @r=sys.sp_releaseapplock @Resource=N'MyDmsVn.SchemaMigration',
  @LockOwner=N'Session'; SELECT @r;", locked);
@@ -463,7 +468,8 @@ EXEC @r=sys.sp_releaseapplock @Resource=N'MyDmsVn.SchemaMigration',
             var partial = await PrepareDbUp(12);
             await Exec(partial, "DROP PROCEDURE dbo.ApplySecurityPermissionImport;");
             var partialBefore = await JournalSignatureOfLegacy(partial);
-            await RunCli(partial, 13, expectSuccess: false);
+            await RunCli(partial, 13, expectSuccess: false,
+                expectedCode: "Migration.NativeSchemaFingerprintRefused");
             Assert(await JournalSignatureOfLegacy(partial) == partialBefore,
                 "VPS07B_PARTIAL_SCHEMA_CHANGED_JOURNAL");
             Pass("partial schema rejected with legacy journal unchanged");
@@ -535,7 +541,8 @@ EXEC @r=sys.sp_releaseapplock @Resource=N'MyDmsVn.SchemaMigration',
             Pass("migration identity without CONTROL and sysadmin outside ephemeral CI refused");
 
             // Explicitly test no operator approval even with valid disposable SQL.
-            await RunCli(denied, 13, expectSuccess: false, approved: false);
+            await RunCli(denied, 13, expectSuccess: false, approved: false,
+                expectedCode: "Migration.OperatorApprovalRequired");
             Assert(await JournalSignature(denied) == stable, "VPS07B_UNAPPROVED_MUTATED");
             Pass("operator consent missing refused");
 
