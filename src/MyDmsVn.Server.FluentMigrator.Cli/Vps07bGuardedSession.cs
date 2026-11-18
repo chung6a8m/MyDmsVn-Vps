@@ -61,6 +61,18 @@ internal sealed class Vps07bGuardedSession : IDisposable
             throw new Vps07bRefusal("Migration.AlreadyRunning");
         _ownsLock = true;
 
+        // Historical source cannot be admitted while application-owned
+        // objects have explicit PUBLIC grants. The original DbUp scripts
+        // grant no application objects to PUBLIC; later approved scoped
+        // runtime/operator grants remain unaffected.
+        if (Scalar(@"SELECT CASE WHEN EXISTS(
+SELECT 1 FROM sys.database_permissions p
+JOIN sys.objects o ON p.class=1 AND p.major_id=o.object_id
+WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'public')
+AND p.state IN (N'G',N'W') AND o.is_ms_shipped=0
+) THEN 1 ELSE 0 END;") != 0)
+            throw new Vps07bRefusal("Migration.PublicObjectGrantRefused");
+
         var hasLegacy = Exists("dbo.SchemaVersions");
         var hasFm = Exists(JournalName);
         var marker = BridgeMarker();

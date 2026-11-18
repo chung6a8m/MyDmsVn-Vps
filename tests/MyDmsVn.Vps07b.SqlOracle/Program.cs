@@ -35,7 +35,7 @@ internal static class Program
     private static string _master = "";
     private static string _cli = "";
     private static string _stage = "admission";
-    private const int RequiredSqlCaseCount = 53;
+    private const int RequiredSqlCaseCount = 54;
     private static int _passed;
     private static int _executed;
     private static readonly List<string> Databases = new();
@@ -334,6 +334,14 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
             Assert(await JournalSignature(denied) == stable,
                 "VPS07B_UNKNOWN_SCHEMA_CHANGED_HISTORY");
             Pass("unknown object refused before mutation");
+
+            await Exec(denied, "GRANT SELECT ON dbo.Users TO public;");
+            await RunCli(denied, 13, expectSuccess: false,
+                expectedCode: "Migration.PublicObjectGrantRefused");
+            await Exec(denied, "REVOKE SELECT ON dbo.Users FROM public;");
+            Assert(await JournalSignature(denied) == stable,
+                "VPS07B_PUBLIC_BUSINESS_GRANT_MUTATED_HISTORY");
+            Pass("unsafe public grant on business table refused before migration");
 
             // Forged versions, unexpected objects, mis-shaped journals and
             // future legacy history are refused without replay or trust bypass.
