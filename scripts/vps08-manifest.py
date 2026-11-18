@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import stat
 import sys
 from pathlib import Path
 
@@ -19,11 +20,16 @@ NEEDED = {
 def inventory(root: Path) -> dict[str, dict[str, str | int]]:
     if not root.is_dir() or root.is_symlink():
         raise ValueError("Artifact directory must be real.")
+    if root.stat().st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        raise ValueError("Group/world-writable artifact root refused.")
     files: dict[str, dict[str, str | int]] = {}
     for p in sorted(root.rglob("*")):
         rel = p.relative_to(root).as_posix()
         if p.is_symlink() or not (p.is_file() or p.is_dir()):
             raise ValueError("Symlinks and special files are forbidden.")
+        entry_mode = p.lstat().st_mode
+        if entry_mode & (stat.S_IWGRP | stat.S_IWOTH | stat.S_ISUID | stat.S_ISGID | stat.S_ISVTX):
+            raise ValueError("Writable/special-mode artifact entry refused.")
         if p.is_dir():
             continue
         if any(part in ("", ".", "..") for part in rel.split("/")):

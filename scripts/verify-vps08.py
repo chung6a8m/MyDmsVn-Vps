@@ -56,6 +56,11 @@ def check_configs() -> None:
         require(expected in start, "Credential wrapper is incomplete")
     require("systemctl restart" in rollout and 'swap "$current"' in rollout,
             "Atomic rollback path missing")
+    for item in ("trusted_dir /opt", 'trusted_dir "$root/releases"',
+                 'flock -n 9 || abort', 'systemctl is-active --quiet "$service"',
+                 'find "$root/$new_target" -type d -exec chmod 0755',
+                 'find "$root/$new_target" -type f -exec chmod go-w,a+r'):
+        require(item in rollout, "Missing rollout security guard: " + item)
     for forbidden in ("MYDMSVN_WEB_SQL_CONNECTION_STRING=", "MYDMSVN_WEB_JWT_KEYS=",
                       "MYDMSVN_VPS08_PROXY_TOKEN="):
         require(forbidden not in env, "Example environment must not contain secrets")
@@ -99,7 +104,23 @@ def check_artifact() -> None:
             raise AssertionError("Env artifact accepted")
         except ValueError:
             pass
-    print("VPS08_ARTIFACT_NEGATIVE_PASS: wrong SHA, file mutation, symlink, env file")
+        (root / ".env.production").unlink()
+        dll.chmod(0o666)
+        try:
+            module.process("verify", directory, SHA)
+            raise AssertionError("World-writable DLL accepted")
+        except ValueError:
+            pass
+        dll.chmod(0o644)
+        nested = root / "writable-dir"
+        nested.mkdir()
+        nested.chmod(0o777)
+        try:
+            module.process("verify", directory, SHA)
+            raise AssertionError("World-writable nested directory accepted")
+        except ValueError:
+            pass
+    print("VPS08_ARTIFACT_NEGATIVE_PASS: wrong SHA, mutation, symlink, env, unsafe modes")
 
 
 if __name__ == "__main__":
