@@ -84,6 +84,13 @@ internal static class Program
                 await Check(db, 13);
                 Assert(beforeHistory == sourceVersion, "VPS07B_SOURCE_HISTORY_REWRITTEN");
                 Assert(await SourceData(db) == beforeData, "VPS07B_SOURCE_DATA_LOST");
+                if (sourceVersion == 9)
+                {
+                    var valuation = await Text(db, @"SELECT CONCAT(
+ (SELECT CONVERT(varchar(32),InventoryValue) FROM dbo.StockBalances),
+ (SELECT CONVERT(varchar(32),ValueChange) FROM dbo.StockValuationEntries));");
+                    Assert(valuation == "10.000010.0000", "VPS07B_SCHEMA9_VALUATION_RECONCILIATION_FAILED");
+                }
                 Assert(await DefinitionSignature(db) == baselineSignature,
                     "VPS07B_UPGRADE_DEFINITION_DRIFT");
                 Pass("exact" + sourceVersion + " to 13; source rows, schema and both journals");
@@ -192,21 +199,49 @@ EXEC @r=sys.sp_releaseapplock @Resource=N'MyDmsVn.SchemaMigration',
 
     private static async Task Seed(string db)
     {
-        // Minimal stable business rows force actual data-retention validation;
-        // schema9->10 also tests cost-zero initialization on an existing balance.
+        // Real posted goods receipt, stock ledger and valuation. On schema9
+        // valuation is computed by migration 010; on schema10+ it is pre-seeded.
+        // The oracle must reconcile four units at 2.5 each (=10), not just
+        // empty-table upgrades.
         await Exec(db, @"
+DECLARE @actor int, @product int, @warehouse int, @employee int,
+ @receipt bigint, @receiptLine bigint, @ledger bigint;
+DECLARE @posted datetime2(7) = SYSUTCDATETIME();
+INSERT dbo.Users(Username,NormalizedUsername,DisplayName,Source,
+ PasswordHash,PasswordSalt,PasswordAlgorithm,IsActive)
+VALUES(N'ci-operator',N'CI-OPERATOR',N'Operator retained',N'Local',
+ N'ci-inert-hash',N'',N'None',1);
+SET @actor=SCOPE_IDENTITY();
 INSERT dbo.Products(Code,Name,Unit) VALUES(N'CI-PROD',N'Product retained',N'EA');
+SET @product=SCOPE_IDENTITY();
 INSERT dbo.Warehouses(Code,Name) VALUES(N'CI-WH',N'Warehouse retained');
+SET @warehouse=SCOPE_IDENTITY();
 INSERT dbo.Customers(Code,Name) VALUES(N'CI-CUST',N'Customer retained');
 INSERT dbo.Employees(Code,Name) VALUES(N'CI-EMP',N'Employee retained');
+SET @employee=SCOPE_IDENTITY();
+INSERT dbo.GoodsReceipts(ReceiptNo,ReceiptDate,WarehouseId,EmployeeId,
+ Status,CreatedByUserId,PostedAtUtc,PostedByUserId)
+VALUES(N'CI-RECEIPT',CONVERT(date,@posted),@warehouse,@employee,
+ 'Posted',@actor,@posted,@actor);
+SET @receipt=SCOPE_IDENTITY();
+INSERT dbo.GoodsReceiptLines(ReceiptId,LineNo,ProductId,Quantity,UnitCost,CreatedByUserId)
+VALUES(@receipt,1,@product,CAST(4 AS decimal(18,4)),CAST(2.5 AS decimal(19,4)),@actor);
+SET @receiptLine=SCOPE_IDENTITY();
+INSERT dbo.StockLedger(WarehouseId,ProductId,DocumentType,DocumentId,DocumentLineId,
+ QuantityChange,PostedAtUtc,PostedByUserId)
+VALUES(@warehouse,@product,'GoodsReceipt',@receipt,@receiptLine,
+ CAST(4 AS decimal(18,4)),@posted,@actor);
+SET @ledger=SCOPE_IDENTITY();
 IF COL_LENGTH(N'dbo.StockBalances',N'InventoryValue') IS NULL
     INSERT dbo.StockBalances(WarehouseId,ProductId,Quantity)
-    SELECT WarehouseId,ProductId,CAST(0 AS decimal(18,4))
-    FROM dbo.Warehouses CROSS JOIN dbo.Products;
+    VALUES(@warehouse,@product,CAST(4 AS decimal(18,4)));
 ELSE
+BEGIN
     INSERT dbo.StockBalances(WarehouseId,ProductId,Quantity,InventoryValue)
-    SELECT WarehouseId,ProductId,CAST(0 AS decimal(18,4)),CAST(0 AS decimal(28,4))
-    FROM dbo.Warehouses CROSS JOIN dbo.Products;");
+    VALUES(@warehouse,@product,CAST(4 AS decimal(18,4)),CAST(10 AS decimal(28,4)));
+    INSERT dbo.StockValuationEntries(LedgerId,ValueChange)
+    VALUES(@ledger,CAST(10 AS decimal(28,4)));
+END;");
     }
 
     private static async Task<string> SourceData(string db)
@@ -216,7 +251,10 @@ ELSE
 (SELECT Code,Name FROM dbo.Customers ORDER BY CustomerId FOR JSON PATH),
 (SELECT Code,Name FROM dbo.Warehouses ORDER BY WarehouseId FOR JSON PATH),
 (SELECT Code,Name FROM dbo.Employees ORDER BY EmployeeId FOR JSON PATH),
-(SELECT CONVERT(varchar(32),Quantity) AS Qty FROM dbo.StockBalances ORDER BY WarehouseId,ProductId FOR JSON PATH)
+(SELECT CONVERT(varchar(32),Quantity) AS Qty FROM dbo.StockBalances ORDER BY WarehouseId,ProductId FOR JSON PATH),
+(SELECT ReceiptNo,Status FROM dbo.GoodsReceipts ORDER BY ReceiptId FOR JSON PATH),
+(SELECT Quantity,UnitCost FROM dbo.GoodsReceiptLines ORDER BY ReceiptLineId FOR JSON PATH),
+(SELECT DocumentType,QuantityChange FROM dbo.StockLedger ORDER BY LedgerId FOR JSON PATH)
 );");
         return Hash(data);
     }
