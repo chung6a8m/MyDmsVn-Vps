@@ -8,8 +8,25 @@
 
 - Opt-in strict single-hop loopback proxy, secret-admitted header boundary with 127.0.0.1 only, no wildcard KnownProxies or unsafe framework flag. Existing direct HTTPS mode remains default.
 - Root-owned systemd/Nginx templates, LoadCredential and unprivileged account, protected audit root, manifest-verified release and atomic binary-only rollback. Review fixes: exclusive flock, trusted owner/mode checks for /opt and release ancestors, rejection of writable/special-mode artifact entries, non-writable installed files, service-active health guard, and full SQL-free real Kestrel forwarded-header/API admission tests.
-- Native proxy, SQL TLS and live SQL-free Kestrel regressions (33 expected), static source/refusal tests, exact SDK 10.0.404 locked publish, and separate manually dispatched protected Environment job.
+- Native proxy, SQL TLS and live SQL-free Kestrel regressions (33 cases verified at earlier code HEAD; final HEAD pending), static source/refusal tests, exact SDK 10.0.404 locked publish, and separate manually dispatched protected Environment job.
 - Operator-specific Environment provisioning script and [Linux runbook](../runbooks/vps-08-linux-deployment.md).
+
+## Observed review checkpoints — not final deployment acceptance
+
+- **Initial source HEAD `e0e705954039cab22146663ed0452bcc4ee0c53b`:** all **10/10 mandatory PR workflows SUCCESS**, including [VPS-08 #44295115796](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44295115796); original **27/27** native proxy/SQL TLS cases PASS, zero failure/skip, 59-file Linux publish with exact source SHA. Protected staging job was **SKIPPED**.
+- **Strengthened proxy code HEAD `7c7e117e40a03c118ee9d5b9f3c30c4a74e4920e`:** [VPS-08 #44308489914](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44308489914) SUCCESS: **33/33** native cases, including 6 real SQL-free Kestrel/forwarded-header/API tests; **0 failed/0 skipped** for the 33 selected tests, 59-file manifest matches that HEAD, published runtime contains **0 Newtonsoft.Json / 0 MediatR**. Other required workflows and the final doc-inclusive HEAD have separate statuses.
+- **Review-fix candidate `c35c1b1fd56995aa00e019d0625a5b0047479a73`:** serialized root-only rollout, positive/negative artifact permission checks, host pinning and safe same-SHA reruns implemented. Final aggregate CI on the latest documentation-inclusive HEAD and real staging remain **PENDING / NOT VERIFIED** unless recorded below.
+
+## Findings and resolution (source review only)
+
+| Finding | Severity | Source disposition |
+| --- | --- | --- |
+| F01 — concurrent rollout and writable ancestor/package could corrupt release state or allow mutable files | P1 | **FIXED IN SOURCE:** `5b2a8ca`: exclusive `flock`, trusted directory modes, no writable/special artifacts, root-owned immutable release, active-service health probe. Actual systemd rollback rehearsal **NOT RUN** |
+| F02 — component tests lacked verification that ASP.NET Core consumes forwarded headers before native strict transport admission | P1 | **FIXED AND CI VERIFIED:** `7c7e117`: 6 additional real Kestrel HTTP cases, 33/33 PASS in #44308489914. Real Nginx/TLS remains **NOT RUN** |
+| F03 — staging runner label alone could select the wrong machine; direct local bypass lacked staged probe | P1 | **FIXED IN SOURCE:** `1b0fdb2`: reviewed machine-id SHA-256 pin plus two mandatory direct-HTTP deny probes. Protected job **NOT RUN** |
+| F04 — failed/partial staging rollout could not be retried on the same reviewed SHA without an operator cleanup | P2 | **FIXED IN SOURCE:** `c35c1b1`: permit same-SHA retry only with identical verified manifest and root-owned existing release, no in-place overwrite. Actual retry/fault rehearsal **NOT RUN** |
+
+Neither an author's code changes nor a second-pass source check is an independent human deployment approval. A protected reviewer must inspect final diff, exact CI and real staging evidence separately.
 
 ## Required evidence, never infer PASS
 

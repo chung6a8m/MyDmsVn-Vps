@@ -15,6 +15,10 @@ Three secrets (restricted SQL string, JWT signing allowlist and proxy token) are
 3. GitHub Environment named vps08-sql13-nonproduction, a reviewer **independent of the actor**, prevent self review, admin bypass disabled, only exact main branch allowed, secret name VPS08_STAGING_HOST_ATTESTATION, variables VPS08_STAGING_PROBE_URL and VPS08_STAGING_MACHINE_SHA256 (SHA-256 of the independently reviewed host /etc/machine-id; do not publish the raw identifier), and a dedicated nonproduction self-hosted runner labeled vps08-staging and operating as vps08runner. No staging job can run on normal PR or push. GitHub Environment configuration is an external admin step, not established by CI.
 4. Pin the full reviewed 40-character main SHA, reviewed artifact and complete same-SHA required CI. Confirm external Owner authorization to use staging SQL and ensure backup/restore and sensitive host cleanup plan are approved.
 
+The staging operator pins the actual machine independently before enabling the protected Environment. Record only the hash (not raw machine-id) as the Environment variable `VPS08_STAGING_MACHINE_SHA256`:
+
+    sha256sum /etc/machine-id
+
 An independent admin can configure and verify (with locally authenticated gh CLI):
 
     python3 scripts/configure-vps08-staging-gate.py configure --reviewer INDEPENDENT_LOGIN
@@ -50,7 +54,7 @@ The VPS-08 CI job restores with exact SDK 10.0.404/locked graph, runs 33 native 
     sudo systemctl is-active mydmsvn-vps.service
     curl --fail --silent --show-error --proto '=https' --tlsv1.2 https://staging.example/api/v1/health
 
-The root-owned rollout helper refuses symlinks, group/other-writable artifacts or paths, special file modes, concurrent deploy/rollback (exclusive flock), and mutated package files. An already-installed release of the same SHA may be restarted only if its manifest is byte-identical to the verified newly downloaded package and all installed entries remain root-owned; it is never overwritten in place. A failed health check is never accepted solely because Nginx responds if systemd has stopped. It installs to /opt/mydmsvn/releases/FULL_SHA, atomically changes current, restarts systemd and polls publicly validated TLS health. On failed health it attempts restoring the previously manifest-verified binary and **returns failure even if recovery succeeds**. Rollback never downgrades SQL or undoes transactions. Only use an old binary when SQL schema, auth sessions and wire compatibility are independently proven:
+The root-owned rollout helper refuses symlinks, group/other-writable artifacts or paths, special file modes, concurrent deploy/rollback (exclusive flock), and mutated package files. An already-installed release of the same SHA may be restarted only if its manifest is byte-identical to the verified newly downloaded package and all installed entries remain root-owned; it is never overwritten in place. A release left partially copied by an interrupted initial deployment cannot be reused: the manifest or ownership admission must fail; clean it up only under root/operator change control after preserving failure evidence. `flock` (util-linux) must be installed on the VPS. A failed health check is never accepted solely because Nginx responds if systemd has stopped. It installs to /opt/mydmsvn/releases/FULL_SHA, atomically changes current, restarts systemd and polls publicly validated TLS health. On failed health it attempts restoring the previously manifest-verified binary and **returns failure even if recovery succeeds**. Rollback never downgrades SQL or undoes transactions. Only use an old binary when SQL schema, auth sessions and wire compatibility are independently proven:
 
     sudo /usr/local/libexec/vps08-rollout rollback PREVIOUS_40_HEX_SHA https://staging.example/api/v1/health
     sudo /usr/local/libexec/vps08-rollout rollback CANDIDATE_40_HEX_SHA https://staging.example/api/v1/health
