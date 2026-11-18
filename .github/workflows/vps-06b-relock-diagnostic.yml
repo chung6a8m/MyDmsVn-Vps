@@ -1,0 +1,28 @@
+name: VPS-06B diagnostic — refresh precise NuGet lock snapshots
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  relock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.404'
+      - name: Refresh all production net10 locks without accepting changes
+        run: |
+          set -eu
+          dotnet restore src/MyDmsVn.Server.AspNetCoreHost/MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true --force-evaluate -v minimal
+          for project in MyDmsVn.Server.Application MyDmsVn.Server.Infrastructure MyDmsVn.Server.AspNetCoreHost; do
+            path="src/$project/packages.vps06b.lock.json"
+            echo "===VPS06B_LOCK_BEGIN:$path==="
+            cat "$path"
+            echo "===VPS06B_LOCK_END:$path==="
+          done
