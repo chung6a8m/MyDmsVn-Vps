@@ -35,11 +35,11 @@ public sealed class Vps06bGeneratedMediatorTests
         Assert.Equal(46, interfaces.Select(i => i.Contract).Distinct().Count());
         foreach (var handler in interfaces)
         {
-            var descriptor = Assert.Single(services.Where(d => d.ServiceType == handler.Contract));
+            var descriptor = Assert.Single(services, d => d.ServiceType == handler.Contract);
             Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
         }
         Assert.Equal(ServiceLifetime.Scoped,
-            Assert.Single(services.Where(d => d.ServiceType == typeof(IMediator))).Lifetime);
+            Assert.Single(services, d => d.ServiceType == typeof(IMediator)).Lifetime);
     }
 
     [Fact]
