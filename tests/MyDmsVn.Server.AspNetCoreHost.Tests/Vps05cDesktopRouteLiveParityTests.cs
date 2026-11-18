@@ -99,7 +99,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         { "VPS01-AUTH-REFRESH", "POST", "/api/v1/auth/refresh", null, false, true },
         { "VPS01-AUTH-LOGOUT", "POST", "/api/v1/auth/logout", null, false, true },
         { "VPS01-AUTH-ME", "GET", "/api/v1/auth/me", null, true, false },
-        { "VPS01-AUTH-CAPABILITIES", "GET", "/api/v1/auth/capabilities?feature=sales-receipts", null, true, false },
+        { "VPS01-AUTH-CAPABILITIES", "GET", "/api/v1/auth/capabilities?feature=sales", null, true, false },
         { "VPS01-OPERATIONS-CONTEXT", "GET", "/api/v1/operations/context", null, true, false },
         { "VPS01-OPERATIONS-STATUS", "GET", "/api/v1/operations/11111111-1111-4111-8111-111111111111", null, true, false },
         { "VPS01-RESOLUTION-CONTEXT", "GET", "/api/v2/operations/context", null, true, false },
@@ -114,7 +114,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
     public async Task LegacyControlRouteMatchesLiveNet48RawResponse(
         string caseId, string method, string path, string? body, bool authenticated, bool cookie)
     {
-        await using var fixture = await DesktopLiveFixture.StartAsync();
+        await using var fixture = await DesktopLiveFixture.StartAsync(authControlProfile: true);
         using var response = await fixture.SendControlAsync(method, path, body, authenticated, cookie);
         var bytes = await response.Content.ReadAsByteArrayAsync();
         AssertMatchesNet48(caseId, "success", response, bytes);
@@ -125,16 +125,50 @@ public sealed class Vps05cDesktopRouteLiveParityTests
     public async Task LegacyDataRouteDispatchesThroughKestrelAndMatchesFrozenLiveNet48Corpus(
         string caseId, string method, string path, string? requestFile, string responseFile)
     {
+        await RunLegacyDataVariant(caseId, method, path, requestFile, responseFile, "success");
+    }
+
+    [Theory]
+    [MemberData(nameof(LegacyDataRoutes))]
+    public Task LegacyDataRoutePreservesPermissionResponse(string caseId, string method, string path,
+        string? requestFile, string responseFile) =>
+        RunLegacyDataVariant(caseId, method, path, requestFile, responseFile, "permission");
+
+    [Theory]
+    [MemberData(nameof(LegacyDataRoutes))]
+    public Task LegacyDataRoutePreservesInvalidInputResponse(string caseId, string method, string path,
+        string? requestFile, string responseFile) =>
+        RunLegacyDataVariant(caseId, method, path, requestFile, responseFile, "invalid");
+
+    [Theory]
+    [MemberData(nameof(LegacyDataRoutes))]
+    public Task LegacyDataRoutePreservesDatabaseFailureResponse(string caseId, string method, string path,
+        string? requestFile, string responseFile) =>
+        RunLegacyDataVariant(caseId, method, path, requestFile, responseFile, "failure");
+
+    [Theory]
+    [MemberData(nameof(LegacyDataRoutes))]
+    public Task LegacyDataRoutePreservesUnauthenticatedResponse(string caseId, string method, string path,
+        string? requestFile, string responseFile) =>
+        RunLegacyDataVariant(caseId, method, path, requestFile, responseFile, "unauthenticated");
+
+    private static async Task RunLegacyDataVariant(string caseId, string method, string path,
+        string? requestFile, string responseFile, string variant)
+    {
         _ = responseFile;
-        await using var fixture = await DesktopLiveFixture.StartAsync();
-        var body = requestFile == null ? null : CorpusText(requestFile);
-        using var response = await fixture.SendAsync(method, path, body);
+        await using var fixture = await DesktopLiveFixture.StartAsync(
+            denyPermissions: variant == "permission", throwHandlers: variant == "failure");
+        if (variant == "invalid")
+        {
+            if (method == "GET") path += path.Contains('?') ? "&unknown=1" : "?unknown=1";
+            else requestFile = null;
+        }
+        var body = variant == "invalid" && method != "GET" ? "{}" :
+            requestFile == null ? null : CorpusText(requestFile);
+        using var response = await fixture.SendAsync(method, path, body,
+            authenticated: variant != "unauthenticated");
         var bytes = await response.Content.ReadAsByteArrayAsync();
-        var actual = Encoding.UTF8.GetString(bytes);
-        Assert.True(response.StatusCode == HttpStatusCode.OK,
-            caseId + ": " + actual + Environment.NewLine + fixture.LastException);
-        AssertMatchesNet48(caseId, "success", response, bytes);
-        Assert.NotNull(fixture.LastRequest);
+        AssertMatchesNet48(caseId, variant, response, bytes);
     }
 
     [Theory]
@@ -268,13 +302,17 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             response.Headers.TryGetValues("X-Content-Type-Options", out var contentOptions) ? string.Join(",", contentOptions) : string.Empty);
         Assert.Equal(expected.Hsts,
             response.Headers.TryGetValues("Strict-Transport-Security", out var hsts) ? string.Join(",", hsts) : string.Empty);
+        Assert.Equal(expected.SetCookie,
+            response.Headers.TryGetValues("Set-Cookie", out var cookies) ? string.Join("\n", cookies) : string.Empty);
         if (caseId is "VPS01-AUTH-LOGIN" or "VPS01-AUTH-REFRESH")
         {
             var legacy = Newtonsoft.Json.Linq.JObject.Parse(
                 Encoding.UTF8.GetString(Convert.FromBase64String(expected.BodyBase64)));
             var current = Newtonsoft.Json.Linq.JObject.Parse(Encoding.UTF8.GetString(body));
-            ((Newtonsoft.Json.Linq.JObject)legacy["data"]!).Property("accessToken")!.Remove();
-            ((Newtonsoft.Json.Linq.JObject)current["data"]!).Property("accessToken")!.Remove();
+            var token = (string?)current["data"]!["accessToken"];
+            Assert.True(token?.Split('.').Length == 3 && token.Split('.').All(x => x.Length > 0),
+                caseId + " returned a malformed access token");
+            current["data"]!["accessToken"] = "<dynamic-jwt>";
             Assert.True(Newtonsoft.Json.Linq.JToken.DeepEquals(legacy, current), caseId);
         }
         else
@@ -302,6 +340,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         public string WwwAuthenticate { get; set; } = string.Empty;
         public string XContentTypeOptions { get; set; } = string.Empty;
         public string Hsts { get; set; } = string.Empty;
+        public string SetCookie { get; set; } = string.Empty;
         public string BodyBase64 { get; set; } = string.Empty;
     }
 
@@ -459,7 +498,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
 
         public static async Task<DesktopLiveFixture> StartAsync(
             bool denyPermissions = false, bool throwHandlers = false,
-            bool throwPermissionStore = false)
+            bool throwPermissionStore = false, bool authControlProfile = false)
         {
             var clock = new FrozenClock();
             var options = new WebHostOptions("https://web2.mydmsvn.test", "https://web2.mydmsvn.test", "auth-tests",
@@ -472,6 +511,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 DenyPermissions = denyPermissions,
                 ThrowHandlers = throwHandlers,
                 ThrowPermissionStore = throwPermissionStore,
+                AuthControlProfile = authControlProfile,
             };
             var errors = new ConcurrentQueue<Exception>();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Production" });
@@ -656,6 +696,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         public bool DenyPermissions { get; init; }
         public bool ThrowHandlers { get; init; }
         public bool ThrowPermissionStore { get; init; }
+        public bool AuthControlProfile { get; init; }
         public bool Revoked { get; private set; }
         public Task<CurrentUser?> GetActiveUserAsync(Guid sessionId, int userId, CancellationToken token) =>
             Task.FromResult<CurrentUser?>(!Revoked && sessionId == Guid.Parse("11111111-1111-4111-8111-111111111111") && userId == 1
@@ -682,7 +723,10 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 throw new InvalidOperationException("secret-database-connection");
             Assert.Equal(1, userId);
             PermissionChecks.Add(permissionKey);
-            return Task.FromResult(new PermissionSnapshot(!DenyPermissions, false));
+            var allowed = !DenyPermissions;
+            if (AuthControlProfile)
+                allowed = permissionKey == "Sales.Receipts.Read" || permissionKey == "Sales.Receipts.Post";
+            return Task.FromResult(new PermissionSnapshot(allowed, AuthControlProfile));
         }
     }
 

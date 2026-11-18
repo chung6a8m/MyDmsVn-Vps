@@ -43,7 +43,7 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
     {
         public Observation(string caseId, string variant, int status, string contentType,
             string correlationId, string cacheControl, string pragma, string wwwAuthenticate,
-            string xContentTypeOptions, string hsts, string bodyBase64)
+            string xContentTypeOptions, string hsts, string setCookie, string bodyBase64)
         {
             CaseId = caseId;
             Variant = variant;
@@ -55,6 +55,7 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
             WwwAuthenticate = wwwAuthenticate;
             XContentTypeOptions = xContentTypeOptions;
             Hsts = hsts;
+            SetCookie = setCookie;
             BodyBase64 = bodyBase64;
         }
 
@@ -68,6 +69,7 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         public string WwwAuthenticate { get; }
         public string XContentTypeOptions { get; }
         public string Hsts { get; }
+        public string SetCookie { get; }
         public string BodyBase64 { get; }
     }
 
@@ -110,7 +112,7 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         new Case("VPS01-AUTH-REFRESH", "POST", "/api/v1/auth/refresh", null),
         new Case("VPS01-AUTH-LOGOUT", "POST", "/api/v1/auth/logout", null),
         new Case("VPS01-AUTH-ME", "GET", "/api/v1/auth/me", null),
-        new Case("VPS01-AUTH-CAPABILITIES", "GET", "/api/v1/auth/capabilities?feature=sales-receipts", null),
+        new Case("VPS01-AUTH-CAPABILITIES", "GET", "/api/v1/auth/capabilities?feature=sales", null),
         new Case("VPS01-OPERATIONS-CONTEXT", "GET", "/api/v1/operations/context", null),
         new Case("VPS01-OPERATIONS-STATUS", "GET", "/api/v1/operations/11111111-1111-4111-8111-111111111111", null),
         new Case("VPS01-RESOLUTION-CONTEXT", "GET", "/api/v2/operations/context", null),
@@ -155,11 +157,12 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         foreach (var testCase in ControlCases)
             observations.Add(await CaptureControl(testCase));
         foreach (var testCase in LegacyCases)
-            observations.Add(await CaptureLegacyData(testCase));
+        foreach (var variant in new[] { "success", "permission", "invalid", "failure", "unauthenticated" })
+            observations.Add(await CaptureLegacyData(testCase, variant));
 
-        Assert.Equal(169, observations.Count);
+        Assert.Equal(233, observations.Count);
         Assert.Equal(57, observations.Select(x => x.CaseId).Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(169, observations.Select(x => x.CaseId + "\n" + x.Variant)
+        Assert.Equal(233, observations.Select(x => x.CaseId + "\n" + x.Variant)
             .Distinct(StringComparer.Ordinal).Count());
 
         var actual = JsonConvert.SerializeObject(observations, Formatting.Indented);
@@ -177,16 +180,27 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
             "Live net48 OWIN route observations differ from the frozen VPS-05C oracle.");
     }
 
-    private static async Task<Observation> CaptureLegacyData(LegacyCase testCase)
+    private static async Task<Observation> CaptureLegacyData(LegacyCase testCase, string variant)
     {
+        var path = testCase.Path;
+        var bodyFile = testCase.Body;
+        if (variant == "invalid")
+        {
+            if (testCase.Method == "GET") path += path.Contains("?") ? "&unknown=1" : "?unknown=1";
+            else bodyFile = null;
+        }
         var inventory = testCase.Id.IndexOf("RECEIPT", StringComparison.Ordinal) >= 0 ||
             testCase.Id.IndexOf("INVENTORY", StringComparison.Ordinal) >= 0;
         if (inventory)
         {
             using var fixture = new InventoryEndpointFixture { ResultFile = testCase.ResponseFile };
-            using var response = await fixture.Send(testCase.Method, testCase.Path,
-                testCase.Body == null ? null : InventoryEndpointCorpus.Text(testCase.Body), correlationId: Correlation);
-            return await Observe(testCase.Id, "success", response);
+            if (variant == "permission") fixture.Denied.Add(LegacyPermission(testCase.Id));
+            if (variant == "failure") fixture.Throw = true;
+            using var response = await fixture.Send(testCase.Method, path,
+                variant == "invalid" && testCase.Method != "GET" ? "{}" :
+                    bodyFile == null ? null : InventoryEndpointCorpus.Text(bodyFile),
+                authenticated: variant != "unauthenticated", correlationId: Correlation);
+            return await Observe(testCase.Id, variant, response);
         }
 
         using (var fixture = new SalesWireFixture())
@@ -200,9 +214,13 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
                 fixture.State.Lookup = WireCorpus.From<IReadOnlyList<MyDmsVn.Contracts.CatalogLookupDto>>(
                     WireCorpus.Json("catalog-" + catalog + "-response.json")["data"]!);
             }
-            using var response = await fixture.Send(testCase.Method, testCase.Path,
-                testCase.Body == null ? null : WireCorpus.Text(testCase.Body), correlationId: Correlation);
-            return await Observe(testCase.Id, "success", response);
+            if (variant == "permission") fixture.State.Denied.Add(LegacyPermission(testCase.Id));
+            if (variant == "failure") fixture.State.Throw = true;
+            using var response = await fixture.Send(testCase.Method, path,
+                variant == "invalid" && testCase.Method != "GET" ? "{}" :
+                    bodyFile == null ? null : WireCorpus.Text(bodyFile),
+                authenticated: variant != "unauthenticated", correlationId: Correlation);
+            return await Observe(testCase.Id, variant, response);
         }
     }
 
@@ -275,7 +293,24 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
             response.Headers.TryGetValues("WWW-Authenticate", out var authenticate) ? string.Join(",", authenticate) : string.Empty,
             response.Headers.TryGetValues("X-Content-Type-Options", out var contentOptions) ? string.Join(",", contentOptions) : string.Empty,
             response.Headers.TryGetValues("Strict-Transport-Security", out var hsts) ? string.Join(",", hsts) : string.Empty,
+            response.Headers.TryGetValues("Set-Cookie", out var cookies) ? string.Join("\n", cookies) : string.Empty,
             Convert.ToBase64String(bytes));
+    }
+
+    private static string LegacyPermission(string caseId)
+    {
+        if (caseId == "VPS01-SALES-LIST" || caseId == "VPS01-SALES-GET") return "Sales.Receipts.Read";
+        if (caseId == "VPS01-SALES-CREATE" || caseId == "VPS01-SALES-UPDATE") return "Sales.Receipts.Write";
+        if (caseId == "VPS01-SALES-POST") return "Sales.Receipts.Post";
+        if (caseId.StartsWith("VPS01-LOOKUP-", StringComparison.Ordinal))
+        {
+            var name = caseId.Substring("VPS01-LOOKUP-".Length).ToLowerInvariant();
+            return "Catalog." + char.ToUpperInvariant(name[0]) + name.Substring(1) + ".Read";
+        }
+        if (caseId == "VPS01-RECEIPT-LIST" || caseId == "VPS01-RECEIPT-GET") return "Inventory.GoodsReceipts.Read";
+        if (caseId == "VPS01-RECEIPT-CREATE" || caseId == "VPS01-RECEIPT-UPDATE") return "Inventory.GoodsReceipts.Write";
+        if (caseId == "VPS01-RECEIPT-POST") return "Inventory.GoodsReceipts.Post";
+        return caseId == "VPS01-INVENTORY-BALANCES" ? "Inventory.Balances.Read" : "Inventory.StockCard.Read";
     }
 
     private static string? Permission(string caseId)

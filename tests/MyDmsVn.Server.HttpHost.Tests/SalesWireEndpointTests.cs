@@ -383,6 +383,7 @@ internal sealed class SalesWireFixture : IDisposable
         services.AddSingleton<IRequestHandler<TRequest, ErrorOr<TResult>>>(new CaptureHandler<TRequest, TResult>(request =>
         {
             State.Calls.Add(request!);
+            if (State.Throw) throw new InvalidOperationException("secret SQL connection");
             if (State.Error.HasValue) return State.Error.Value;
             if (State.Errors != null) return State.Errors;
             return result(request);
@@ -417,6 +418,7 @@ internal sealed class SalesWireState : IPermissionStore
     public readonly HashSet<string> Denied = new HashSet<string>(StringComparer.Ordinal);
     public Error? Error;
     public List<Error>? Errors;
+    public bool Throw;
     public SalesReceiptDto Detail = WireCorpus.Dto<SalesReceiptDto>("sales-create-response.json");
     public IReadOnlyList<CatalogLookupDto> Lookup = new[] { new CatalogLookupDto(104, "SP104", "Sản phẩm", true) };
     public Task<PermissionSnapshot> GetSnapshotAsync(int userId, string permissionKey, CancellationToken cancellationToken) => Task.FromResult(new PermissionSnapshot(!Denied.Contains(permissionKey), false));

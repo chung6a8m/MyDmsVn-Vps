@@ -14,6 +14,7 @@ using Xunit;
 namespace MyDmsVn.Server.AspNetCoreHost.Tests;
 
 [SupportedOSPlatform("linux")]
+[Collection("Portable audit Linux serial")]
 public sealed class PortableAuditLinuxTests
 {
     private static readonly UnixFileMode PrivateDirectory =
@@ -199,3 +200,6 @@ public sealed class PortableAuditLinuxTests
             securityAuditPath: "C:\\temp\\vps04b\\audit.jsonl"));
     }
 }
+
+[CollectionDefinition("Portable audit Linux serial", DisableParallelization = true)]
+public sealed class PortableAuditLinuxSerialCollection;
