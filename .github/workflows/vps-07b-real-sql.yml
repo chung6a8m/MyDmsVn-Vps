@@ -31,16 +31,13 @@ jobs:
         run: |
           set -euo pipefail
           test "$(dotnet --version)" = "10.0.404"
-          dotnet restore MyDmsVn.Server.FluentMigrator.Cli.csproj -p:Vps04Server=true --force-evaluate -v minimal
+          dotnet restore MyDmsVn.Server.FluentMigrator.Cli.csproj -p:Vps04Server=true --locked-mode -v minimal
           dotnet build MyDmsVn.Server.FluentMigrator.Cli.csproj -c Release -f net10.0 -p:Vps04Server=true --no-restore -warnaserror -v minimal
           test -f packages.lock.json || { echo "::error::Missing NuGet lock file"; exit 1; }
-      - name: Preserve generated NuGet lock to freeze in review commit
+      - name: Preserve committed deterministic NuGet lock
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: vps07b-runner-lock
           path: src/MyDmsVn.Server.FluentMigrator.Cli/packages.lock.json
           if-no-files-found: warn
-      - name: Display lock in deterministic UTF-8 for explicit source pinning
-        if: success()
-        run: cat src/MyDmsVn.Server.FluentMigrator.Cli/packages.lock.json
