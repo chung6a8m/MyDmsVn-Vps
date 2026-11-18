@@ -77,6 +77,7 @@ internal static class Program
         var builder = WebApplication.CreateBuilder(args);
         RequireScopeValidation(builder);
         builder.Services.AddServerApplication(superuser).AddHttpRequestIdentity();
+        builder.Services.AddProductionGeneratedMediator();
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton(sessions);
         builder.Services.AddSingleton<AuthAttemptLimiter>();
