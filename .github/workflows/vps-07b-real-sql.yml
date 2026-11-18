@@ -110,11 +110,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dotnet restore MyDmsVn.Vps07b.SqlOracle.csproj --force-evaluate -v minimal
+          dotnet restore MyDmsVn.Vps07b.SqlOracle.csproj --locked-mode -v minimal
           dotnet build MyDmsVn.Vps07b.SqlOracle.csproj -c Release -f net10.0 --no-restore -warnaserror -v minimal
-          echo 'VPS07B_SQL_ORACLE_LOCK_BEGIN'
-          cat packages.lock.json
-          echo 'VPS07B_SQL_ORACLE_LOCK_END'
       - name: Execute all real SQL paths with explicit discovered/executed/failed/skipped
         shell: bash
         run: |
