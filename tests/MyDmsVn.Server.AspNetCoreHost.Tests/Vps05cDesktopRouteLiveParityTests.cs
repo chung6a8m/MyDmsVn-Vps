@@ -246,6 +246,48 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         AssertMatchesNet48(caseId, "permission", response, bytes);
     }
 
+    [Fact]
+    public async Task Web6ReceiptEpochMismatchMatchesLiveNet48()
+    {
+        await using var fixture = await DesktopLiveFixture.StartAsync(web6Enabled: true);
+        using var response = await fixture.SendWeb6Async("VPS01-RESEND-RECEIPT",
+            identityVariant: "epoch-mismatch");
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        AssertMatchesNet48("VPS01-RESEND-RECEIPT", "epoch-mismatch", response, bytes);
+    }
+
+    [Theory]
+    [InlineData("epoch-mismatch")]
+    [InlineData("fingerprint-mismatch")]
+    public async Task Web6EligibilityIdentityMismatchMatchesLiveNet48(string variant)
+    {
+        await using var fixture = await DesktopLiveFixture.StartAsync(web6Enabled: true);
+        using var issued = await fixture.SendWeb6Async("VPS01-RESEND-RECEIPT");
+        var issuedJson = Newtonsoft.Json.Linq.JObject.Parse(await issued.Content.ReadAsStringAsync());
+        var receipt = (string)issuedJson["data"]!["receipt"]!;
+        using var response = await fixture.SendWeb6Async("VPS01-RESEND-ELIGIBILITY", receipt,
+            identityVariant: variant);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        AssertMatchesNet48("VPS01-RESEND-ELIGIBILITY", variant, response, bytes);
+    }
+
+    [Fact]
+    public async Task Web6EligibilityCandidateMismatchMatchesLiveNet48()
+    {
+        string receipt;
+        await using (var source = await DesktopLiveFixture.StartAsync(web6Enabled: true,
+            web6CandidateId: "candidate-2"))
+        {
+            using var issued = await source.SendWeb6Async("VPS01-RESEND-RECEIPT");
+            var issuedJson = Newtonsoft.Json.Linq.JObject.Parse(await issued.Content.ReadAsStringAsync());
+            receipt = (string)issuedJson["data"]!["receipt"]!;
+        }
+        await using var target = await DesktopLiveFixture.StartAsync(web6Enabled: true);
+        using var response = await target.SendWeb6Async("VPS01-RESEND-ELIGIBILITY", receipt);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        AssertMatchesNet48("VPS01-RESEND-ELIGIBILITY", "key-mismatch", response, bytes);
+    }
+
     [Theory]
     [InlineData("deny-decision", "RESULT_EXPIRED")]
     [InlineData("indeterminate", "INDETERMINATE")]
@@ -288,6 +330,29 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         AssertMatchesNet48(caseId, variant, response, bytes);
     }
 
+    public static IEnumerable<object[]> EnabledWeb45StatusErrorCases()
+    {
+        var cases = new[]
+        {
+            new[] { "VPS01-OPERATIONS-STATUS", "/api/v1/operations/" + DesktopState.Operation.ToString("D") },
+            new[] { "VPS01-RESOLUTION-STATUS", "/api/v2/operations/" + DesktopState.Operation.ToString("D") + "/resolution" },
+        };
+        foreach (var item in cases)
+        foreach (var variant in new[] { "permission", "not-observed", "epoch-mismatch", "fingerprint-mismatch" })
+            yield return new object[] { item[0], item[1], variant };
+    }
+
+    [Theory]
+    [MemberData(nameof(EnabledWeb45StatusErrorCases))]
+    public async Task EnabledWeb45StatusErrorsMatchLiveNet48(string caseId, string path, string variant)
+    {
+        await using var fixture = await DesktopLiveFixture.StartAsync(web45Enabled: true,
+            operationVariant: variant);
+        using var response = await fixture.SendOperationAsync(path, status: true, authenticated: true);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        AssertMatchesNet48(caseId, variant, response, bytes);
+    }
+
     [Fact]
     public async Task LoginWrongCredentialsMatchesLiveNet48()
     {
@@ -296,6 +361,30 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             "{\"username\":\"alice\",\"password\":\"wrong-secret\"}", false, false);
         var bytes = await response.Content.ReadAsByteArrayAsync();
         AssertMatchesNet48("VPS01-AUTH-LOGIN", "wrong-credentials", response, bytes);
+    }
+
+    [Theory]
+    [InlineData("VPS01-AUTH-LOGIN")]
+    [InlineData("VPS01-AUTH-REFRESH")]
+    public async Task AuthRateLimitMatchesLiveNet48(string caseId)
+    {
+        await using var fixture = await DesktopLiveFixture.StartAsync(authControlProfile: true);
+        for (var attempt = 0; attempt < 30; attempt++)
+        {
+            using var rejected = await fixture.SendControlAsync("POST",
+                caseId == "VPS01-AUTH-LOGIN" ? "/api/v1/auth/login" : "/api/v1/auth/refresh",
+                caseId == "VPS01-AUTH-LOGIN"
+                    ? "{\"username\":\"missing-" + attempt + "\",\"password\":\"wrong-secret\"}" : null,
+                authenticated: false, cookie: false);
+            Assert.NotEqual(429, (int)rejected.StatusCode);
+        }
+        using var response = await fixture.SendControlAsync("POST",
+            caseId == "VPS01-AUTH-LOGIN" ? "/api/v1/auth/login" : "/api/v1/auth/refresh",
+            caseId == "VPS01-AUTH-LOGIN"
+                ? "{\"username\":\"alice\",\"password\":\"correct-secret\"}" : null,
+            authenticated: false, cookie: caseId == "VPS01-AUTH-REFRESH");
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        AssertMatchesNet48(caseId, "rate-limited", response, bytes);
     }
 
     [Theory]
@@ -480,6 +569,8 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             response.Headers.TryGetValues("X-Content-Type-Options", out var contentOptions) ? string.Join(",", contentOptions) : string.Empty);
         Assert.Equal(expected.Hsts,
             response.Headers.TryGetValues("Strict-Transport-Security", out var hsts) ? string.Join(",", hsts) : string.Empty);
+        Assert.Equal(expected.RetryAfter,
+            response.Headers.TryGetValues("Retry-After", out var retryAfter) ? string.Join(",", retryAfter) : string.Empty);
         Assert.Equal(expected.SetCookie,
             response.Headers.TryGetValues("Set-Cookie", out var cookies) ? string.Join("\n", cookies) : string.Empty);
         if ((caseId is "VPS01-AUTH-LOGIN" or "VPS01-AUTH-REFRESH") && response.IsSuccessStatusCode)
@@ -518,6 +609,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         public string WwwAuthenticate { get; set; } = string.Empty;
         public string XContentTypeOptions { get; set; } = string.Empty;
         public string Hsts { get; set; } = string.Empty;
+        public string RetryAfter { get; set; } = string.Empty;
         public string SetCookie { get; set; } = string.Empty;
         public string BodyBase64 { get; set; } = string.Empty;
     }
@@ -680,7 +772,8 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             string? controlFailure = null, bool web6Enabled = false,
             bool web45Enabled = false, bool operationFailure = false,
             bool web6Failure = false, bool web6ContextFailure = false,
-            bool web6ReceiptFailure = false)
+            bool web6ReceiptFailure = false, string? operationVariant = null,
+            string web6CandidateId = "candidate-1")
         {
             var clock = new FrozenClock();
             var options = new WebHostOptions("https://web2.mydmsvn.test", "https://web2.mydmsvn.test", "auth-tests",
@@ -690,7 +783,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 }, desktopApiEnabled: true, web4Enabled: web45Enabled,
                 web5Enabled: web6Enabled || web45Enabled,
                 web6ResendEligibilityEnabled: web6Enabled,
-                web6CandidateId: web6Enabled ? "candidate-1" : null);
+                web6CandidateId: web6Enabled ? web6CandidateId : null);
             var state = new DesktopState
             {
                 DenyPermissions = denyPermissions,
@@ -699,6 +792,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 AuthControlProfile = authControlProfile,
                 ControlFailure = controlFailure,
                 OperationFailure = operationFailure,
+                OperationVariant = operationVariant,
                 Web6Failure = web6Failure,
                 Web6ContextFailure = web6ContextFailure,
                 Web6ReceiptFailure = web6ReceiptFailure,
@@ -794,7 +888,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         }
 
         public async Task<HttpResponseMessage> SendWeb6Async(string caseId, string? receipt = null,
-            bool authenticated = true, bool invalid = false)
+            bool authenticated = true, bool invalid = false, string? identityVariant = null)
         {
             var operation = DesktopState.Operation.ToString("D");
             var path = caseId == "VPS01-RESEND-CONTEXT" ? "/api/v3/operations/resend-context" :
@@ -807,8 +901,10 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             request.Headers.Add("X-Correlation-ID", Correlation);
             if (caseId != "VPS01-RESEND-CONTEXT")
             {
-                request.Headers.Add("X-MyDmsVn-Deployment-Epoch", DesktopState.Epoch.ToString("D"));
-                request.Headers.Add("X-MyDmsVn-Operation-Fingerprint", DesktopState.Fingerprint);
+                request.Headers.Add("X-MyDmsVn-Deployment-Epoch", identityVariant == "epoch-mismatch"
+                    ? "22222222-3333-4444-8555-666666666666" : DesktopState.Epoch.ToString("D"));
+                request.Headers.Add("X-MyDmsVn-Operation-Fingerprint", identityVariant == "fingerprint-mismatch"
+                    ? new string('f', 64) : DesktopState.Fingerprint);
                 request.Headers.Add("X-MyDmsVn-Operation-Kind", "Sales.Create");
             }
             if (receipt != null) request.Headers.Add("X-MyDmsVn-Resend-Receipt", receipt);
@@ -942,6 +1038,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         public bool AuthControlProfile { get; init; }
         public string? ControlFailure { get; init; }
         public bool OperationFailure { get; init; }
+        public string? OperationVariant { get; init; }
         public bool Web6Failure { get; init; }
         public bool Web6ContextFailure { get; init; }
         public bool Web6ReceiptFailure { get; init; }
@@ -988,15 +1085,28 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         public Task<Guid> ReadContextAsync(int actorUserId, Guid sessionId, CancellationToken token) =>
             OperationFailure || Web6ContextFailure ? throw new InvalidOperationException("secret SQL connection") : Task.FromResult(Epoch);
         public Task<WebOperationStatus?> ReadStatusAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
-            Guid operationId, byte[] expectedFingerprint, CancellationToken token) => OperationFailure
-                ? throw new InvalidOperationException("secret SQL connection")
-                : Task.FromResult<WebOperationStatus?>(OperationStatus());
+            Guid operationId, byte[] expectedFingerprint, CancellationToken token) => OperationVariant switch
+            {
+                "permission" => throw new WebOperationException("Auth.Forbidden"),
+                "not-observed" => Task.FromResult<WebOperationStatus?>(null),
+                "epoch-mismatch" => throw new WebOperationException("Deployment.EpochMismatch"),
+                "fingerprint-mismatch" => throw new WebOperationException("Idempotency.FingerprintMismatch"),
+                _ when OperationFailure => throw new InvalidOperationException("secret SQL connection"),
+                _ => Task.FromResult<WebOperationStatus?>(OperationStatus()),
+            };
         public Task<WebOperationResolution?> ReadResolutionAsync(int actorUserId, Guid sessionId,
-            Guid deploymentEpoch, Guid operationId, byte[] expectedFingerprint, CancellationToken token) =>
-            OperationFailure ? throw new InvalidOperationException("secret SQL connection") :
-                Task.FromResult<WebOperationResolution?>(new WebOperationResolution(OperationStatus()));
+            Guid deploymentEpoch, Guid operationId, byte[] expectedFingerprint, CancellationToken token) => OperationVariant switch
+            {
+                "permission" => throw new WebOperationException("Auth.Forbidden"),
+                "not-observed" => Task.FromResult<WebOperationResolution?>(null),
+                "epoch-mismatch" => throw new WebOperationException("Deployment.EpochMismatch"),
+                "fingerprint-mismatch" => throw new WebOperationException("Idempotency.FingerprintMismatch"),
+                _ when OperationFailure => throw new InvalidOperationException("secret SQL connection"),
+                _ => Task.FromResult<WebOperationResolution?>(new WebOperationResolution(OperationStatus())),
+            };
         public Task AuthorizeReceiptAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
-            WebOperationKind kind, CancellationToken token) => Web6Denied
+            WebOperationKind kind, CancellationToken token) => deploymentEpoch != Epoch
+                ? throw new WebOperationException("Deployment.EpochMismatch") : Web6Denied
                 ? throw new WebOperationException("Auth.Forbidden") : Web6ReceiptFailure
                 ? throw new InvalidOperationException("private-journal-read-denied") : Task.CompletedTask;
         public Task<WebOperationResolution?> ReadEligibilityAsync(int actorUserId, Guid sessionId,

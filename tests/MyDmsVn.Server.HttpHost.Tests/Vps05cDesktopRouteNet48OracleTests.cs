@@ -46,7 +46,7 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
     {
         public Observation(string caseId, string variant, int status, string contentType,
             string correlationId, string cacheControl, string pragma, string wwwAuthenticate,
-            string xContentTypeOptions, string hsts, string setCookie, string bodyBase64)
+            string xContentTypeOptions, string hsts, string retryAfter, string setCookie, string bodyBase64)
         {
             CaseId = caseId;
             Variant = variant;
@@ -58,6 +58,7 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
             WwwAuthenticate = wwwAuthenticate;
             XContentTypeOptions = xContentTypeOptions;
             Hsts = hsts;
+            RetryAfter = retryAfter;
             SetCookie = setCookie;
             BodyBase64 = bodyBase64;
         }
@@ -72,6 +73,7 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         public string WwwAuthenticate { get; }
         public string XContentTypeOptions { get; }
         public string Hsts { get; }
+        public string RetryAfter { get; }
         public string SetCookie { get; }
         public string BodyBase64 { get; }
     }
@@ -174,13 +176,15 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         observations.AddRange(await CaptureEnabledWeb6());
         observations.AddRange(await CaptureEnabledWeb45());
         observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-LOGIN"), "wrong-credentials"));
+        observations.Add(await CaptureRateLimited("VPS01-AUTH-LOGIN"));
+        observations.Add(await CaptureRateLimited("VPS01-AUTH-REFRESH"));
         foreach (var testCase in LegacyCases)
         foreach (var variant in new[] { "success", "permission", "invalid", "failure", "unauthenticated" })
             observations.Add(await CaptureLegacyData(testCase, variant));
 
-        Assert.Equal(279, observations.Count);
+        Assert.Equal(293, observations.Count);
         Assert.Equal(57, observations.Select(x => x.CaseId).Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(279, observations.Select(x => x.CaseId + "\n" + x.Variant)
+        Assert.Equal(293, observations.Select(x => x.CaseId + "\n" + x.Variant)
             .Distinct(StringComparer.Ordinal).Count());
 
         var actual = JsonConvert.SerializeObject(observations, Formatting.Indented);
@@ -298,6 +302,27 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         return await Observe(testCase.Id, variant, response);
     }
 
+    private static async Task<Observation> CaptureRateLimited(string caseId)
+    {
+        using var fixture = new AuthFixture();
+        var route = caseId == "VPS01-AUTH-LOGIN" ? "login" : "refresh";
+        var attempts = caseId == "VPS01-AUTH-LOGIN" ? 30 : 30;
+        for (var attempt = 0; attempt < attempts; attempt++)
+        {
+            using var rejected = caseId == "VPS01-AUTH-LOGIN"
+                ? await fixture.Post(route, "{\"username\":\"missing-" + attempt + "\",\"password\":\"wrong-secret\"}")
+                : await fixture.Post(route, null);
+            Assert.NotEqual(429, (int)rejected.StatusCode);
+        }
+        using var request = fixture.PostRequest(route,
+            caseId == "VPS01-AUTH-LOGIN" ? "{\"username\":\"alice\",\"password\":\"correct-secret\"}" : null);
+        request.Headers.Add("X-Correlation-ID", Correlation);
+        if (caseId == "VPS01-AUTH-REFRESH")
+            request.Headers.Add("Cookie", "__Host-mydmsvn-rt=" + AuthFixture.InitialRefresh);
+        using var response = await fixture.Server.HttpClient.SendAsync(request);
+        return await Observe(caseId, "rate-limited", response);
+    }
+
     private static async Task<IReadOnlyList<Observation>> CaptureEnabledWeb6()
     {
         using var probe = new Web6ResendEligibilityEndpointTests.Probe();
@@ -355,6 +380,15 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
             }))
             result.Add(await Observe("VPS01-RESEND-RECEIPT", "permission", deniedReceipt));
         probe.Deny = false;
+        using (var epochMismatchReceipt = await probe.Get(Web6ResendEligibilityEndpointTests.Operation.ToString("D") +
+            "/resend-receipt", request =>
+            {
+                Web6ResendEligibilityEndpointTests.Probe.IdentityHeaders(request);
+                request.Headers.Remove("X-MyDmsVn-Deployment-Epoch");
+                request.Headers.Add("X-MyDmsVn-Deployment-Epoch", "22222222-3333-4444-8555-666666666666");
+                request.Headers.Add("X-Correlation-ID", Correlation);
+            }))
+            result.Add(await Observe("VPS01-RESEND-RECEIPT", "epoch-mismatch", epochMismatchReceipt));
         var compact = await probe.Receipt();
         using (var eligibility = await probe.Eligibility(compact, request =>
             request.Headers.Add("X-Correlation-ID", Correlation)))
@@ -370,6 +404,27 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         using (var invalid = await probe.Eligibility("not-a-receipt", request =>
             request.Headers.Add("X-Correlation-ID", Correlation)))
             result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "invalid", invalid));
+        using (var epochMismatch = await probe.Eligibility(compact, request =>
+        {
+            request.Headers.Remove("X-MyDmsVn-Deployment-Epoch");
+            request.Headers.Add("X-MyDmsVn-Deployment-Epoch", "22222222-3333-4444-8555-666666666666");
+            request.Headers.Add("X-Correlation-ID", Correlation);
+        }))
+            result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "epoch-mismatch", epochMismatch));
+        using (var fingerprintMismatch = await probe.Eligibility(compact, request =>
+        {
+            request.Headers.Remove("X-MyDmsVn-Operation-Fingerprint");
+            request.Headers.Add("X-MyDmsVn-Operation-Fingerprint", new string('f', 64));
+            request.Headers.Add("X-Correlation-ID", Correlation);
+        }))
+            result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "fingerprint-mismatch", fingerprintMismatch));
+        using (var otherCandidate = new Web6ResendEligibilityEndpointTests.Probe("candidate-2"))
+        {
+            var otherReceipt = await otherCandidate.Receipt();
+            using var keyMismatch = await probe.Eligibility(otherReceipt, request =>
+                request.Headers.Add("X-Correlation-ID", Correlation));
+            result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "key-mismatch", keyMismatch));
+        }
         probe.FailEligibilityRead = true;
         using (var failure = await probe.Eligibility(compact, request =>
             request.Headers.Add("X-Correlation-ID", Correlation)))
@@ -409,6 +464,13 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
                 testCase.Id.EndsWith("STATUS", StringComparison.Ordinal), variant != "unauthenticated");
             result.Add(await Observe(testCase.Id, variant, response));
         }
+        foreach (var testCase in cases.Where(x => x.Id.EndsWith("STATUS", StringComparison.Ordinal)))
+        foreach (var variant in new[] { "permission", "not-observed", "epoch-mismatch", "fingerprint-mismatch" })
+        {
+            using var probe = new OperationProbe { Variant = variant };
+            using var response = await probe.Get(testCase.Path, status: true, authenticated: true);
+            result.Add(await Observe(testCase.Id, variant, response));
+        }
         return result;
     }
 
@@ -421,6 +483,7 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         private readonly AuthFixture _host;
         private string? _token;
         internal bool Throw;
+        internal string? Variant;
         internal OperationProbe() => _host = new AuthFixture(
             services => services.AddSingleton<IUnitOfWorkFactory>(this), web4Enabled: true, web5Enabled: true);
         internal async Task<HttpResponseMessage> Get(string path, bool status, bool authenticated)
@@ -454,12 +517,25 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         public Task<Guid> ReadContextAsync(int actorUserId, Guid sessionId, System.Threading.CancellationToken token) =>
             Throw ? throw new InvalidOperationException("secret SQL connection") : Task.FromResult(Epoch);
         public Task<WebOperationStatus?> ReadStatusAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
-            Guid operationId, byte[] expectedFingerprint, System.Threading.CancellationToken token) =>
-            Throw ? throw new InvalidOperationException("secret SQL connection") : Task.FromResult<WebOperationStatus?>(Status());
+            Guid operationId, byte[] expectedFingerprint, System.Threading.CancellationToken token) => Variant switch
+            {
+                "permission" => throw new WebOperationException("Auth.Forbidden"),
+                "not-observed" => Task.FromResult<WebOperationStatus?>(null),
+                "epoch-mismatch" => throw new WebOperationException("Deployment.EpochMismatch"),
+                "fingerprint-mismatch" => throw new WebOperationException("Idempotency.FingerprintMismatch"),
+                _ when Throw => throw new InvalidOperationException("secret SQL connection"),
+                _ => Task.FromResult<WebOperationStatus?>(Status()),
+            };
         public Task<WebOperationResolution?> ReadResolutionAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
-            Guid operationId, byte[] expectedFingerprint, System.Threading.CancellationToken token) =>
-            Throw ? throw new InvalidOperationException("secret SQL connection") :
-                Task.FromResult<WebOperationResolution?>(new WebOperationResolution(Status()));
+            Guid operationId, byte[] expectedFingerprint, System.Threading.CancellationToken token) => Variant switch
+            {
+                "permission" => throw new WebOperationException("Auth.Forbidden"),
+                "not-observed" => Task.FromResult<WebOperationResolution?>(null),
+                "epoch-mismatch" => throw new WebOperationException("Deployment.EpochMismatch"),
+                "fingerprint-mismatch" => throw new WebOperationException("Idempotency.FingerprintMismatch"),
+                _ when Throw => throw new InvalidOperationException("secret SQL connection"),
+                _ => Task.FromResult<WebOperationResolution?>(new WebOperationResolution(Status())),
+            };
         public void Dispose() => _host.Dispose();
         private sealed class Uow : IUnitOfWork
         {
@@ -514,6 +590,7 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
             response.Headers.TryGetValues("WWW-Authenticate", out var authenticate) ? string.Join(",", authenticate) : string.Empty,
             response.Headers.TryGetValues("X-Content-Type-Options", out var contentOptions) ? string.Join(",", contentOptions) : string.Empty,
             response.Headers.TryGetValues("Strict-Transport-Security", out var hsts) ? string.Join(",", hsts) : string.Empty,
+            response.Headers.TryGetValues("Retry-After", out var retryAfter) ? string.Join(",", retryAfter) : string.Empty,
             response.Headers.TryGetValues("Set-Cookie", out var cookies) ? string.Join("\n", cookies) : string.Empty,
             Convert.ToBase64String(bytes));
     }

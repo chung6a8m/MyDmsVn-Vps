@@ -314,7 +314,7 @@ public sealed class Web6ResendEligibilityEndpointTests
         public Task<WebOperationStatus?> ReadStatusAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
             Guid operationId, byte[] expectedFingerprint, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task AuthorizeReceiptAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch, WebOperationKind kind, CancellationToken cancellationToken)
-        { if (Deny) throw new WebOperationException("Auth.Forbidden"); if (FailAuthorizeReceipt) throw new InvalidOperationException("private-journal-read-denied"); AuthorizedKinds.Add(kind); return Task.CompletedTask; }
+        { if (deploymentEpoch != Epoch) throw new WebOperationException("Deployment.EpochMismatch"); if (Deny) throw new WebOperationException("Auth.Forbidden"); if (FailAuthorizeReceipt) throw new InvalidOperationException("private-journal-read-denied"); AuthorizedKinds.Add(kind); return Task.CompletedTask; }
         public Task<WebOperationResolution?> ReadEligibilityAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
             Guid operationId, WebOperationKind expectedKind, long? expectedTargetId, byte[] expectedFingerprint, CancellationToken cancellationToken)
         {
