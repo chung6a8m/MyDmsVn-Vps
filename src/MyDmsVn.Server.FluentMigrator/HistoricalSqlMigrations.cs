@@ -13,8 +13,41 @@ public abstract class ImmutableSqlMigration : Migration
 
     public sealed override void Up()
     {
+        if (!Vps07bExecutionScope.IsActive)
+            throw new InvalidOperationException("VPS07B_UnguardedMigrationRefused");
+
+        // Script 010 requires session context for a genuinely empty database.
+        // Existing schema9..12 upgrades never receive this exemption.
+        if (ScriptName == "010_DirectSalesAndValuation.sql" && Vps07bExecutionScope.IsFresh)
+            Execute.Sql("EXEC sys.sp_set_session_context @key=N'MyDmsVn.FreshInstall', @value=1, @read_only=1;");
+
         foreach (var sqlBatch in ImmutableSqlScript.Batches(ScriptName))
             Execute.Sql(sqlBatch);
+
+        // Both journals and the original business SQL are in one migration
+        // transaction. VersionInfo is appended by the runner after Up().
+        var version = Vps07bExecutionScope.VersionOf(ScriptName);
+        Execute.WithConnection((connection, transaction) =>
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = @"
+IF (SELECT COUNT_BIG(*) FROM dbo.SchemaVersions) <> @Previous
+    THROW 51711, 'VPS07B journal prefix changed.', 1;
+IF EXISTS (SELECT 1 FROM dbo.SchemaVersions WHERE ScriptName=@Name)
+    THROW 51712, 'VPS07B replay refused.', 1;
+INSERT dbo.SchemaVersions(ScriptName,Applied) VALUES(@Name,GETDATE());";
+            var prior = command.CreateParameter();
+            prior.ParameterName = "@Previous";
+            prior.Value = version - 1;
+            command.Parameters.Add(prior);
+            var name = command.CreateParameter();
+            name.ParameterName = "@Name";
+            name.Value = "MyDmsVn.Server.DbMigrator.Scripts." + ScriptName;
+            command.Parameters.Add(name);
+            if (command.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("VPS07B journal append failed.");
+        });
     }
 
     public sealed override void Down()
