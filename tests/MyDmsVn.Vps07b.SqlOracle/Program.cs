@@ -165,7 +165,7 @@ EXEC @r=sys.sp_releaseapplock @Resource=N'MyDmsVn.SchemaMigration',
             // connection strings, SQL source text, login or any row data.
             Console.Error.WriteLine("VPS07B_REAL_SQL_FAILED: executed=" + _executed +
                 "; passed=" + _passed + "; failed=1; skipped=0; type=" +
-                ex.GetType().Name + "; code=" + SafeCode(ex.Message));
+                ex.GetType().Name + "; stage=" + _stage + "; sql=" + (ex is SqlException q ? q.Number.ToString(CultureInfo.InvariantCulture) : "none") + "; code=" + SafeCode(ex.Message));
             return 1;
         }
         finally
