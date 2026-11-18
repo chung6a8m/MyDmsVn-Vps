@@ -74,13 +74,13 @@ jobs:
       - name: Locked restore and warning-free Linux host build
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
-          dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true --locked-mode
-          dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -c Release -f net10.0 --no-restore -warnaserror
+          dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode
+          dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore -warnaserror
       - name: Locked restore and compile explicitly admitted live tests
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
-          dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps04ALive=true --locked-mode
-          dotnet build ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-restore -warnaserror
+          dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true --locked-mode
+          dotnet build ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-restore -warnaserror
       - name: Refuse moved PR HEAD or synthetic checkout before SQL mutation
         shell: bash
         env:
@@ -146,7 +146,7 @@ jobs:
           test "$ready" = 1 || { echo "::error::Verified HTTPS health never became ready."; exit 1; }
           mkdir -p vps04a-live-trx
           dotnet test tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
-            -p:Vps04Server=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
             --filter 'FullyQualifiedName~Vps04aLiveSqlAcceptanceTests' \
             --logger 'trx;LogFileName=vps04a-live-https-sql.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-live-trx"
           python3 - <<'PY'
