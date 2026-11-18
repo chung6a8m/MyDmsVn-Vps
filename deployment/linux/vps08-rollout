@@ -46,6 +46,15 @@ exec 9>>"$lock" || abort
 [[ -f "$lock" && "$(stat -c '%u:%h:%a' -- "$lock")" == "0:1:600" ]] || abort
 flock -n 9 || abort
 
+trusted_release() {
+  local directory="$1" version="$2"
+  [[ -d "$directory" && ! -L "$directory" ]] || abort
+  # An installed release is immutable and entirely owned by root; a file
+  # owned by the service/runner user could change after digest verification.
+  [[ -z "$(find "$directory" ! -user root -print -quit)" ]] || abort
+  python3 /usr/local/libexec/vps08-manifest.py verify "$directory" "$version" >/dev/null || abort
+}
+
 probe() {
   local i
   for i in $(seq 1 24); do
@@ -75,19 +84,24 @@ if [[ "$action" == deploy ]]; then
   [[ -d "$source_dir" && ! -L "$source_dir" ]] || abort
   [[ "$source_dir" != "$root/"* && "$source_dir" != "$root" ]] || abort
   python3 /usr/local/libexec/vps08-manifest.py verify "$source_dir" "$sha" >/dev/null || abort
-  [[ ! -e "$root/$new_target" ]] || abort
-  mkdir -m 0755 -- "$root/$new_target"
-  cp -a -- "$source_dir/." "$root/$new_target/"
-  # The copy can race with a mutable runner workspace. Verify the destination
-  # before chown and again after making all folders and files non-writable.
-  python3 /usr/local/libexec/vps08-manifest.py verify "$root/$new_target" "$sha" >/dev/null || abort
-  chown -R root:root "$root/$new_target"
-  find "$root/$new_target" -type d -exec chmod 0755 -- {} +
-  find "$root/$new_target" -type f -exec chmod go-w,a+r -- {} +
-  python3 /usr/local/libexec/vps08-manifest.py verify "$root/$new_target" "$sha" >/dev/null || abort
+  if [[ -e "$root/$new_target" || -L "$root/$new_target" ]]; then
+    # Rerunning exactly the same reviewed SHA is safe only when the installed
+    # immutable release matches every byte in the new CI package.
+    trusted_release "$root/$new_target" "$sha"
+    cmp -s -- "$source_dir/vps08-manifest.json" "$root/$new_target/vps08-manifest.json" || abort
+  else
+    mkdir -m 0755 -- "$root/$new_target"
+    cp -a -- "$source_dir/." "$root/$new_target/"
+    # The copy can race with a mutable runner workspace. Verify before chown
+    # and after normalizing permissions, then lock the release to root.
+    python3 /usr/local/libexec/vps08-manifest.py verify "$root/$new_target" "$sha" >/dev/null || abort
+    chown -R root:root "$root/$new_target"
+    find "$root/$new_target" -type d -exec chmod 0755 -- {} +
+    find "$root/$new_target" -type f -exec chmod go-w,a+r -- {} +
+    trusted_release "$root/$new_target" "$sha"
+  fi
 else
-  [[ -d "$root/$new_target" && ! -L "$root/$new_target" ]] || abort
-  python3 /usr/local/libexec/vps08-manifest.py verify "$root/$new_target" "$sha" >/dev/null || abort
+  trusted_release "$root/$new_target" "$sha"
   [[ "$current" != "$new_target" ]] || abort
 fi
 swap "$new_target"
@@ -99,7 +113,7 @@ fi
 # Restore only the previously pinned verified local release; never mutate the database.
 if [[ -n "$current" ]]; then
   prior_sha="${current#releases/}"
-  python3 /usr/local/libexec/vps08-manifest.py verify "$root/$current" "$prior_sha" >/dev/null || abort
+  trusted_release "$root/$current" "$prior_sha"
   swap "$current"
   systemctl restart "$service" || true
   if probe; then printf 'VPS08_ROLLOUT_RECOVERED: restored=%s health=verified_tls\n' "$prior_sha"; fi

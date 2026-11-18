@@ -57,7 +57,9 @@ def check_configs() -> None:
     require("systemctl restart" in rollout and 'swap "$current"' in rollout,
             "Atomic rollback path missing")
     for item in ("trusted_dir /opt", 'trusted_dir "$root/releases"',
-                 'flock -n 9 || abort', 'systemctl is-active --quiet "$service"',
+                 'flock -n 9 || abort', 'trusted_release "$root/$new_target" "$sha"',
+                 'cmp -s -- "$source_dir/vps08-manifest.json"',
+                 'systemctl is-active --quiet "$service"',
                  'find "$root/$new_target" -type d -exec chmod 0755',
                  'find "$root/$new_target" -type f -exec chmod go-w,a+r'):
         require(item in rollout, "Missing rollout security guard: " + item)
