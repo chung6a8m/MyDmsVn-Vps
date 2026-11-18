@@ -5,7 +5,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Contracts.Security;
 using MyDmsVn.Server.Application.Identity;
 
@@ -108,6 +112,11 @@ public sealed class ApplyPermissionAssignmentImportCommand
 internal sealed class PreviewPermissionAssignmentImportHandler
     : IRequestHandler<PreviewPermissionAssignmentImportQuery, ErrorOr<PermissionAssignmentImportPreviewDto>>
 {
+#if VPS06B_MEDIATOR
+    ValueTask<ErrorOr<PermissionAssignmentImportPreviewDto>> IRequestHandler<PreviewPermissionAssignmentImportQuery, ErrorOr<PermissionAssignmentImportPreviewDto>>.Handle(PreviewPermissionAssignmentImportQuery message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<PermissionAssignmentImportPreviewDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly PermissionAssignmentImportParser _parser;
     private readonly IPermissionRegistry _registry;
     private readonly IPermissionAssignmentImportStore _store;
@@ -185,6 +194,11 @@ internal sealed class PreviewPermissionAssignmentImportHandler
 internal sealed class ApplyPermissionAssignmentImportHandler
     : IRequestHandler<ApplyPermissionAssignmentImportCommand, ErrorOr<PermissionAssignmentImportResultDto>>
 {
+#if VPS06B_MEDIATOR
+    ValueTask<ErrorOr<PermissionAssignmentImportResultDto>> IRequestHandler<ApplyPermissionAssignmentImportCommand, ErrorOr<PermissionAssignmentImportResultDto>>.Handle(ApplyPermissionAssignmentImportCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<PermissionAssignmentImportResultDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly PermissionAssignmentImportParser _parser;
     private readonly IPermissionRegistry _registry;
     private readonly IPermissionAssignmentImportStore _store;

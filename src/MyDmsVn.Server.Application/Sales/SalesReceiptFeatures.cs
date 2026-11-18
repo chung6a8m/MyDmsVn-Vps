@@ -7,7 +7,11 @@ using System.Threading.Tasks;
 using ErrorOr;
 using FluentValidation;
 using FluentValidation.Results;
+#if VPS06B_MEDIATOR
+using Mediator;
+#else
 using MediatR;
+#endif
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.Application.Identity;
 using MyDmsVn.Server.Application.Inventory;
@@ -152,6 +156,11 @@ internal static class SalesReceiptValidation
 
 internal sealed class CreateSalesReceiptDraftCommandHandler : IRequestHandler<CreateSalesReceiptDraftCommand, ErrorOr<SalesReceiptDto>>
 {
+#if VPS06B_MEDIATOR
+    ValueTask<ErrorOr<SalesReceiptDto>> IRequestHandler<CreateSalesReceiptDraftCommand, ErrorOr<SalesReceiptDto>>.Handle(CreateSalesReceiptDraftCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<SalesReceiptDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _factory;
     public CreateSalesReceiptDraftCommandHandler(IUnitOfWorkFactory factory) => _factory = factory;
     public async Task<ErrorOr<SalesReceiptDto>> Handle(CreateSalesReceiptDraftCommand command, CancellationToken cancellationToken)
@@ -210,6 +219,11 @@ internal sealed class CreateSalesReceiptDraftCommandHandler : IRequestHandler<Cr
 
 internal sealed class UpdateSalesReceiptDraftCommandHandler : IRequestHandler<UpdateSalesReceiptDraftCommand, ErrorOr<SalesReceiptDto>>
 {
+#if VPS06B_MEDIATOR
+    ValueTask<ErrorOr<SalesReceiptDto>> IRequestHandler<UpdateSalesReceiptDraftCommand, ErrorOr<SalesReceiptDto>>.Handle(UpdateSalesReceiptDraftCommand message, CancellationToken cancellationToken)
+        => new ValueTask<ErrorOr<SalesReceiptDto>>(Handle(message, cancellationToken));
+#endif
+
     private readonly IUnitOfWorkFactory _factory;
     private readonly IUtcClock _clock;
     public UpdateSalesReceiptDraftCommandHandler(IUnitOfWorkFactory factory, IUtcClock clock) { _factory = factory; _clock = clock; }
