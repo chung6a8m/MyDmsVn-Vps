@@ -95,7 +95,8 @@ class Vps09EvidenceGateTests(unittest.TestCase):
             "routeObservations": "route-observations.json",
             "sqlOracle": "sql-oracle.json",
             "gates": {row["id"]: {
-                "status": "PASS", "discovered": 2, "executed": 2, "passed": 2,
+                "status": "PASS", "discovered": row["minimumExecuted"],
+                "executed": row["minimumExecuted"], "passed": row["minimumExecuted"],
                 "failed": 0, "skipped": 0, "runner": "synthetic-negative-test",
                 "evidence": ["gates/" + row["id"] + ".json"],
             } for row in spec["gates"]},
@@ -227,6 +228,21 @@ class Vps09EvidenceGateTests(unittest.TestCase):
     def test_live_receipt_cannot_claim_disposable_ci_as_staging(self):
         self.attestation["environment"]["staging"] = "ephemeral-container"
         self.rejects("EnvironmentNotAdmitted")
+
+    def test_short_live_sql_293_gate_refused(self):
+        gate = self.attestation["gates"]["VPS09-02"]
+        gate["discovered"] = gate["executed"] = gate["passed"] = 292
+        self.rejects("GateBelowMinimum:VPS09-02")
+
+    def test_short_attended_9_checkpoint_gate_refused(self):
+        gate = self.attestation["gates"]["VPS09-12"]
+        gate["discovered"] = gate["executed"] = gate["passed"] = 8
+        self.rejects("GateBelowMinimum:VPS09-12")
+
+    def test_short_vps08_8_gate_refused(self):
+        gate = self.attestation["gates"]["VPS09-11"]
+        gate["discovered"] = gate["executed"] = gate["passed"] = 7
+        self.rejects("GateBelowMinimum:VPS09-11")
 
     def test_missing_required_ci_workflow_refused(self):
         self.attestation["ciRuns"].pop()

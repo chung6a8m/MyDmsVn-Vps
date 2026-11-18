@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   source-evidence-policy:
-    name: Source inventory and 26 synthetic signed-evidence tests (NOT live acceptance)
+    name: Source inventory and 29 synthetic signed-evidence tests (NOT live acceptance)
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:

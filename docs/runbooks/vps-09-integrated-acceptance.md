@@ -49,7 +49,7 @@ If protected environments, runners, selected SQL seeds or source SHA are absent,
 
 Maintain the packet outside source control (protected transfer, access/retention policy). It contains `attestation.json`, raw 64-byte `attestation.sig` and only the relative evidence files listed under `attestation.artifacts` with exact SHA-256 and byte count. Symlinks, unexpected files, parent traversals, file digest/size mismatches and missing gate evidence are refused.
 
-The signed JSON fields are defined by the code and [gate registry](../testing/vps-09-gates.json). Key requirements:
+The signed JSON fields are defined by the code and [gate registry](../testing/vps-09-gates.json). The signed gate counts must meet registry floors, notably 293 real-SQL route variants, 8 VPS-08 operational checks, 9 attended GUI checkpoints, 12 valuation/oracle scenarios and 11 same-SHA workflows. Key requirements:
 
 - `repository` = `chung6a8m/MyDmsVn-Vps`, `schemaVersion` = 1; `headSha`, `desktopSourceSha` and `linuxDeployedSourceSha` must all equal the reviewer-pinned exact main SHA. Distinct SHA-256 digests bind Desktop executable, Linux package, machine identity and approved isolated SQL instance.
 - `environment` contains the required exact Windows net48-x86 attended / Linux net10 systemd+Nginx / approved isolated SQL13 / verified TLS / independent read-only SQL / protected reviewer / cleanup values. These are **signed assertions**, independently verified against original machine logs, not machine-detected facts.

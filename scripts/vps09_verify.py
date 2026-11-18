@@ -243,6 +243,10 @@ def validate_packet(folder: Path, expected_sha: str,
         require(all(type(v) is int and v >= 0 for v in values)
                 and values[0] > 0 and values[0] == values[1] == values[2]
                 and values[3] == values[4] == 0, "SkippedOrEmptyGate:" + gate_id)
+        floor = next(row["minimumExecuted"] for row in spec["gates"]
+                     if row["id"] == gate_id)
+        require(type(floor) is int and floor > 0 and values[1] >= floor,
+                "GateBelowMinimum:" + gate_id)
         evidence = gate.get("evidence")
         require(isinstance(evidence, list) and bool(evidence) and
                 all(name in artifact_names for name in evidence),
