@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -14,8 +15,8 @@ using MyDmsVn.Server.Infrastructure.Operations;
 
 namespace MyDmsVn.Server.HttpHost;
 
-// VPS-04B: Linux direct-HTTPS host with portable protected WEB6 audit.
-// Reverse proxy trust, systemd deployment and production approval are VPS-08 gates.
+// VPS-08: optional explicit loopback-only Nginx TLS termination and proxy admission.
+// Direct HTTPS remains unchanged unless the VPS-08 deployment mode is selected.
 internal static class Program
 {
     public static async Task Main(string[] args)
@@ -48,11 +49,14 @@ internal static class Program
     private static async Task<WebApplication> CreateAppAsync(string[] args)
     {
         var options = WebHostOptions.FromEnvironment();
+        var proxy = LoopbackProxyBoundary.ReadSettings(Environment.GetEnvironmentVariable, options.PublicOrigin);
         var sessions = WebAuthSessionConfiguration.Read(Environment.GetEnvironmentVariable);
         var connection = Environment.GetEnvironmentVariable("MYDMSVN_WEB_SQL_CONNECTION_STRING");
         var superuser = Environment.GetEnvironmentVariable("MYDMSVN_WEB_SUPERUSER_USERNAME");
         if (string.IsNullOrWhiteSpace(connection) || string.IsNullOrWhiteSpace(superuser))
             throw new InvalidOperationException("Missing restricted web deployment settings.");
+        if (proxy != null)
+            LoopbackProxyBoundary.RequireSqlTls(connection!);
 
         // Keep the exact legacy schema/principal/superuser refusal gates, before opening a listener.
         using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
@@ -76,6 +80,13 @@ internal static class Program
 
         var builder = WebApplication.CreateBuilder(args);
         RequireScopeValidation(builder);
+        if (proxy != null)
+        {
+            // Never publish an HTTP Kestrel listener off the loopback interface.
+            builder.WebHost.UseUrls(LoopbackProxyBoundary.LoopbackUrl);
+            builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(
+                LoopbackProxyBoundary.ConfigureForwardedHeaders);
+        }
         builder.Services.AddServerApplication(superuser).AddHttpRequestIdentity();
         builder.Services.AddProductionGeneratedMediator();
         builder.Services.AddSingleton(options);
@@ -103,6 +114,19 @@ internal static class Program
         var app = builder.Build();
         // Correlation, transport, strict CSRF, body size, Bearer+SQL session and
         // audit readiness must run after routing, before any endpoint dispatch.
+        if (proxy != null)
+        {
+            app.Use((context, next) => LoopbackProxyBoundary.AdmitAsync(context, next, proxy));
+            app.UseForwardedHeaders();
+            app.Use(async (context, next) =>
+            {
+                // ASP.NET Core stores consumed values as X-Original-*; prevent them
+                // from entering legacy API controller request-header adapters.
+                context.Request.Headers.Remove("X-Original-For");
+                context.Request.Headers.Remove("X-Original-Proto");
+                await next().ConfigureAwait(false);
+            });
+        }
         app.UseRouting();
         app.UseMiddleware<CoreApiAdmissionMiddleware>();
         Net10RouteTable.Map(app);
