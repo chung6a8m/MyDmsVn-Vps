@@ -96,6 +96,19 @@ LEN(definition)-LEN(REPLACE(definition,CHAR(10),N'')))
 FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImportTarget');";
                 Console.Error.WriteLine("VPS07B_SOURCE_MODULE_SHAPE=" + await Text(baseline, moduleShape));
                 Console.Error.WriteLine("VPS07B_FRESH_MODULE_SHAPE=" + await Text(fresh, moduleShape));
+                foreach (var module in new[] { "ApplySecurityAdministration", "ApplySecurityPermissionImport" })
+                {
+                    var select = "SELECT definition FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo." + module + "');";
+                    var oldValue = await Text(baseline, select);
+                    var newValue = await Text(fresh, select);
+                    var at = 0;
+                    while (at < oldValue.Length && at < newValue.Length && oldValue[at] == newValue[at]) at++;
+                    var oldCode = at < oldValue.Length ? ((int)oldValue[at]).ToString(CultureInfo.InvariantCulture) : "END";
+                    var newCode = at < newValue.Length ? ((int)newValue[at]).ToString(CultureInfo.InvariantCulture) : "END";
+                    Console.Error.WriteLine("VPS07B_MODULE_DIFF_" + module + ": oldLen=" + oldValue.Length +
+                        ";newLen=" + newValue.Length + ";at=" + at + ";oldChar=" + oldCode +
+                        ";newChar=" + newCode + ";oldTail=" + (int)oldValue[^1] + ";newTail=" + (int)newValue[^1]);
+                }
                 throw;
             }
             await Check(fresh, 13);
