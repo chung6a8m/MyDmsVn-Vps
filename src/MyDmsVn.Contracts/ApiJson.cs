@@ -1,4 +1,16 @@
-﻿using System.Globalization;
+﻿#if NET10_0_OR_GREATER
+namespace MyDmsVn.Contracts
+{
+    // Keep the existing error-field path policy without shipping Json.NET
+    // to the Linux host. Desktop/net48 retains the original ApiJson below.
+    public static class ApiJson
+    {
+        public static string ResolvePropertyName(string name) =>
+            System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(name);
+    }
+}
+#else
+using System.Globalization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 
@@ -57,3 +69,4 @@ namespace MyDmsVn.Contracts
         }
     }
 }
+#endif

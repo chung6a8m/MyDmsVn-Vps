@@ -100,6 +100,26 @@ jobs:
           assert counts['failed']==0 and counts['notExecuted']==0 and counts['passed']==counts['total'], counts
           print(f"PASS net10 HTTP boundary: {counts}")
           PY
+      - name: Require all 293 live 57-route differential cases
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -c Release -f net10.0 --no-build --no-restore -v minimal \
+            --filter FullyQualifiedName~Vps05cDesktopRouteLiveParityTests \
+            --logger "trx;LogFileName=vps05c-live-desktop-routes.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          path=Path(os.environ['GITHUB_WORKSPACE'])/'vps04a-trx'/'vps05c-live-desktop-routes.trx'
+          assert path.is_file(), 'Missing VPS-05C live route TRX'
+          ns={'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          counters=ET.parse(path).getroot().find('./t:ResultSummary/t:Counters',ns)
+          assert counters is not None, 'Missing VPS-05C live route counters'
+          counts={k:int(v) for k,v in counters.attrib.items() if k in ('total','passed','failed','executed','notExecuted')}
+          assert counts == {'total':293,'executed':293,'passed':293,'failed':0,'notExecuted':0}, counts
+          print(f"PASS net10 live 57-route differential: {counts}")
+          PY
       - name: Reflect compiled ASP.NET Core endpoint inventory
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |

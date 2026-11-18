@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +14,7 @@ using Xunit;
 namespace MyDmsVn.Server.AspNetCoreHost.Tests;
 
 [SupportedOSPlatform("linux")]
+[Collection("Portable audit Linux serial")]
 public sealed class PortableAuditLinuxTests
 {
     private static readonly UnixFileMode PrivateDirectory =
@@ -91,6 +93,27 @@ public sealed class PortableAuditLinuxTests
         Assert.DoesNotContain("secret", string.Concat(lines));
         Assert.Equal(PrivateDirectory, File.GetUnixFileMode(destination.Root));
         Assert.Equal(PrivateFile, File.GetUnixFileMode(destination.Path));
+    }
+
+    [Fact]
+    public async Task JsonlShapeOrderAndExplicitNullableFieldsRemainByteExactAcrossRestart()
+    {
+        using var destination = new Destination();
+        var first = new PortableProtectedSecurityAuditSink(destination.Options());
+        await first.WriteAsync(new SecurityAuditEntry(
+            SecurityAuditAction.Authentication, SecurityAuditOutcome.Denied, null,
+            new DateTime(2026, 11, 18, 1, 2, 3, DateTimeKind.Utc),
+            documentType: "WebAuthRefresh", correlationId: null), CancellationToken.None);
+
+        var reopened = new PortableProtectedSecurityAuditSink(destination.Options());
+        await reopened.WriteAsync(new SecurityAuditEntry(
+            SecurityAuditAction.Authentication, SecurityAuditOutcome.Succeeded, 19,
+            new DateTime(2026, 11, 18, 1, 2, 4, DateTimeKind.Utc),
+            documentType: "WebAuthLogout", correlationId: "audit_second"), CancellationToken.None);
+
+        var expected = "{\"category\":\"WebAuthRefresh\",\"action\":\"Authentication\",\"outcome\":\"Denied\",\"userId\":null,\"correlationId\":null,\"utc\":\"2026-11-18T01:02:03.0000000Z\"}\n" +
+            "{\"category\":\"WebAuthLogout\",\"action\":\"Authentication\",\"outcome\":\"Succeeded\",\"userId\":19,\"correlationId\":\"audit_second\",\"utc\":\"2026-11-18T01:02:04.0000000Z\"}\n";
+        Assert.Equal(Encoding.UTF8.GetBytes(expected), File.ReadAllBytes(destination.Path));
     }
 
     [Fact]
@@ -177,3 +200,6 @@ public sealed class PortableAuditLinuxTests
             securityAuditPath: "C:\\temp\\vps04b\\audit.jsonl"));
     }
 }
+
+[CollectionDefinition("Portable audit Linux serial", DisableParallelization = true)]
+public sealed class PortableAuditLinuxSerialCollection;

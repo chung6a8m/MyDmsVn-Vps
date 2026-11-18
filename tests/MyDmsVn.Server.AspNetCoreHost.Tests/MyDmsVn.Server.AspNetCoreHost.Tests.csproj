@@ -12,6 +12,9 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <!-- Independent legacy Json.NET differential oracle belongs only to tests,
+         never to the published Linux net10 Host graph. -->
+    <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio">
       <PrivateAssets>all</PrivateAssets>

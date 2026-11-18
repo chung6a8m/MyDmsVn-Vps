@@ -250,27 +250,34 @@ internal sealed class DesktopParityFixture : IDisposable
             Add<CreateCustomerCommand, CustomerDto>(services, _ => new CustomerDto(1, "C1", "Customer", null, null, null, true));
             Add<UpdateCustomerCommand, CustomerDto>(services, _ => new CustomerDto(1, "C1", "Customer", null, null, null, true));
             Add<SetCustomerActiveCommand, UnitResponse>(services, _ => UnitResponse.Value);
-            Add<CheckPermissionQuery, PermissionDecisionDto>(services, r => new PermissionDecisionDto(r.PermissionKey, true));
-            Add<ListPermissionCatalogQuery, PermissionCatalogDto>(services, _ => new PermissionCatalogDto("1", "digest", Array.Empty<PermissionCatalogItemDto>()));
-            Add<ListSecurityUsersQuery, IReadOnlyList<SecurityUserDto>>(services, _ => Array.Empty<SecurityUserDto>());
-            Add<ListSecurityRolesQuery, IReadOnlyList<SecurityRoleDto>>(services, _ => Array.Empty<SecurityRoleDto>());
+            Add<CheckPermissionQuery, PermissionDecisionDto>(services, r =>
+                new PermissionDecisionDto(r.PermissionKey, !State.Denied.Contains(r.PermissionKey)));
+            Add<ListPermissionCatalogQuery, PermissionCatalogDto>(services, _ => new PermissionCatalogDto("1", "digest", new[]
+                { new PermissionCatalogItemDto("Security.Users.Manage", "Bảo mật", "Quản lý \"người dùng\"", "Active") }));
+            Add<ListSecurityUsersQuery, IReadOnlyList<SecurityUserDto>>(services, _ => new[]
+                { new SecurityUserDto(1, "alice", "Álice \"Admin\"", null, true, 9007199254740993L,
+                    new[] { 7 }, new[] { new SecurityDecisionDto("Security.Users.Manage", null) }, true) });
+            Add<ListSecurityRolesQuery, IReadOnlyList<SecurityRoleDto>>(services, _ => new[]
+                { new SecurityRoleDto(7, "Quản trị", true, 9007199254740993L, new[] { 1 }, new[] { "Security.Users.Manage" }) });
             Add<MutateSecurityAdministrationCommand, SecurityAdministrationResultDto>(services, _ => new SecurityAdministrationResultDto(1, true));
             Add<PreviewPermissionAssignmentImportQuery, PermissionAssignmentImportPreviewDto>(services, _ =>
                 new PermissionAssignmentImportPreviewDto(new ParsedPermissionAssignmentImportDto(1, PermissionImportTargetTypeDto.Role, 3,
-                    Array.Empty<PermissionAssignmentImportEntryDto>()), "Role", 0, "digest", Array.Empty<PermissionAssignmentImportEntryDto>()));
-            Add<ApplyPermissionAssignmentImportCommand, PermissionAssignmentImportResultDto>(services, _ => new PermissionAssignmentImportResultDto(2, 1, true));
+                    new[] { new PermissionAssignmentImportEntryDto("Báo cáo \"Đặc biệt\"\n", true) }), "Quản trị", 1, "digest",
+                    new[] { new PermissionAssignmentImportEntryDto("Báo cáo \"Đặc biệt\"\n", true) }));
+            Add<ApplyPermissionAssignmentImportCommand, PermissionAssignmentImportResultDto>(services, _ => new PermissionAssignmentImportResultDto(9007199254740993L, 1, true));
             Add<GetFoundationStatusQuery, FoundationStatus>(services, _ => new FoundationStatus(true, "net48"));
         }, options: options);
     }
     private void Add<TReq, TResult>(IServiceCollection services, Func<TReq, TResult> result)
         where TReq : IRequest<ErrorOr<TResult>> =>
-        services.AddSingleton<IRequestHandler<TReq, ErrorOr<TResult>>>(new CaptureHandler<TReq, TResult>(request =>
+        services.AddSingleton<IRequestHandler<TReq, ErrorOr<TResult>>>(new CaptureHandler<TReq, TResult>(State, request =>
         {
             State.Calls.Add(request!);
             if (State.Failure.HasValue) return State.Failure.Value;
             return result(request);
         }));
-    public async Task<HttpResponseMessage> Send(string method, string route, string? body = null, bool authenticated = true)
+    public async Task<HttpResponseMessage> Send(string method, string route, string? body = null,
+        bool authenticated = true, string? correlationId = null)
     {
         if (authenticated && _token == null)
         {
@@ -280,6 +287,7 @@ internal sealed class DesktopParityFixture : IDisposable
         }
         using var request = new HttpRequestMessage(new HttpMethod(method), AuthFixture.Origin + "/api/v1" + route);
         if (authenticated) request.Headers.Add("Authorization", "Bearer " + _token);
+        if (correlationId != null) request.Headers.Add("X-Correlation-ID", correlationId);
         if (method != "GET")
         {
             request.Headers.Add("Origin", AuthFixture.Origin);
@@ -293,9 +301,13 @@ internal sealed class DesktopParityFixture : IDisposable
         where TReq : IRequest<ErrorOr<TResult>>
     {
         private readonly Func<TReq, ErrorOr<TResult>> _handle;
-        public CaptureHandler(Func<TReq, ErrorOr<TResult>> handle) => _handle = handle;
+        private readonly DesktopParityState _state;
+        public CaptureHandler(DesktopParityState state, Func<TReq, ErrorOr<TResult>> handle)
+        { _state = state; _handle = handle; }
         public Task<ErrorOr<TResult>> Handle(TReq request, CancellationToken token) =>
-            Task.FromResult(_handle(request));
+            _state.ThrowHandlers
+                ? throw new InvalidOperationException("secret-database-connection")
+                : Task.FromResult(_handle(request));
     }
 }
 internal sealed class DesktopParityState : IPermissionStore
@@ -303,6 +315,7 @@ internal sealed class DesktopParityState : IPermissionStore
     public readonly List<object> Calls = new List<object>();
     public readonly HashSet<string> Denied = new HashSet<string>(StringComparer.Ordinal);
     public Error? Failure;
+    public bool ThrowHandlers;
     public Task<PermissionSnapshot> GetSnapshotAsync(int userId, string permissionKey, CancellationToken token) =>
         Task.FromResult(new PermissionSnapshot(!Denied.Contains(permissionKey), false));
 }

@@ -18,9 +18,9 @@ namespace MyDmsVn.Server.HttpHost.Tests;
 
 public sealed class Web6ResendEligibilityEndpointTests
 {
-    private static readonly Guid Epoch = Guid.Parse("11111111-2222-4333-8444-555555555555");
-    private static readonly Guid Operation = Guid.Parse("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
-    private const string Fingerprint = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    internal static readonly Guid Epoch = Guid.Parse("11111111-2222-4333-8444-555555555555");
+    internal static readonly Guid Operation = Guid.Parse("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    internal const string Fingerprint = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
     public static IEnumerable<object[]> Kinds()
     {
@@ -225,7 +225,7 @@ public sealed class Web6ResendEligibilityEndpointTests
         Assert.Empty(target.EligibilityKinds);
     }
 
-    private static WebOperationResolution Resolution(string state, bool result = false, bool terminal = false)
+    internal static WebOperationResolution Resolution(string state, bool result = false, bool terminal = false)
     {
         var completed = new DateTime(2026, 10, 31, 8, 0, 0, DateTimeKind.Utc);
         var status = new WebOperationStatus(Operation, Epoch, WebOperationKind.SalesCreate, null,
@@ -248,7 +248,7 @@ public sealed class Web6ResendEligibilityEndpointTests
 
     private static string Compact(string json) => JToken.Parse(json).ToString(Formatting.None);
 
-    private sealed class Probe : IDisposable, IUnitOfWorkFactory, IWebOperationReadRepository, IWebOperationResendEligibilityRepository
+    internal sealed class Probe : IDisposable, IUnitOfWorkFactory, IWebOperationReadRepository, IWebOperationResendEligibilityRepository
     {
         private readonly AuthFixture _host;
         private string? _token;
@@ -258,6 +258,9 @@ public sealed class Web6ResendEligibilityEndpointTests
         internal int EligibilityReads;
         internal bool ExpireDuringEligibilityRead;
         internal bool FailEligibilityRead;
+        internal bool FailContextRead;
+        internal bool FailAuthorizeReceipt;
+        internal bool Deny;
         internal AuthClock Clock => _host.Clock;
         internal void ResetAccess() => _token = null;
 
@@ -267,15 +270,16 @@ public sealed class Web6ResendEligibilityEndpointTests
                 web6ResendEligibilityEnabled: true, web6CandidateId: candidate);
         }
 
-        internal async Task<HttpResponseMessage> Get(string route, Action<HttpRequestMessage>? configure = null)
+        internal async Task<HttpResponseMessage> Get(string route, Action<HttpRequestMessage>? configure = null,
+            bool authenticated = true)
         {
-            if (_token == null)
+            if (authenticated && _token == null)
             {
                 using var login = await _host.Login();
                 _token = (string)JObject.Parse(await login.Content.ReadAsStringAsync())["data"]!["accessToken"]!;
             }
             using var request = new HttpRequestMessage(HttpMethod.Get, AuthFixture.Origin + "/api/v3/operations/" + route);
-            request.Headers.Add("Authorization", "Bearer " + _token);
+            if (authenticated) request.Headers.Add("Authorization", "Bearer " + _token);
             configure?.Invoke(request);
             return await _host.Server.HttpClient.SendAsync(request);
         }
@@ -296,7 +300,7 @@ public sealed class Web6ResendEligibilityEndpointTests
                 configure?.Invoke(request);
             });
 
-        private static void IdentityHeaders(HttpRequestMessage request)
+        internal static void IdentityHeaders(HttpRequestMessage request)
         {
             request.Headers.Add("X-MyDmsVn-Deployment-Epoch", Epoch.ToString("D"));
             request.Headers.Add("X-MyDmsVn-Operation-Fingerprint", Fingerprint);
@@ -305,16 +309,18 @@ public sealed class Web6ResendEligibilityEndpointTests
 
         public IUnitOfWork Create() => new Uow(this);
         public Task<IUnitOfWork> CreateAsync(CancellationToken cancellationToken) => Task.FromResult<IUnitOfWork>(Create());
-        public Task<Guid> ReadContextAsync(int actorUserId, Guid sessionId, CancellationToken cancellationToken) => Task.FromResult(Epoch);
+        public Task<Guid> ReadContextAsync(int actorUserId, Guid sessionId, CancellationToken cancellationToken) =>
+            FailContextRead ? throw new InvalidOperationException("private-journal-read-denied") : Task.FromResult(Epoch);
         public Task<WebOperationStatus?> ReadStatusAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
             Guid operationId, byte[] expectedFingerprint, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task AuthorizeReceiptAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch, WebOperationKind kind, CancellationToken cancellationToken)
-        { AuthorizedKinds.Add(kind); return Task.CompletedTask; }
+        { if (deploymentEpoch != Epoch) throw new WebOperationException("Deployment.EpochMismatch"); if (Deny) throw new WebOperationException("Auth.Forbidden"); if (FailAuthorizeReceipt) throw new InvalidOperationException("private-journal-read-denied"); AuthorizedKinds.Add(kind); return Task.CompletedTask; }
         public Task<WebOperationResolution?> ReadEligibilityAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
             Guid operationId, WebOperationKind expectedKind, long? expectedTargetId, byte[] expectedFingerprint, CancellationToken cancellationToken)
         {
             EligibilityReads++;
             EligibilityKinds.Add(expectedKind);
+            if (Deny) throw new WebOperationException("Auth.Forbidden");
             if (FailEligibilityRead) throw new InvalidOperationException("private-journal-read-denied");
             if (ExpireDuringEligibilityRead) Clock.Now = Clock.Now.AddSeconds(Web6ResendReceiptCodec.LifetimeSeconds);
             return Task.FromResult(Resolution);

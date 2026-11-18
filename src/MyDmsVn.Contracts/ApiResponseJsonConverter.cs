@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if !NET10_0_OR_GREATER
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Newtonsoft.Json;
@@ -114,3 +115,4 @@ namespace MyDmsVn.Contracts
         }
     }
 }
+#endif

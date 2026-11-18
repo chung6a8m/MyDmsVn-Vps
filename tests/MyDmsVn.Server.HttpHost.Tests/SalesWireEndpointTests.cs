@@ -383,11 +383,13 @@ internal sealed class SalesWireFixture : IDisposable
         services.AddSingleton<IRequestHandler<TRequest, ErrorOr<TResult>>>(new CaptureHandler<TRequest, TResult>(request =>
         {
             State.Calls.Add(request!);
+            if (State.Throw) throw new InvalidOperationException("secret SQL connection");
             if (State.Error.HasValue) return State.Error.Value;
             if (State.Errors != null) return State.Errors;
             return result(request);
         }));
-    public async Task<HttpResponseMessage> Send(string method, string route, string? body = null, bool authenticated = true, string? rawQuery = null)
+    public async Task<HttpResponseMessage> Send(string method, string route, string? body = null, bool authenticated = true, string? rawQuery = null,
+        string? correlationId = null)
     {
         if (authenticated && _token == null)
         {
@@ -396,6 +398,7 @@ internal sealed class SalesWireFixture : IDisposable
         }
         using var request = new HttpRequestMessage(new HttpMethod(method), AuthFixture.Origin + "/api/v1" + route);
         if (authenticated) request.Headers.Add("Authorization", "Bearer " + _token);
+        if (correlationId != null) request.Headers.Add("X-Correlation-ID", correlationId);
         if (rawQuery != null) request.Headers.Add("X-Test-Raw-Query", rawQuery);
         if (method != "GET") { request.Headers.Add("Origin", AuthFixture.Origin); request.Headers.Add("Sec-Fetch-Site", "same-origin"); }
         if (body != null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
@@ -415,6 +418,7 @@ internal sealed class SalesWireState : IPermissionStore
     public readonly HashSet<string> Denied = new HashSet<string>(StringComparer.Ordinal);
     public Error? Error;
     public List<Error>? Errors;
+    public bool Throw;
     public SalesReceiptDto Detail = WireCorpus.Dto<SalesReceiptDto>("sales-create-response.json");
     public IReadOnlyList<CatalogLookupDto> Lookup = new[] { new CatalogLookupDto(104, "SP104", "Sản phẩm", true) };
     public Task<PermissionSnapshot> GetSnapshotAsync(int userId, string permissionKey, CancellationToken cancellationToken) => Task.FromResult(new PermissionSnapshot(!Denied.Contains(permissionKey), false));

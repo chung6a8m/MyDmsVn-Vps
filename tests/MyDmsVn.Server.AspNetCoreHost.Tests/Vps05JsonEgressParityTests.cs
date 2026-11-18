@@ -12,6 +12,8 @@ using MyDmsVn.Server.Application.Operations;
 using MyDmsVn.Server.HttpHost;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
+using System.Reflection;
 using Xunit;
 
 namespace MyDmsVn.Server.AspNetCoreHost.Tests;
@@ -23,8 +25,57 @@ namespace MyDmsVn.Server.AspNetCoreHost.Tests;
 /// </summary>
 public sealed class Vps05JsonEgressParityTests
 {
-    private static string Legacy<T>(ApiResponse<T> value) =>
-        JsonConvert.SerializeObject(value, ApiJson.CreateSerializerSettings());
+    // Independent Json.NET oracle, now owned by the *test* project. The
+    // production net10 Contracts assembly cannot depend on Newtonsoft.
+    private static readonly JsonSerializerSettings LegacySettings = new()
+    {
+        ContractResolver = new LegacyContractResolver(),
+        Culture = CultureInfo.InvariantCulture,
+        DateFormatHandling = DateFormatHandling.IsoDateFormat,
+        DateTimeZoneHandling = DateTimeZoneHandling.Utc,
+        Formatting = Formatting.None,
+        NullValueHandling = NullValueHandling.Ignore
+    };
+
+    private sealed class LegacyContractResolver : CamelCasePropertyNamesContractResolver
+    {
+        protected override Newtonsoft.Json.Serialization.JsonProperty CreateProperty(MemberInfo member, MemberSerialization memberSerialization)
+        {
+            var property = base.CreateProperty(member, memberSerialization);
+            if ((property.PropertyType == typeof(DateTime) || property.PropertyType == typeof(DateTime?)) &&
+                member.Name is "SaleDate" or "ReceiptDate" or "FromDate" or "ToDate")
+                property.Converter = new LegacyCalendarDateConverter();
+            return property;
+        }
+    }
+
+    private sealed class LegacyCalendarDateConverter : Newtonsoft.Json.JsonConverter
+    {
+        public override bool CanConvert(Type type) =>
+            type == typeof(DateTime) || type == typeof(DateTime?);
+
+        public override void WriteJson(JsonWriter writer, object? value, Newtonsoft.Json.JsonSerializer serializer)
+        {
+            if (value is DateTime date)
+                writer.WriteValue(date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            else
+                writer.WriteNull();
+        }
+
+        public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue,
+            Newtonsoft.Json.JsonSerializer serializer) => throw new NotSupportedException();
+    }
+
+    private static string Legacy<T>(ApiResponse<T> value)
+    {
+        if (value.IsSuccess)
+            return "{\"data\":" + JsonConvert.SerializeObject(value.Data, LegacySettings) + "}";
+        var error = value.Error!;
+        return "{\"error\":" + JsonConvert.SerializeObject(new
+        {
+            error.Code, error.Message, error.Details, error.CorrelationId
+        }, LegacySettings) + "}";
+    }
 
     [Fact]
     public async Task Success_envelope_keeps_frozen_int64_and_decimal_string_lexemes()
@@ -101,7 +152,7 @@ public sealed class Vps05JsonEgressParityTests
             ["warehouseId"] = 3
         };
         var response = ApiResponse<object>.Success(data);
-        var native = WireObject.Parse(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(data, ApiJson.CreateSerializerSettings())));
+        var native = WireObject.Parse(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(data, LegacySettings)));
         var json = Net10WireJson.SerializeEnvelope(ApiResponse<object>.Success(native));
         Assert.Equal(Legacy(response), json);
         using var doc = JsonDocument.Parse(json);
@@ -191,7 +242,7 @@ public sealed class Vps05JsonEgressParityTests
         };
         var expected = Legacy(ApiResponse<object>.Success(legacy));
         Assert.Contains("\"postedAtUtc\":\"2026-11-17T13:14:15Z\"", expected);
-        var native = WireObject.Parse(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(legacy, ApiJson.CreateSerializerSettings())));
+        var native = WireObject.Parse(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(legacy, LegacySettings)));
         Assert.Equal(expected, Net10WireJson.SerializeEnvelope(ApiResponse<object>.Success(native)));
     }
 }

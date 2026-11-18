@@ -7,6 +7,6 @@
     <NuGetLockFilePath Condition="'$(Vps04Server)' == 'true'">$(MSBuildProjectDirectory)/packages.vps04a.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="Newtonsoft.Json" Condition="'$(Vps04Server)' != 'true'" />
   </ItemGroup>
 </Project>

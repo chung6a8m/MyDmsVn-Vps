@@ -1,4 +1,32 @@
-﻿using System;
+﻿#if NET10_0_OR_GREATER
+using System;
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace MyDmsVn.Contracts;
+
+// A net10-only converter for shared DTO metadata. The Desktop/net48
+// Newtonsoft converter is compiled exclusively in the legacy graph.
+public sealed class SalesCalendarDateJsonConverter : JsonConverter<DateTime>
+{
+    public static DateTime Normalize(DateTime value) =>
+        DateTime.SpecifyKind(value.Date, DateTimeKind.Unspecified);
+
+    public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.String ||
+            !DateTime.TryParseExact(reader.GetString(), "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var date))
+            throw new JsonException("A sales calendar date must use yyyy-MM-dd.");
+        return Normalize(date);
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+}
+#else
+using System;
 using System.Globalization;
 using Newtonsoft.Json;
 namespace MyDmsVn.Contracts;
@@ -20,3 +48,4 @@ public sealed class SalesCalendarDateJsonConverter : JsonConverter
         writer.WriteValue(((DateTime)value).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
     }
 }
+#endif

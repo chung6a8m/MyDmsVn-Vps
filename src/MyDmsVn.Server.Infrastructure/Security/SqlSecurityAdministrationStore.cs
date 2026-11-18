@@ -6,7 +6,12 @@ using System.Threading.Tasks;
 using System.Data;
 using ErrorOr;
 using Microsoft.Data.SqlClient;
+#if NET10_0_OR_GREATER
+using System.Text.Json;
+using System.Text.Encodings.Web;
+#else
 using Newtonsoft.Json;
+#endif
 using MyDmsVn.Contracts.Security;
 using MyDmsVn.Server.Application.Persistence;
 using MyDmsVn.Server.Application.Security;
@@ -377,11 +382,7 @@ public sealed class SqlSecurityAdministrationRepository : ISecurityAdministratio
         Guid correlationId,
         CancellationToken cancellationToken)
     {
-        var entriesJson = JsonConvert.SerializeObject(import.Entries.Select(entry => new
-        {
-            PermissionKey = entry.PermissionKey,
-            entry.Granted,
-        }));
+        var entriesJson = SerializePermissionImportEntries(import.Entries);
         using var command = SqlRead.Command(_context.Connection, _context.Transaction, "dbo.ApplySecurityPermissionImport",
             SqlRead.Text("@TargetType", import.TargetType == PermissionImportTargetTypeDto.User ? "User" : "Role"),
             SqlRead.P("@TargetId", SqlDbType.Int, import.TargetId), SqlRead.P("@ActorUserId", SqlDbType.Int, actorUserId),
@@ -390,6 +391,30 @@ public sealed class SqlSecurityAdministrationRepository : ISecurityAdministratio
         command.CommandType = CommandType.StoredProcedure;
         return await SqlRead.SingleAsync(command, reader => new PermissionAssignmentImportResultDto(
             reader.GetInt64(0), reader.GetInt32(1), reader.GetBoolean(2)), cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static string SerializePermissionImportEntries(
+        IReadOnlyList<PermissionAssignmentImportEntryDto> entries)
+    {
+        if (entries == null) throw new ArgumentNullException(nameof(entries));
+#if NET10_0_OR_GREATER
+        return JsonSerializer.Serialize(entries.Select(entry => new
+        {
+            PermissionKey = entry.PermissionKey,
+            entry.Granted,
+        }), new JsonSerializerOptions
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            WriteIndented = false,
+            PropertyNamingPolicy = null
+        });
+#else
+        return JsonConvert.SerializeObject(entries.Select(entry => new
+        {
+            PermissionKey = entry.PermissionKey,
+            entry.Granted,
+        }));
+#endif
     }
 
     private sealed class UserRow

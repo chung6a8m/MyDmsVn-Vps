@@ -495,7 +495,7 @@ internal sealed class AuthState : IWebAuthSessionStore, IUserStore, IPermissionS
 {
     private static readonly Guid Session = Guid.Parse("11111111-1111-4111-8111-111111111111");
     public int Issues, Rotations, Revocations, CredentialLookups, ActiveLookups;
-    public bool FailIssue, Revoked, ReadAllowed = true;
+    public bool FailIssue, FailRotate, FailRevoke, FailActive, FailPermissions, Revoked, ReadAllowed = true;
     public readonly List<SecurityAuditEntry> Audits = new List<SecurityAuditEntry>();
     public Task WriteAsync(SecurityAuditEntry entry, CancellationToken cancellationToken) { Audits.Add(entry); return Task.CompletedTask; }
     public Task<UserAccount?> FindByNormalizedUsernameAsync(string name, CancellationToken cancellationToken)
@@ -504,13 +504,14 @@ internal sealed class AuthState : IWebAuthSessionStore, IUserStore, IPermissionS
     public Task<WebAuthSessionToken?> IssueAsync(int userId, CancellationToken cancellationToken)
     { Issues++; if (FailIssue) throw new InvalidOperationException("secret SQL connection"); return Task.FromResult<WebAuthSessionToken?>(Token(AuthFixture.InitialRefresh)); }
     public Task<WebAuthSessionToken?> RotateAsync(string refreshToken, CancellationToken cancellationToken)
-    { Rotations++; return Task.FromResult<WebAuthSessionToken?>(Revoked ? null : Token(AuthFixture.ChildRefresh)); }
-    public Task RevokeAsync(string refreshToken, CancellationToken cancellationToken) { Revocations++; Revoked = true; return Task.CompletedTask; }
+    { Rotations++; if (FailRotate) throw new InvalidOperationException("secret SQL connection"); return Task.FromResult<WebAuthSessionToken?>(Revoked ? null : Token(AuthFixture.ChildRefresh)); }
+    public Task RevokeAsync(string refreshToken, CancellationToken cancellationToken) { Revocations++; if (FailRevoke) throw new InvalidOperationException("secret SQL connection"); Revoked = true; return Task.CompletedTask; }
     public Task<CurrentUser?> GetActiveUserAsync(Guid sessionId, int userId, CancellationToken cancellationToken)
     { ActiveLookups++; return Task.FromResult<CurrentUser?>(Revoked || sessionId != Session || userId != 1 ? null : CurrentUser.Authenticated(1, "authoritative-alice", "Authoritative Alice", true)); }
-    public Task<bool> IsActiveAsync(int userId, CancellationToken cancellationToken) => Task.FromResult(!Revoked);
+    public Task<bool> IsActiveAsync(int userId, CancellationToken cancellationToken) => FailActive
+        ? throw new InvalidOperationException("secret SQL connection") : Task.FromResult(!Revoked);
     public Task<PermissionSnapshot> GetSnapshotAsync(int userId, string permissionKey, CancellationToken cancellationToken)
-    { Assert.Equal(1, userId); return Task.FromResult(new PermissionSnapshot(permissionKey == "Sales.Receipts.Read" ? ReadAllowed : permissionKey == "Sales.Receipts.Post", true)); }
+    { Assert.Equal(1, userId); if (FailPermissions) throw new InvalidOperationException("secret SQL connection"); return Task.FromResult(new PermissionSnapshot(permissionKey == "Sales.Receipts.Read" ? ReadAllowed : permissionKey == "Sales.Receipts.Post", true)); }
     private static WebAuthSessionToken Token(string refresh) => new WebAuthSessionToken(Session, CurrentUser.Authenticated(1, "authoritative-alice", "Authoritative Alice", true), refresh, AuthFixtureTime.AddDays(7), AuthFixtureTime.AddDays(30));
     private static DateTime AuthFixtureTime => new DateTime(2026, 10, 31, 9, 0, 0, DateTimeKind.Utc);
 }

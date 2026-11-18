@@ -1,4 +1,9 @@
-﻿using System;
+﻿#if NET10_0_OR_GREATER
+using LegacyApiJson = MyDmsVn.Server.Application.Tests.LegacyApiJsonOracle;
+#else
+using LegacyApiJson = MyDmsVn.Contracts.ApiJson;
+#endif
+using System;
 using System.Globalization;
 using System.Linq;
 using MyDmsVn.Contracts;
@@ -9,7 +14,7 @@ using Xunit;
 namespace MyDmsVn.Server.Application.Tests;
 public sealed class SalesContractTests
 {
-    private static readonly JsonSerializerSettings Settings = ApiJson.CreateSerializerSettings();
+    private static readonly JsonSerializerSettings Settings = LegacyApiJson.CreateSerializerSettings();
     [Theory]
     [InlineData("vi-VN", DateTimeKind.Local)]
     [InlineData("en-US", DateTimeKind.Utc)]
