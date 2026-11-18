@@ -1,6 +1,6 @@
 # DbUp -> FluentMigrator — safe transition contract (VPS-07)
 
-**Current:** net48 `Server.DbMigrator` uses DbUp; 13 historical scripts are embedded and their checksums are pinned under `docs/import/`. **Target:** net10.0 standalone FluentMigrator versioned migrations after Server replatform. This document is a proposal, **not** an executed migration.
+**Repository status (2026-11-18):** original net48 DbUp remains available as the legacy oracle. VPS-07A has been merged (PR #24); VPS-07B's standalone net10 FluentMigrator CLI, isolated dual-journal bridge and SQL acceptance harness are being reviewed in [Draft PR #26](https://github.com/chung6a8m/MyDmsVn-Vps/pull/26). **Only CI-confirmed disposable SQL test results count as verified; production cutover, protected staging and release remain NOT VERIFIED.**
 
 ## Safety principles
 
@@ -45,3 +45,13 @@ two migrating processes, failure/interruption, retry, data preservation, backup
 and restore rehearsal. Unknown or partial states must be refused without mutation.
 
 **Evidence status:** source/contract implementation passed 8/8 pre-evidence-commit CI workflows on `dd043ec2`, see [VPS-07A evidence](../evidence/vps-07a-fluentmigrator-foundation.md). Final-HEAD CI and review remain separate. The [VPS-07B real SQL journal bridge](https://github.com/chung6a8m/MyDmsVn-Vps/issues/25), protected staging, and production approval remain NOT VERIFIED.
+
+## VPS-07B implementation candidate — NOT YET ACCEPTED
+
+- Explicit command `migrate schema10|schema12|schema13`, strict operator acknowledgement and verified TLS with named application `Initial Catalog`. No web-startup migration, default target, system database or silent fallback. A separate non-pooled SQL session acquires the same exclusive `MyDmsVn.SchemaMigration` app lock as legacy DbUp.
+- The *old* `dbo.SchemaVersions` remains the canonical historical evidence. A strictly shaped `dbo.FluentMigratorVersionInfo` table tracks matching numeric versions. A validated schema9..13 source is stamped in an atomic bridge, then immutable SQL and both corresponding version appends must share a migration transaction.
+- Native source admission remains exact: schema9 legacy checker, schema10, schema11, schema12 or schema13 definition fingerprints, journal prefix/description checks, original restricted maintenance/writer-drain validator; unknown/future/partial schemas fail closed. A narrowly attested FM table is excluded from the historical definition hash. Arbitrary additional objects are not accepted.
+- On any failed or killed SQL migration, do **not** assume the physical database has rolled back: independently check both journals, native fingerprint and business rows before an authorized retry; restore an approved backup when state is partial. `Down()` is prohibited.
+- Isolated CI runs an independent original DbUp9..13 oracle and a fresh FM install comparison; checks data (receipts, ledger, balances, valuation, users, web sessions, operation journals, terminal audit) alongside schema definitions. Workstream acceptance additionally requires early/middle/late fault, process-loss retry, wrong privilege, writer drain and backup/restore evidence on the final PR HEAD.
+
+See [VPS-07B runbook](../runbooks/vps-07b-sql-migration.md) and [working evidence](../evidence/vps-07b-journal-bridge.md). **Do not use the candidate CLI with a business database until independent review, all real SQL gates and Owner authorization.**
