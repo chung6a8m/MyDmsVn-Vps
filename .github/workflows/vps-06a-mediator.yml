@@ -1,0 +1,102 @@
+name: VPS-06A — generated Mediator scoped pipeline canary
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps-06a-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generator-canary:
+    name: Ubuntu SDK 10.0.404 generated Mediator canary and diagnostics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.404'
+      - name: Verify canary is isolated from production Host
+        run: python3 scripts/verify-vps06a-boundary.py
+      - name: Freeze source MediatR handler/request/dispatch inventory
+        run: python3 scripts/vps06a-mediator-inventory.py --output vps06a-mediator-inventory.json
+      - name: Strict committed NuGet lock — locked-only restore
+        working-directory: tests/MyDmsVn.Vps06A.MediatorCanary
+        run: |
+          test "$(dotnet --version)" = "10.0.404"
+          test -f packages.lock.json
+          dotnet restore MyDmsVn.Vps06A.MediatorCanary.csproj --locked-mode -v minimal
+          git diff --exit-code -- packages.lock.json
+      - name: Compile generated Mediator with warnings as errors
+        working-directory: tests/MyDmsVn.Vps06A.MediatorCanary
+        run: dotnet build MyDmsVn.Vps06A.MediatorCanary.csproj -c Release -f net10.0 --no-restore -warnaserror -v normal
+      - name: Inspect emitted generator code, generated registration and scoped lifetime
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('tests/MyDmsVn.Vps06A.MediatorCanary/obj/mediator-generated')
+          cs=list(root.rglob('*.cs'))
+          assert cs, 'No generated Mediator C# files'
+          all_text='\n'.join(p.read_text(encoding='utf-8') for p in cs)
+          for marker in ('CanaryHandler','CanaryRequest','Scoped'):
+              assert marker in all_text, f'Generated Mediator lacks {marker}'
+          print(f'Generator emitted {len(cs)} C# files, internal handler and Scoped lifetime registered')
+          PY
+      - name: Freeze positive generated source before negative diagnostic builds
+        run: |
+          mkdir -p vps06a-positive-generated
+          cp -R tests/MyDmsVn.Vps06A.MediatorCanary/obj/mediator-generated/. vps06a-positive-generated/
+          test "$(find vps06a-positive-generated -name '*.cs' | wc -l)" -eq 4
+      - name: Verify compiled canary dependency boundary
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path('tests/MyDmsVn.Vps06A.MediatorCanary/bin/Release/net10.0/MyDmsVn.Vps06A.MediatorCanary.deps.json')
+          assert path.is_file(), 'Canary output dependency manifest missing'
+          libraries=json.loads(path.read_text(encoding='utf-8'))['libraries']
+          assert any(name.startswith('Mediator.Abstractions/') for name in libraries)
+          assert not any(name.startswith('MediatR/') for name in libraries)
+          print('PASS isolated canary artifact: Mediator.Abstractions present, MediatR absent')
+          PY
+      - name: Execute generated mediator scope and pipeline contract tests
+        working-directory: tests/MyDmsVn.Vps06A.MediatorCanary
+        run: |
+          dotnet run --project MyDmsVn.Vps06A.MediatorCanary.csproj -c Release -f net10.0 --no-build --no-restore | tee canary-results.txt
+          grep -Fxq 'VPS06A_CANARY_PASS 22/22, generator=3.0.2, scoped=true' canary-results.txt
+      - name: Negative generator diagnostics — missing and duplicate handler
+        working-directory: tests/MyDmsVn.Vps06A.MediatorCanary
+        run: |
+          for target in missing duplicate; do
+            set +e
+            dotnet build MyDmsVn.Vps06A.MediatorCanary.csproj -c Release -f net10.0 --no-restore -warnaserror -p:Vps06aDiagnostic="$target" -v normal > "diagnostic-$target.txt" 2>&1
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ]; then echo "Expected generator diagnostic for $target but build succeeded"; exit 1; fi
+            if [ "$target" = missing ]; then code=MSG0005; else code=MSG0001; fi
+            if ! grep -q "$code" "diagnostic-$target.txt"; then
+              echo "Expected $code diagnostic absent for $target"
+              grep -E 'error |warning |MSG[0-9]+' "diagnostic-$target.txt" | head -30
+              exit 1
+            fi
+            echo "PASS expected $code for $target"
+          done
+      - name: Preserve reproducible generator and diagnostics evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps06a-generated-mediator-canary
+          path: |
+            vps06a-mediator-inventory.json
+            tests/MyDmsVn.Vps06A.MediatorCanary/packages.lock.json
+            vps06a-positive-generated/**/*.cs
+            tests/MyDmsVn.Vps06A.MediatorCanary/canary-results.txt
+            tests/MyDmsVn.Vps06A.MediatorCanary/diagnostic-*.txt
+          if-no-files-found: warn
