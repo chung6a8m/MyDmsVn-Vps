@@ -279,21 +279,21 @@ END;");
         using var c = new SqlConnection(For(db));
         await c.OpenAsync();
         using var command = new SqlCommand(@"
-SELECT CONCAT(N'O|',SCHEMA_NAME(schema_id),N'|',name,N'|',type) AS Sig
+SELECT CONCAT(N'O|',SCHEMA_NAME(schema_id),N'|',name,N'|',type) COLLATE Latin1_General_100_BIN2 AS Sig
 FROM sys.objects WHERE is_ms_shipped=0 AND name<>N'FluentMigratorVersionInfo'
 UNION ALL SELECT CONCAT(N'C|',OBJECT_SCHEMA_NAME(object_id),N'|',OBJECT_NAME(object_id),
  N'|',column_id,N'|',name,N'|',TYPE_NAME(user_type_id),N'|',max_length,
- N'|',precision,N'|',scale,N'|',is_nullable)
+ N'|',precision,N'|',scale,N'|',is_nullable) COLLATE Latin1_General_100_BIN2
 FROM sys.columns WHERE object_id<>ISNULL(OBJECT_ID(N'dbo.FluentMigratorVersionInfo'),-1)
  AND OBJECTPROPERTY(object_id,'IsMSShipped')=0
 UNION ALL SELECT CONCAT(N'M|',OBJECT_SCHEMA_NAME(object_id),N'|',OBJECT_NAME(object_id),
- N'|',CONVERT(varchar(64),HASHBYTES('SHA2_256',definition),2))
+ N'|',CONVERT(varchar(64),HASHBYTES('SHA2_256',definition),2)) COLLATE Latin1_General_100_BIN2
 FROM sys.sql_modules WHERE OBJECTPROPERTY(object_id,'IsMSShipped')=0
 UNION ALL SELECT CONCAT(N'I|',OBJECT_SCHEMA_NAME(object_id),N'|',OBJECT_NAME(object_id),
- N'|',name,N'|',is_unique,N'|',is_primary_key,N'|',has_filter)
+ N'|',name,N'|',is_unique,N'|',is_primary_key,N'|',has_filter) COLLATE Latin1_General_100_BIN2
 FROM sys.indexes WHERE OBJECTPROPERTY(object_id,'IsMSShipped')=0
  AND object_id<>ISNULL(OBJECT_ID(N'dbo.FluentMigratorVersionInfo'),-1)
-UNION ALL SELECT CONCAT(N'T|',name,N'|',is_disabled,N'|',is_instead_of_trigger)
+UNION ALL SELECT CONCAT(N'T|',name,N'|',is_disabled,N'|',is_instead_of_trigger) COLLATE Latin1_General_100_BIN2
 FROM sys.triggers WHERE is_ms_shipped=0
 ORDER BY Sig;", c);
         using var reader = await command.ExecuteReaderAsync();
