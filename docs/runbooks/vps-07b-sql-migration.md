@@ -1,6 +1,6 @@
 # VPS-07B — safe SQL Server migration operator runbook
 
-**Status:** DRAFT CANDIDATE under [PR #26](https://github.com/chung6a8m/MyDmsVn-Vps/pull/26), **not approved for production or staging**. Owner decision [OWN-VPS-02](../decisions/OWN-VPS-02.md) mandates fresh and independently proven existing-database paths. Protected staging is VPS-08 and release authorization belongs to VPS-09.
+**Status:** VPS-07B migration procedure independently reviewed and exercised on **disposable SQL2022** ([PR #26](https://github.com/chung6a8m/MyDmsVn-Vps/pull/26)); **not approved for real business databases, protected staging or production**. Owner decision [OWN-VPS-02](../decisions/OWN-VPS-02.md) mandates fresh and independently proven existing-database paths. Protected staging is VPS-08 and release authorization belongs to VPS-09.
 
 ## Preconditions and trust boundary
 

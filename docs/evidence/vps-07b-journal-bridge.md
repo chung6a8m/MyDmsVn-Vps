@@ -1,7 +1,7 @@
 # VPS-07B — FluentMigrator journal bridge & real SQL acceptance ledger
 
-**Date:** 2026-11-18 · [Draft PR #26](https://github.com/chung6a8m/MyDmsVn-Vps/pull/26) · [Issue #25](https://github.com/chung6a8m/MyDmsVn-Vps/issues/25) · **Base `main`:** `1ab58a0f7537c6dbcf6d238d0c6f5c2b922708e0`.
-**Status: IMPLEMENTED / 54-case CODE-HEAD CI VERIFIED / EXACT FINAL-HEAD CI & INDEPENDENT REVIEW PENDING / DO NOT MERGE.** This document is not a release certificate.
+**Date:** 2026-11-18 · [PR #26](https://github.com/chung6a8m/MyDmsVn-Vps/pull/26) · [Issue #25](https://github.com/chung6a8m/MyDmsVn-Vps/issues/25) · **Base `main`:** `1ab58a0f7537c6dbcf6d238d0c6f5c2b922708e0`.
+**Status: INDEPENDENT REVIEW COMPLETE / 58-case SQL2022 & 9/9 workflows SUCCESS at code HEAD `7b29dab675ab37264a385d482204056471236999`.** Final documentation-inclusive HEAD checks and merge SHA must be recorded in PR #26 before closeout. **Protected staging, real business SQL and production release remain NOT VERIFIED.** This is not a release certificate.
 
 ## Implemented candidate
 
@@ -29,13 +29,20 @@ Mandatory final verification includes: exact9..13 and empty source admission, ex
 **Review policy:** audit the entire [PR #26 diff](https://github.com/chung6a8m/MyDmsVn-Vps/pull/26/files), regenerate independent SQL oracles and inspect exact job logs, generated lock graph, counts, final HEAD and checksum comparison. Update this ledger and the PR with run IDs and dispositions before deciding review/merge. A log saying `SUCCESS` for compilation alone never means VPS-07B acceptance.
 
 
-## Independent review findings — code fixes committed, final-HEAD CI required
+## Independent review final code-HEAD evidence (2026-11-18)
+
+- [VPS-07B SQL2022 #44287719619](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44287719619): **58/58 discovered, executed and PASS; failed=0, skipped=0**, both jobs SUCCESS, original DbUp9..13, exact native fingerprints, source rows, COGS, recovery, app lock and the four additional denial/partial-fresh cases; SQL TLS verified, ephemeral only.
+- Other **8/8 workflows SUCCESS on the same code HEAD**: [legacy Windows #44287719780](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44287719780), [xUnit v3 #44287719634](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44287719634), [Linux net10 #44287719679](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44287719679), [HTTPS→DbUp13 #44287719749](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44287719749), [Desktop publish #44287719635](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44287719635), [VPS-07A #44287719646](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44287719646), [Mediator 06A #44287719849](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44287719849), [Mediator 06B #44287719717](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44287719717).
+- Earlier commit `4173ba9` executed **58/58 SQL PASS**, but its workflow failed solely because YAML still required `54/54`. Commit `7b29dab` corrected both gate assertions and passed all nine workflows. No earlier failed workflow is represented as passing.
+- The documentation-inclusive final-HEAD CI links and the actual merge SHA are authoritative in [PR #26](https://github.com/chung6a8m/MyDmsVn-Vps/pull/26); do not infer production approval from disposable CI.
+
+## Independent review findings — resolved and SQL regression-tested
 
 6. **P1 — inherited PUBLIC permission bypass.** A grant at `SCHEMA::dbo` or database scope could expose application objects without an object-level grant; refuse object, schema and broad database grants in preflight, with independent SQL negatives.
 7. **P1 — bare legacy SQL alias provenance.** Enforce the complete original embedded DbUp resource name; add forged bare-alias refusal.
 8. **P1 — interrupted fresh prefix not explicitly exercised.** Inject failure in SQL005 after versions1..4 commit, prove dual-journal consistency and fail-closed rerun; document operator-led fresh replacement/backup restore.
 
-**New required acceptance floor: 58/58 real SQL cases**, zero failed/skipped, on exact new PR HEAD; earlier 54/54 is historical evidence only.
+**Required acceptance floor: 58/58 real SQL cases**, zero failed/skipped, achieved at code HEAD `7b29dab`; final documentation-inclusive HEAD CI is a separate gate. Earlier 54/54 is historical evidence only.
 
 ## Review findings addressed on this branch
 

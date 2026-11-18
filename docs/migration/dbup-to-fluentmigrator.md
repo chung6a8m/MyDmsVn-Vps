@@ -1,6 +1,6 @@
 # DbUp -> FluentMigrator — safe transition contract (VPS-07)
 
-**Repository status (2026-11-18):** original net48 DbUp remains available as the legacy oracle. VPS-07A has been merged (PR #24); VPS-07B's standalone net10 FluentMigrator CLI, isolated dual-journal bridge and SQL acceptance harness are being reviewed in [Draft PR #26](https://github.com/chung6a8m/MyDmsVn-Vps/pull/26). **Only CI-confirmed disposable SQL test results count as verified; production cutover, protected staging and release remain NOT VERIFIED.**
+**Repository status (2026-11-18):** original net48 DbUp remains available as the legacy oracle. VPS-07A has been merged (PR #24); VPS-07B's standalone net10 FluentMigrator CLI, isolated dual-journal bridge and SQL acceptance harness were independently reviewed with 58/58 disposable SQL cases under [PR #26](https://github.com/chung6a8m/MyDmsVn-Vps/pull/26). **Only CI-confirmed disposable SQL test results count as verified; production cutover, protected staging and release remain NOT VERIFIED.**
 
 ## Safety principles
 
@@ -46,7 +46,7 @@ and restore rehearsal. Unknown or partial states must be refused without mutatio
 
 **Evidence status:** source/contract implementation passed 8/8 pre-evidence-commit CI workflows on `dd043ec2`, see [VPS-07A evidence](../evidence/vps-07a-fluentmigrator-foundation.md). Final-HEAD CI and review remain separate. The [VPS-07B real SQL journal bridge](https://github.com/chung6a8m/MyDmsVn-Vps/issues/25), protected staging, and production approval remain NOT VERIFIED.
 
-## VPS-07B implementation candidate — NOT YET ACCEPTED
+## VPS-07B reviewed implementation — disposable SQL acceptance only
 
 - Explicit command `migrate schema10|schema12|schema13`, strict operator acknowledgement and verified TLS with named application `Initial Catalog`. No web-startup migration, default target, system database or silent fallback. A separate non-pooled SQL session acquires the same exclusive `MyDmsVn.SchemaMigration` app lock as legacy DbUp.
 - The *old* `dbo.SchemaVersions` remains canonical historical evidence. The strictly shaped `dbo.FluentMigratorVersionInfo` table and database-scope durable marker `MyDmsVn.FluentMigratorBridge=vps07b-v1` are committed atomically in one bridge transaction; the marker distinguishes legitimate first-time DbUp import from a missing/forged FM journal after cutover. A validated schema9..13 source is stamped only once; immutable SQL and both version appends share each forward migration transaction.
