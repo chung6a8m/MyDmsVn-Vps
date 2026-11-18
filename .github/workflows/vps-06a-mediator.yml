@@ -49,6 +49,23 @@ jobs:
               assert marker in all_text, f'Generated Mediator lacks {marker}'
           print(f'Generator emitted {len(cs)} C# files, internal handler and Scoped lifetime registered')
           PY
+      - name: Freeze positive generated source before negative diagnostic builds
+        run: |
+          mkdir -p vps06a-positive-generated
+          cp -R tests/MyDmsVn.Vps06A.MediatorCanary/obj/mediator-generated/. vps06a-positive-generated/
+          test "$(find vps06a-positive-generated -name '*.cs' | wc -l)" -eq 4
+      - name: Verify compiled canary dependency boundary
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path('tests/MyDmsVn.Vps06A.MediatorCanary/bin/Release/net10.0/MyDmsVn.Vps06A.MediatorCanary.deps.json')
+          assert path.is_file(), 'Canary output dependency manifest missing'
+          libraries=json.loads(path.read_text(encoding='utf-8'))['libraries']
+          assert any(name.startswith('Mediator.Abstractions/') for name in libraries)
+          assert not any(name.startswith('MediatR/') for name in libraries)
+          print('PASS isolated canary artifact: Mediator.Abstractions present, MediatR absent')
+          PY
       - name: Execute generated mediator scope and pipeline contract tests
         working-directory: tests/MyDmsVn.Vps06A.MediatorCanary
         run: |
@@ -79,7 +96,7 @@ jobs:
           path: |
             vps06a-mediator-inventory.json
             tests/MyDmsVn.Vps06A.MediatorCanary/packages.lock.json
-            tests/MyDmsVn.Vps06A.MediatorCanary/obj/mediator-generated/**/*.cs
+            vps06a-positive-generated/**/*.cs
             tests/MyDmsVn.Vps06A.MediatorCanary/canary-results.txt
             tests/MyDmsVn.Vps06A.MediatorCanary/diagnostic-*.txt
           if-no-files-found: warn
