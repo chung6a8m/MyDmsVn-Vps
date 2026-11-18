@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>MyDmsVn.Vps06A.MediatorCanary</AssemblyName>
+    <!-- Emitted source is build evidence, never checked in as hand-written code. -->
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>obj/mediator-generated</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ErrorOr" />
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Mediator.Abstractions" />
+    <PackageReference Include="Mediator.SourceGenerator">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Diagnostics/**/*.cs" />
+    <Compile Include="Diagnostics/MissingHandler.cs" Condition="'$(Vps06aDiagnostic)' == 'missing'" />
+    <Compile Include="Diagnostics/DuplicateHandler.cs" Condition="'$(Vps06aDiagnostic)' == 'duplicate'" />
+  </ItemGroup>
+</Project>

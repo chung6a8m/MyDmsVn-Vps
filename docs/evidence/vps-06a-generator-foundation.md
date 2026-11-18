@@ -1,0 +1,22 @@
+# VPS-06A — Mediator 3.x generator/pipeline foundation (pre-cutover)
+
+**Status:** IN PROGRESS — implementation in independent PR; NOT ACCEPTED or merged until full independent review and exact-final-HEAD CI. Owner [Issue #19](https://github.com/chung6a8m/MyDmsVn-Vps/issues/19). Base main: `ba1c00499f8993ffd73323aaf4004ed556b8a1bb` (VPS-05 closeout).
+
+## Frozen source behavior and boundary inventory
+
+- **ApplicationRequest<T>** currently inherits `MediatR.IRequest<ErrorOr<T>>`; real `Server.Application` selects `net48` or `net10` using `Vps04Server`, with `MediatR 12.5.0` retained. Do not change it in VPS-06A.
+- **Production DI**: `Server.Application/DependencyInjection.cs` registers `AddMediatR` and open generic **ExceptionHandlingBehavior → AuthorizationBehavior → ValidationBehavior** in that order. These behaviors use `Task<T>` and MediatR's `RequestHandlerDelegate<T>`, while v3 uses `ValueTask<T>` and a message-aware delegate; authorization depends on per-request scoped identity, permission and audit.
+- **Production consumers**: ASP.NET Core `Server.AspNetCoreHost/Program.cs` calls `AddServerApplication` and enforces `ValidateScopes=true`; legacy OWIN `Server.HttpHost/Startup.cs` also calls `AddServerApplication`. Existing `tests/MyDmsVn.Server.Application.Tests/ApplicationPipelineTests.cs` uses MediatR `ISender` and private nested probe handlers; these are not guaranteed generator-visible. A separate external generator cannot blindly assume reflection-based test handler discovery.
+- **Canary scope**: `tests/MyDmsVn.Vps06A.MediatorCanary` is a net10 console executable with **no ProjectReferences** to the production graph. It compiles one `internal` request handler for `ErrorOr<string>` and three **closed-type** pipeline behaviors in order using the v3 generator; it mirrors expected error/identity/audit semantics rather than modifying the actual business handlers. Extra source files are compiled only for negative diagnostic cases. This is a generator/behavior canary, **not** whole-application handler parity or production cutover.
+- **NuGet**: `Mediator.Abstractions` and `Mediator.SourceGenerator` are centrally pinned at **3.0.2**; generator `PrivateAssets=all` is confined to the canary executable. The canary's nested `global.json` pins SDK **10.0.404**. CI first generates a lockfile and performs a locked restore; a committed lockfile and strict locked-only restore are required for final acceptance.
+- **Handler inventory/diagnostics**: generated code and DI are inspected for `CanaryRequest`, internal `CanaryHandler`, and **Scoped** registration. Negative compiler diagnostics must emit **MSG0005 (missing handler)** and **MSG0001 (duplicate handler)**. No unknown/duplicate handler may be silently accepted.
+- **Behavior matrix**: happy path; unauthorized/inactive/missing ID; permission denied; admitted/denied audit, no-audit request; validation field metadata/2 async validators/sequential execution; closed web-operation mapping and sanitized unknown exceptions; cancellation without exception reporting; independent scoped identities, correlations and audit under concurrent dispatch; root service provider scope refusal.
+- **Dependencies and source files**: no Desktop, Contracts, legacy API, SQL scripts, Host production code or migration journal modified. `VPS-06B` must inventory and port all real application handlers, request declarations, test-only probe handlers, caller registrations and dependency graph, then run full production parity/oracles.
+
+## Evidence gates pending
+
+1. Locked restore on exact commit, net10 10.0.404 build warnings-as-errors, emitted generated C# diagnostics and registration, scoped canary contract program with exact PASS count, negative diagnostics.
+2. Five existing PR workflows must continue: Linux net10 compiled 57 routes + VPS-05 SQL-free **293/293** differential; disposable HTTPS→SQL13 **15/15**; Windows net48; xUnit v3 discovery; Windows published Desktop artifact. All must run on the same final PR HEAD.
+3. Independent full diff review, complete test counts, logs/artifacts and merge of the separate VPS-06A PR; **no premature COMPLETE**. GitHub protected `approved-linux-sql` intentionally SKIPPED / NOT PASS; VPS-08 protected staging and VPS-09 integrated release remain NOT VERIFIED.
+
+The only live roadmap status is [`docs/roadmap/README.md`](../roadmap/README.md). No real SQL/GUI/VPS/production readiness is claimed by this canary.
