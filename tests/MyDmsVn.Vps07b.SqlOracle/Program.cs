@@ -217,6 +217,28 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                 "VPS07B_MAINTENANCE_REFUSAL_CREATED_JOURNAL");
             Pass("missing restricted maintenance rejected before bridge");
 
+            _stage = "killed-in-flight-transaction-and-retry";
+            var interrupted = await PrepareDbUp(12);
+            var interruptedData = await SourceData(interrupted, 12);
+            var interruptedJournal = await JournalSignatureOfLegacy(interrupted);
+            await RunCli(interrupted, 13, expectSuccess: false,
+                ciFault: "13:5:hang", interruptAtWaitfor: true);
+            Assert(await JournalSignatureOfLegacy(interrupted) == interruptedJournal,
+                "VPS07B_PROCESS_LOSS_CHANGED_LEGACY_JOURNAL");
+            Assert(await Count(interrupted,
+                "SELECT COUNT(*) FROM dbo.FluentMigratorVersionInfo;") == 12,
+                "VPS07B_PROCESS_LOSS_LEFT_FM_VERSION");
+            Assert(await Count(interrupted,
+                "SELECT CASE WHEN OBJECT_ID(N'dbo.WebOperationTerminalAudit',N'U') IS NULL THEN 0 ELSE 1 END;") == 0,
+                "VPS07B_PROCESS_LOSS_LEFT_LATE_TABLE");
+            Assert(await SourceData(interrupted, 12) == interruptedData,
+                "VPS07B_PROCESS_LOSS_CHANGED_SOURCE");
+            await RunCli(interrupted, 13, expectSuccess: true);
+            await Check(interrupted, 13);
+            Assert(await SourceData(interrupted, 12) == interruptedData,
+                "VPS07B_PROCESS_LOSS_RETRY_CHANGED_SOURCE");
+            Pass("kill dotnet worker during SQL WAITFOR transaction; rollback and retry");
+
             // A real SQL Server BACKUP ... WITH CHECKSUM, RESTORE VERIFYONLY,
             // RESTORE ... WITH REPLACE is rehearsed only on an owned disposable
             // database. This is NOT protected-staging or production evidence.
@@ -645,7 +667,8 @@ ORDER BY Sig;", c);
     }
 
     private static async Task RunCli(string db, int version, bool expectSuccess, bool approved = true,
-        string? ciFault = null, string? expectedCode = null, string? connectionOverride = null)
+        string? ciFault = null, string? expectedCode = null, string? connectionOverride = null,
+        bool interruptAtWaitfor = false)
     {
         var psi = new ProcessStartInfo("dotnet") { RedirectStandardError = true,
             RedirectStandardOutput = true, UseShellExecute = false };
@@ -672,8 +695,35 @@ ORDER BY Sig;", c);
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         using var limit = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(120));
-        try { await process.WaitForExitAsync(limit.Token); }
-        catch (OperationCanceledException) { process.Kill(entireProcessTree:true); throw new InvalidOperationException("VPS07B_CHILD_TIMEOUT"); }
+        try
+        {
+            if (interruptAtWaitfor)
+            {
+                Assert(!string.IsNullOrEmpty(ciFault) && ciFault.EndsWith(":hang", StringComparison.Ordinal),
+                    "VPS07B_PROCESS_LOSS_REQUIRES_HANG_SENTINEL");
+                var sawInFlightSql = false;
+                for (var attempt = 0; attempt < 50; attempt++)
+                {
+                    Assert(!process.HasExited, "VPS07B_WORKER_EXITED_BEFORE_SQL_WAIT");
+                    if (await Count(db, @"SELECT COUNT(*) FROM sys.dm_exec_requests r
+WHERE r.session_id<>@@SPID AND r.database_id=DB_ID()
+AND (r.wait_type LIKE N'WAITFOR%' OR r.command=N'WAITFOR');") > 0)
+                    {
+                        sawInFlightSql = true;
+                        break;
+                    }
+                    await Task.Delay(300);
+                }
+                Assert(sawInFlightSql, "VPS07B_NO_IN_FLIGHT_SQL_WAIT_WAS_OBSERVED");
+                process.Kill(entireProcessTree: true);
+            }
+            await process.WaitForExitAsync(limit.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            throw new InvalidOperationException("VPS07B_CHILD_TIMEOUT");
+        }
         var output = await stdout;
         var diagnostic = await stderr;
         if (expectSuccess)
