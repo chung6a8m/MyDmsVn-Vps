@@ -2,7 +2,7 @@
 
 **Scope:** frozen source route inventories `docs/contracts/vps-01-route-inventory.json` (29) and `docs/contracts/vps-02-route-additions.json` (28), **57 compiled signatures**. Updated for code checkpoint `62544462326e413474f7d402f851a4bcf8fd4c2f` (2026-11-17); exact final documentation HEAD CI evidence will be recorded in PR #9. This is a **coverage ledger**, not a claim of exhaustive live response parity. The canonical live roadmap status remains `docs/roadmap/README.md`.
 
-> **VPS-05C overlay (2026-11-18):** the `ROUTE_ONLY` and bounded labels below remain the historical PR #9 accounting. PR #17 code checkpoint `e70a07c` adds a separate source-independent live net48 OWIN → frozen raw observation → live net10 Kestrel gate with **293 unique observations across all 57 route IDs**. See [VPS-05C evidence](vps-05c-json-runtime.md) and [`vps-05c-desktop-route-net48.json`](../contracts/vps-05c-desktop-route-net48.json). Do not use the old PR #9 labels to describe current VPS-05C coverage.
+> **VPS-05C overlay (2026-11-18):** the `ROUTE_ONLY` and bounded labels below remain the historical PR #9 accounting. PR #17 verified code checkpoint `8e257eb` adds a separate source-independent live net48 OWIN → frozen raw observation → live net10 Kestrel gate with **293 unique observations across all 57 route IDs**. See [VPS-05C evidence](vps-05c-json-runtime.md) and [`vps-05c-desktop-route-net48.json`](../contracts/vps-05c-desktop-route-net48.json). Do not use the old PR #9 labels to describe current VPS-05C coverage.
 
 ## Evidence definitions
 
@@ -93,4 +93,4 @@
 
 The historical PR #9 matrix did not provide full response parity. VPS-05C now provides SQL-free live legacy-vs-new wire differentials for all 57 signatures plus the bounded disposable SQL suite. That does **not** provision or approve the independently protected `vps04a-sql-nonproduction` GitHub Environment and does not establish Linux systemd/reverse-proxy/VPS production acceptance; those remain VPS-08/09.
 
-**PR disposition:** DRAFT / NOT MERGE APPROVED; no Owner exception, staging approval or production readiness implied.
+**PR disposition:** PR #17 Ready for independent Owner review at code checkpoint `8e257eb`; merge requires fresh CI on the final documentation HEAD. No Owner exception, protected staging approval or production readiness is implied.

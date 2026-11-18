@@ -2,7 +2,7 @@
 
 **Repository:** `chung6a8m/MyDmsVn-Vps` · **Issue:** [#15](https://github.com/chung6a8m/MyDmsVn-Vps/issues/15) · **Implementation:** [PR #17](https://github.com/chung6a8m/MyDmsVn-Vps/pull/17)
 **Baseline:** VPS-05B merged `main` `f2eeb62f19a5cb8177eb769d01dba4003a2621d8`.
-**Status:** CODE IMPLEMENTED / 293-CASE LIVE DIFFERENTIAL PASS locally at `e70a07c3b9565e9668f0bf21f42cf4eedc1a6ba3`; all five workflows passed on preceding 279-case documentation checkpoint `b3542e05d2d5056effa6449141bc0ae0ae2dea35` / FINAL DOCUMENTATION-HEAD CI, REVIEW DISPOSITION AND MERGE PENDING. **VPS-05 overall NOT COMPLETE until merge.**
+**Status:** CODE IMPLEMENTED / 293/293 LIVE DIFFERENTIAL PASS and all five CI workflows PASS at exact code-checkpoint HEAD `8e257eb5cd045c8f2360c7ae7f6bbda74f429f16`; new documentation-HEAD CI, independent final review and merge still required. **VPS-05 overall NOT COMPLETE until merge.**
 
 ## Production dependency change
 
@@ -21,19 +21,21 @@
 
 ## Exact code-checkpoint CI (2026-11-18)
 
-All links below refer to the preceding **documentation SHA `b3542e05d2d5056effa6449141bc0ae0ae2dea35`**. GitHub PR #17 must establish the same five successful results, with the expanded 293-case gate, on the later exact final HEAD.
+The following results were independently checked against GitHub Actions logs/check-runs at exact HEAD `8e257eb5cd045c8f2360c7ae7f6bbda74f429f16`. They are a **code checkpoint**: a subsequent documentation-only commit must receive its own final-HEAD CI before merge.
 
-| Gate | Code-checkpoint evidence |
-| --- | --- |
-| Ubuntu SDK 10.0.404, warnings-as-errors, locked net10 production restore/build, generated Host `.deps.json` | **PASS:** production runtime boundary, SQL-free suites, 57/57 route inventory and exact **279/279** live net48-vs-net10 differential; zero failed/skipped/not-executed. The Linux-only FD-leak test remains bounded and is isolated from unrelated parallel Kestrel socket churn. [Linux run #44224021745](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44224021745) |
-| Disposable Linux SQL2022, HTTPS with real TLS, restricted database principal, SQL Oracle, WEB2–WEB6 | **PASS:** 15/15 bounded real HTTPS→SQL facts and the separately enabled WEB6 durable-audit/restart subset; zero failure/skip in required subsets. [SQL13 run #44224021912](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44224021912) |
-| Windows Desktop `net48` published x86 artifact | **PASS:** package/dependency boundary only; **NOT** attended GUI/SQL E2E. [Desktop publish run #44224021754](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44224021754) |
-| Windows xUnit v3 compile/discovery | **PASS:** all discovery workflow jobs; discovery is not live SQL E2E. [xUnit run #44224021770](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44224021770) |
-| Windows legacy `net48` foundation and SQL-free smoke | **PASS:** legacy builds and SQL-free smoke, including live net48 oracle regeneration. [legacy run #44224021903](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44224021903) |
+| Required gate | Verified result | GitHub workflow |
+| --- | --- | --- |
+| Ubuntu SDK 10.0.404, warnings-as-errors, locked production restore/build, runtime `.deps.json`, 57-route inventory | **PASS:** Server.Application **366/366**, ASP.NET Core Host **660/660**, dedicated net48→net10 live route differential **293/293**, zero failed/skipped/not-executed; published Host contains **0** Newtonsoft libraries/targets | [Linux #44225748658](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44225748658) |
+| Disposable Linux SQL2022 + native HTTPS/TLS and bounded business groups | **PASS:** **15/15** real HTTPS→SQL facts, **24** selected WEB2–WEB6 expected/actual/diff cases in fail-closed WEB6 mode; **3/3** separately enabled WEB6 audit/restart checks. Not protected staging, not 57-route real-SQL parity | [SQL13 #44225748452](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44225748452) |
+| Windows Desktop net48 published x86 artifact | **PASS:** build/publish and dependency boundary only; attended Desktop GUI/SQL E2E not run | [Desktop #44225748387](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44225748387) |
+| Windows xUnit v3 discovery | **PASS:** topology and all discovery jobs; build/discovery is not full SQL/GUI execution | [xUnit #44225748364](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44225748364) |
+| Windows legacy net48 Host, SQL-free regression and independent OWIN observation regeneration | **PASS:** legacy Host **684/684**, dedicated frozen OWIN oracle **1/1** (internally asserts 293 unique observations, 57 IDs), zero failed/skipped/not-executed | [legacy #44225748418](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44225748418) |
+
+The separate `approved-linux-sql` job is intentionally **SKIPPED**, **not PASS**, and is not a required gate for this PR's automatic CI. Protected Linux staging/systemd/reverse proxy/secrets and integrated Windows Desktop → Linux Host → real SQL release remain `NOT VERIFIED` (VPS-08/09).
 
 ## Remaining acceptance boundaries
 
-1. **Exact final documentation-HEAD CI and final review disposition remain required before merge.** The code-checkpoint results above do not automatically transfer to a later SHA.
+1. **Fresh CI on the final documentation HEAD and independent review remain required before merge.** The code-checkpoint results above do not automatically transfer to a later SHA; cite that final SHA and all five successful workflows in the PR.
 2. **VPS-05C and VPS-05 become complete only after PR #17 is merged and that merge is recorded in the roadmap.**
 3. **Protected VPS staging/systemd/proxy/secrets and integrated Windows Desktop → Linux Host → real SQL release** remain `NOT VERIFIED` (VPS-08/09). Disposable CI SQL is not production or staging.
 
