@@ -147,7 +147,7 @@ def validate_links(path: str, tracked: set[str], errors: list[str]) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default="foundation-report.json")
-    parser.add_argument("--expected-projects", type=int, default=56)
+    parser.add_argument("--expected-projects", type=int, default=58)
     args = parser.parse_args()
     errors: list[str] = []
     index, blob_shas, index_errors = tracked_files()
@@ -190,6 +190,14 @@ def main() -> int:
     fm_oracle = "tests/MyDmsVn.Vps07b.SqlOracle/MyDmsVn.Vps07b.SqlOracle.csproj"
     if fm_oracle not in projects:
         errors.append("Missing VPS-07B independent SQL oracle executable")
+    vps09_tool = "tools/MyDmsVn.Vps09.Acceptance/MyDmsVn.Vps09.Acceptance.csproj"
+    vps09_tests = "tests/MyDmsVn.Vps09.Acceptance.Tests/MyDmsVn.Vps09.Acceptance.Tests.csproj"
+    if vps09_tool not in projects or vps09_tests not in projects:
+        errors.append("Missing exact VPS-09 acceptance tool/test project pair")
+    else:
+        for project in (vps09_tool, vps09_tests):
+            if "net10.0" not in (ROOT / project).read_text(encoding="utf-8-sig"):
+                errors.append("VPS-09 acceptance projects must target net10.0: " + project)
     if len(projects) != args.expected_projects:
         errors.append(
             f"Project count drift: expected {args.expected_projects}; "
