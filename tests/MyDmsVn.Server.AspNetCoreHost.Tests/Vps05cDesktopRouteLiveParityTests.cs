@@ -22,6 +22,8 @@ using MyDmsVn.Server.Application;
 using MyDmsVn.Server.Application.Catalog;
 using MyDmsVn.Server.Application.Identity;
 using MyDmsVn.Server.Application.Inventory;
+using MyDmsVn.Server.Application.Operations;
+using MyDmsVn.Server.Application.Persistence;
 using MyDmsVn.Server.Application.Sales;
 using MyDmsVn.Server.Application.Security;
 using MyDmsVn.Server.HttpHost;
@@ -117,7 +119,63 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         await using var fixture = await DesktopLiveFixture.StartAsync(authControlProfile: true);
         using var response = await fixture.SendControlAsync(method, path, body, authenticated, cookie);
         var bytes = await response.Content.ReadAsByteArrayAsync();
-        AssertMatchesNet48(caseId, "success", response, bytes);
+        var variant = caseId.Contains("OPERATIONS-", StringComparison.Ordinal) ||
+            caseId.Contains("RESOLUTION-", StringComparison.Ordinal) ||
+            caseId.Contains("RESEND-", StringComparison.Ordinal) ? "disabled" : "success";
+        AssertMatchesNet48(caseId, variant, response, bytes);
+        if ((caseId is "VPS01-AUTH-LOGIN" or "VPS01-AUTH-REFRESH") && response.IsSuccessStatusCode)
+        {
+            var token = (string)Newtonsoft.Json.Linq.JObject.Parse(Encoding.UTF8.GetString(bytes))["data"]!["accessToken"]!;
+            using var me = await fixture.SendWithTokenAsync("/api/v1/auth/me", token);
+            Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+        }
+    }
+
+    public static TheoryData<string, string, string, string?, bool, bool, string> ControlVariants => new()
+    {
+        { "VPS01-AUTH-LOGIN", "POST", "/api/v1/auth/login", "{}", false, false, "invalid" },
+        { "VPS01-AUTH-LOGIN", "POST", "/api/v1/auth/login", "{\"username\":\"alice\",\"password\":\"correct-secret\"}", false, false, "failure" },
+        { "VPS01-AUTH-REFRESH", "POST", "/api/v1/auth/refresh", null, false, false, "unauthenticated" },
+        { "VPS01-AUTH-REFRESH", "POST", "/api/v1/auth/refresh", null, false, true, "failure" },
+        { "VPS01-AUTH-LOGOUT", "POST", "/api/v1/auth/logout?unknown=1", null, false, true, "invalid" },
+        { "VPS01-AUTH-LOGOUT", "POST", "/api/v1/auth/logout", null, false, true, "failure" },
+        { "VPS01-AUTH-ME", "GET", "/api/v1/auth/me", null, false, false, "unauthenticated" },
+        { "VPS01-AUTH-ME", "GET", "/api/v1/auth/me?unknown=1", null, true, false, "invalid" },
+        { "VPS01-AUTH-ME", "GET", "/api/v1/auth/me", null, true, false, "failure" },
+        { "VPS01-AUTH-CAPABILITIES", "GET", "/api/v1/auth/capabilities?feature=sales", null, false, false, "unauthenticated" },
+        { "VPS01-AUTH-CAPABILITIES", "GET", "/api/v1/auth/capabilities?feature=sales-receipts", null, true, false, "invalid" },
+        { "VPS01-AUTH-CAPABILITIES", "GET", "/api/v1/auth/capabilities?feature=sales", null, true, false, "failure" },
+    };
+
+    [Theory]
+    [MemberData(nameof(ControlVariants))]
+    public async Task LegacyAuthControlVariantsMatchLiveNet48(string caseId, string method, string path,
+        string? body, bool authenticated, bool cookie, string variant)
+    {
+        await using var fixture = await DesktopLiveFixture.StartAsync(authControlProfile: true,
+            controlFailure: variant == "failure" ? caseId : null);
+        using var response = await fixture.SendControlAsync(method, path, body, authenticated, cookie);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        AssertMatchesNet48(caseId, variant, response, bytes);
+    }
+
+    [Theory]
+    [InlineData("VPS01-RESEND-CONTEXT")]
+    [InlineData("VPS01-RESEND-RECEIPT")]
+    [InlineData("VPS01-RESEND-ELIGIBILITY")]
+    public async Task EnabledWeb6RouteMatchesLiveNet48(string caseId)
+    {
+        await using var fixture = await DesktopLiveFixture.StartAsync(web6Enabled: true);
+        string? receipt = null;
+        if (caseId == "VPS01-RESEND-ELIGIBILITY")
+        {
+            using var issued = await fixture.SendWeb6Async("VPS01-RESEND-RECEIPT");
+            var issuedJson = Newtonsoft.Json.Linq.JObject.Parse(await issued.Content.ReadAsStringAsync());
+            receipt = (string)issuedJson["data"]!["receipt"]!;
+        }
+        using var response = await fixture.SendWeb6Async(caseId, receipt);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        AssertMatchesNet48(caseId, "enabled", response, bytes);
     }
 
     [Theory]
@@ -304,7 +362,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             response.Headers.TryGetValues("Strict-Transport-Security", out var hsts) ? string.Join(",", hsts) : string.Empty);
         Assert.Equal(expected.SetCookie,
             response.Headers.TryGetValues("Set-Cookie", out var cookies) ? string.Join("\n", cookies) : string.Empty);
-        if (caseId is "VPS01-AUTH-LOGIN" or "VPS01-AUTH-REFRESH")
+        if ((caseId is "VPS01-AUTH-LOGIN" or "VPS01-AUTH-REFRESH") && response.IsSuccessStatusCode)
         {
             var legacy = Newtonsoft.Json.Linq.JObject.Parse(
                 Encoding.UTF8.GetString(Convert.FromBase64String(expected.BodyBase64)));
@@ -498,20 +556,24 @@ public sealed class Vps05cDesktopRouteLiveParityTests
 
         public static async Task<DesktopLiveFixture> StartAsync(
             bool denyPermissions = false, bool throwHandlers = false,
-            bool throwPermissionStore = false, bool authControlProfile = false)
+            bool throwPermissionStore = false, bool authControlProfile = false,
+            string? controlFailure = null, bool web6Enabled = false)
         {
             var clock = new FrozenClock();
             var options = new WebHostOptions("https://web2.mydmsvn.test", "https://web2.mydmsvn.test", "auth-tests",
                 "active", new Dictionary<string, byte[]>
                 {
                     ["active"] = Encoding.UTF8.GetBytes("active-test-key-at-least-32-bytes-long")
-                }, desktopApiEnabled: true);
+                }, desktopApiEnabled: true, web5Enabled: web6Enabled,
+                web6ResendEligibilityEnabled: web6Enabled,
+                web6CandidateId: web6Enabled ? "candidate-1" : null);
             var state = new DesktopState
             {
                 DenyPermissions = denyPermissions,
                 ThrowHandlers = throwHandlers,
                 ThrowPermissionStore = throwPermissionStore,
                 AuthControlProfile = authControlProfile,
+                ControlFailure = controlFailure,
             };
             var errors = new ConcurrentQueue<Exception>();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Production" });
@@ -527,6 +589,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             builder.Services.AddSingleton<IUserStore>(state);
             builder.Services.AddSingleton<IUserAccountValidator>(state);
             builder.Services.AddSingleton<ISecurityAuditSink>(state);
+            builder.Services.AddSingleton<IUnitOfWorkFactory>(state);
             builder.Services.AddSingleton<IPasswordHasher, TestPasswords>();
             builder.Services.AddSingleton<ILegacyPasswordVerifier, TestPasswords>();
             AddHandlers(builder.Services, state);
@@ -591,6 +654,33 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             }
             if (cookie) request.Headers.Add("Cookie", "__Host-mydmsvn-rt=22222222-2222-4222-8222-222222222222");
             if (body != null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+            return await _client.SendAsync(request);
+        }
+
+        public async Task<HttpResponseMessage> SendWithTokenAsync(string path, string token)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, path);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            request.Headers.Add("X-Correlation-ID", Correlation);
+            return await _client.SendAsync(request);
+        }
+
+        public async Task<HttpResponseMessage> SendWeb6Async(string caseId, string? receipt = null)
+        {
+            var operation = DesktopState.Operation.ToString("D");
+            var path = caseId == "VPS01-RESEND-CONTEXT" ? "/api/v3/operations/resend-context" :
+                caseId == "VPS01-RESEND-RECEIPT" ? "/api/v3/operations/" + operation + "/resend-receipt" :
+                "/api/v3/operations/" + operation + "/resend-eligibility";
+            using var request = new HttpRequestMessage(HttpMethod.Get, path);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+            request.Headers.Add("X-Correlation-ID", Correlation);
+            if (caseId != "VPS01-RESEND-CONTEXT")
+            {
+                request.Headers.Add("X-MyDmsVn-Deployment-Epoch", DesktopState.Epoch.ToString("D"));
+                request.Headers.Add("X-MyDmsVn-Operation-Fingerprint", DesktopState.Fingerprint);
+                request.Headers.Add("X-MyDmsVn-Operation-Kind", "Sales.Create");
+            }
+            if (receipt != null) request.Headers.Add("X-MyDmsVn-Resend-Receipt", receipt);
             return await _client.SendAsync(request);
         }
 
@@ -689,28 +779,36 @@ public sealed class Vps05cDesktopRouteLiveParityTests
     }
 
     private sealed class DesktopState : IWebAuthSessionStore, IPermissionStore, IUserStore,
-        IUserAccountValidator, ISecurityAuditSink
+        IUserAccountValidator, ISecurityAuditSink, IUnitOfWorkFactory,
+        IWebOperationReadRepository, IWebOperationResendEligibilityRepository
     {
+        public static readonly Guid Epoch = Guid.Parse("11111111-2222-4333-8444-555555555555");
+        public static readonly Guid Operation = Guid.Parse("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+        public const string Fingerprint = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
         public List<object> Calls { get; } = new();
         public List<string> PermissionChecks { get; } = new();
         public bool DenyPermissions { get; init; }
         public bool ThrowHandlers { get; init; }
         public bool ThrowPermissionStore { get; init; }
         public bool AuthControlProfile { get; init; }
+        public string? ControlFailure { get; init; }
         public bool Revoked { get; private set; }
         public Task<CurrentUser?> GetActiveUserAsync(Guid sessionId, int userId, CancellationToken token) =>
             Task.FromResult<CurrentUser?>(!Revoked && sessionId == Guid.Parse("11111111-1111-4111-8111-111111111111") && userId == 1
                 ? CurrentUser.Authenticated(1, "authoritative-alice", "Authoritative Alice", true) : null);
         public Task<WebAuthSessionToken?> IssueAsync(int userId, CancellationToken token) =>
-            Task.FromResult<WebAuthSessionToken?>(Token("22222222-2222-4222-8222-222222222222"));
+            ControlFailure == "VPS01-AUTH-LOGIN" ? throw new InvalidOperationException("secret SQL connection") :
+                Task.FromResult<WebAuthSessionToken?>(Token("22222222-2222-4222-8222-222222222222"));
         public Task<WebAuthSessionToken?> RotateAsync(string refreshToken, CancellationToken token) =>
-            Task.FromResult<WebAuthSessionToken?>(Revoked ? null : Token("33333333-3333-4333-8333-333333333333"));
-        public Task RevokeAsync(string refreshToken, CancellationToken token) { Revoked = true; return Task.CompletedTask; }
+            ControlFailure == "VPS01-AUTH-REFRESH" ? throw new InvalidOperationException("secret SQL connection") :
+                Task.FromResult<WebAuthSessionToken?>(Revoked ? null : Token("33333333-3333-4333-8333-333333333333"));
+        public Task RevokeAsync(string refreshToken, CancellationToken token) { if (ControlFailure == "VPS01-AUTH-LOGOUT") throw new InvalidOperationException("secret SQL connection"); Revoked = true; return Task.CompletedTask; }
         public Task<UserAccount?> FindByNormalizedUsernameAsync(string name, CancellationToken token) =>
             Task.FromResult<UserAccount?>(name == "ALICE" ? new UserAccount(1, "alice", "ALICE", "Alice", true, "test-hash", "", "test") : null);
         public Task<bool> TryReplacePasswordAsync(PasswordReplacement replacement, CancellationToken token) =>
             throw new NotSupportedException();
-        public Task<bool> IsActiveAsync(int userId, CancellationToken token) => Task.FromResult(!Revoked);
+        public Task<bool> IsActiveAsync(int userId, CancellationToken token) => ControlFailure == "VPS01-AUTH-ME"
+            ? throw new InvalidOperationException("secret SQL connection") : Task.FromResult(!Revoked);
         public Task WriteAsync(SecurityAuditEntry entry, CancellationToken token) => Task.CompletedTask;
         private static WebAuthSessionToken Token(string refresh) => new(
             Guid.Parse("11111111-1111-4111-8111-111111111111"),
@@ -721,12 +819,37 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         {
             if (ThrowPermissionStore)
                 throw new InvalidOperationException("secret-database-connection");
+            if (ControlFailure == "VPS01-AUTH-CAPABILITIES")
+                throw new InvalidOperationException("secret SQL connection");
             Assert.Equal(1, userId);
             PermissionChecks.Add(permissionKey);
             var allowed = !DenyPermissions;
             if (AuthControlProfile)
                 allowed = permissionKey == "Sales.Receipts.Read" || permissionKey == "Sales.Receipts.Post";
             return Task.FromResult(new PermissionSnapshot(allowed, AuthControlProfile));
+        }
+        public IUnitOfWork Create() => new TestUnitOfWork(this);
+        public Task<IUnitOfWork> CreateAsync(CancellationToken token) => Task.FromResult<IUnitOfWork>(Create());
+        public Task<Guid> ReadContextAsync(int actorUserId, Guid sessionId, CancellationToken token) => Task.FromResult(Epoch);
+        public Task<WebOperationStatus?> ReadStatusAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
+            Guid operationId, byte[] expectedFingerprint, CancellationToken token) => throw new NotSupportedException();
+        public Task AuthorizeReceiptAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
+            WebOperationKind kind, CancellationToken token) => Task.CompletedTask;
+        public Task<WebOperationResolution?> ReadEligibilityAsync(int actorUserId, Guid sessionId,
+            Guid deploymentEpoch, Guid operationId, WebOperationKind expectedKind, long? expectedTargetId,
+            byte[] expectedFingerprint, CancellationToken token) => Task.FromResult<WebOperationResolution?>(null);
+
+        private sealed class TestUnitOfWork : IUnitOfWork
+        {
+            private readonly DesktopState _state;
+            public TestUnitOfWork(DesktopState state) => _state = state;
+            public UnitOfWorkState State { get; private set; } = UnitOfWorkState.Created;
+            public void BeginTransaction() => State = UnitOfWorkState.ActiveTransaction;
+            public TRepository Repository<TRepository>() where TRepository : class =>
+                _state as TRepository ?? throw new InvalidOperationException(typeof(TRepository).Name);
+            public void Commit() => State = UnitOfWorkState.Committed;
+            public void Rollback() => State = UnitOfWorkState.RolledBack;
+            public void Dispose() { if (State == UnitOfWorkState.ActiveTransaction) Rollback(); State = UnitOfWorkState.Disposed; }
         }
     }
 

@@ -100,7 +100,7 @@ jobs:
           assert counts['failed']==0 and counts['notExecuted']==0 and counts['passed']==counts['total'], counts
           print(f"PASS net10 HTTP boundary: {counts}")
           PY
-      - name: Require all 233 live 57-route differential cases
+      - name: Require all 248 live 57-route differential cases
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
           dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
@@ -117,7 +117,7 @@ jobs:
           counters=ET.parse(path).getroot().find('./t:ResultSummary/t:Counters',ns)
           assert counters is not None, 'Missing VPS-05C live route counters'
           counts={k:int(v) for k,v in counters.attrib.items() if k in ('total','passed','failed','executed','notExecuted')}
-          assert counts == {'total':233,'executed':233,'passed':233,'failed':0,'notExecuted':0}, counts
+          assert counts == {'total':248,'executed':248,'passed':248,'failed':0,'notExecuted':0}, counts
           print(f"PASS net10 live 57-route differential: {counts}")
           PY
       - name: Reflect compiled ASP.NET Core endpoint inventory

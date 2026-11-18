@@ -155,14 +155,26 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
             observations.Add(await Capture(testCase, "unauthenticated"));
         }
         foreach (var testCase in ControlCases)
-            observations.Add(await CaptureControl(testCase));
+            observations.Add(await CaptureControl(testCase,
+                testCase.Id.Contains("OPERATIONS-") || testCase.Id.Contains("RESOLUTION-") || testCase.Id.Contains("RESEND-")
+                    ? "disabled" : "success"));
+        observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-LOGIN"), "invalid"));
+        observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-LOGIN"), "failure"));
+        observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-REFRESH"), "unauthenticated"));
+        observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-REFRESH"), "failure"));
+        observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-LOGOUT"), "invalid"));
+        observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-LOGOUT"), "failure"));
+        foreach (var id in new[] { "VPS01-AUTH-ME", "VPS01-AUTH-CAPABILITIES" })
+        foreach (var variant in new[] { "unauthenticated", "invalid", "failure" })
+            observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == id), variant));
+        observations.AddRange(await CaptureEnabledWeb6());
         foreach (var testCase in LegacyCases)
         foreach (var variant in new[] { "success", "permission", "invalid", "failure", "unauthenticated" })
             observations.Add(await CaptureLegacyData(testCase, variant));
 
-        Assert.Equal(233, observations.Count);
+        Assert.Equal(248, observations.Count);
         Assert.Equal(57, observations.Select(x => x.CaseId).Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(233, observations.Select(x => x.CaseId + "\n" + x.Variant)
+        Assert.Equal(248, observations.Select(x => x.CaseId + "\n" + x.Variant)
             .Distinct(StringComparer.Ordinal).Count());
 
         var actual = JsonConvert.SerializeObject(observations, Formatting.Indented);
@@ -224,9 +236,17 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         }
     }
 
-    private static async Task<Observation> CaptureControl(Case testCase)
+    private static async Task<Observation> CaptureControl(Case testCase, string variant)
     {
         using var fixture = new AuthFixture();
+        if (variant == "failure")
+        {
+            if (testCase.Id == "VPS01-AUTH-LOGIN") fixture.Store.FailIssue = true;
+            else if (testCase.Id == "VPS01-AUTH-REFRESH") fixture.Store.FailRotate = true;
+            else if (testCase.Id == "VPS01-AUTH-LOGOUT") fixture.Store.FailRevoke = true;
+            else if (testCase.Id == "VPS01-AUTH-ME") fixture.Store.FailActive = true;
+            else fixture.Store.FailPermissions = true;
+        }
         string? token = null;
         if (testCase.Id is "VPS01-AUTH-ME" or "VPS01-AUTH-CAPABILITIES" ||
             testCase.Id.StartsWith("VPS01-OPERATIONS-", StringComparison.Ordinal) ||
@@ -237,7 +257,17 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
             token = (string)JObject.Parse(await login.Content.ReadAsStringAsync())["data"]!["accessToken"]!;
         }
 
-        using var request = new HttpRequestMessage(new HttpMethod(testCase.Method), AuthFixture.Origin + testCase.Path);
+        var path = testCase.Path;
+        var body = testCase.Body;
+        var cookie = testCase.Id is "VPS01-AUTH-REFRESH" or "VPS01-AUTH-LOGOUT";
+        if (variant == "invalid")
+        {
+            if (testCase.Id == "VPS01-AUTH-LOGIN") body = "{}";
+            else if (testCase.Id == "VPS01-AUTH-CAPABILITIES") path = "/api/v1/auth/capabilities?feature=sales-receipts";
+            else path += "?unknown=1";
+        }
+        if (variant == "unauthenticated") { token = null; cookie = false; }
+        using var request = new HttpRequestMessage(new HttpMethod(testCase.Method), AuthFixture.Origin + path);
         request.Headers.Add("X-Correlation-ID", Correlation);
         if (token != null) request.Headers.Add("Authorization", "Bearer " + token);
         if (testCase.Method == "POST")
@@ -246,12 +276,39 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
             request.Headers.Add("Sec-Fetch-Site", "same-origin");
             request.Headers.Add("X-Requested-With", "XMLHttpRequest");
         }
-        if (testCase.Id is "VPS01-AUTH-REFRESH" or "VPS01-AUTH-LOGOUT")
+        if (cookie)
             request.Headers.Add("Cookie", "__Host-mydmsvn-rt=" + AuthFixture.InitialRefresh);
-        if (testCase.Body != null)
-            request.Content = new StringContent(testCase.Body, Encoding.UTF8, "application/json");
+        if (body != null)
+            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
         using var response = await fixture.Server.HttpClient.SendAsync(request);
-        return await Observe(testCase.Id, "success", response);
+        if ((testCase.Id is "VPS01-AUTH-LOGIN" or "VPS01-AUTH-REFRESH") && response.IsSuccessStatusCode)
+        {
+            var issued = (string)JObject.Parse(await response.Content.ReadAsStringAsync())["data"]!["accessToken"]!;
+            using var me = await fixture.Get("me", issued);
+            Assert.Equal(System.Net.HttpStatusCode.OK, me.StatusCode);
+        }
+        return await Observe(testCase.Id, variant, response);
+    }
+
+    private static async Task<IReadOnlyList<Observation>> CaptureEnabledWeb6()
+    {
+        using var probe = new Web6ResendEligibilityEndpointTests.Probe();
+        var result = new List<Observation>();
+        using (var context = await probe.Get("resend-context", request =>
+            request.Headers.Add("X-Correlation-ID", Correlation)))
+            result.Add(await Observe("VPS01-RESEND-CONTEXT", "enabled", context));
+        using (var receipt = await probe.Get(Web6ResendEligibilityEndpointTests.Operation.ToString("D") +
+            "/resend-receipt", request =>
+            {
+                Web6ResendEligibilityEndpointTests.Probe.IdentityHeaders(request);
+                request.Headers.Add("X-Correlation-ID", Correlation);
+            }))
+            result.Add(await Observe("VPS01-RESEND-RECEIPT", "enabled", receipt));
+        var compact = await probe.Receipt();
+        using (var eligibility = await probe.Eligibility(compact, request =>
+            request.Headers.Add("X-Correlation-ID", Correlation)))
+            result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "enabled", eligibility));
+        return result;
     }
 
     private static async Task<Observation> Capture(Case testCase, string variant)
@@ -279,7 +336,7 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
     private static async Task<Observation> Observe(string caseId, string variant, HttpResponseMessage response)
     {
         var bytes = await response.Content.ReadAsByteArrayAsync();
-        if (caseId is "VPS01-AUTH-LOGIN" or "VPS01-AUTH-REFRESH")
+        if ((caseId is "VPS01-AUTH-LOGIN" or "VPS01-AUTH-REFRESH") && response.IsSuccessStatusCode)
         {
             var json = JObject.Parse(Encoding.UTF8.GetString(bytes));
             json["data"]!["accessToken"] = "<dynamic-jwt>";

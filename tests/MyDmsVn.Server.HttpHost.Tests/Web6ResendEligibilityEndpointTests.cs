@@ -18,9 +18,9 @@ namespace MyDmsVn.Server.HttpHost.Tests;
 
 public sealed class Web6ResendEligibilityEndpointTests
 {
-    private static readonly Guid Epoch = Guid.Parse("11111111-2222-4333-8444-555555555555");
-    private static readonly Guid Operation = Guid.Parse("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
-    private const string Fingerprint = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    internal static readonly Guid Epoch = Guid.Parse("11111111-2222-4333-8444-555555555555");
+    internal static readonly Guid Operation = Guid.Parse("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+    internal const string Fingerprint = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
     public static IEnumerable<object[]> Kinds()
     {
@@ -248,7 +248,7 @@ public sealed class Web6ResendEligibilityEndpointTests
 
     private static string Compact(string json) => JToken.Parse(json).ToString(Formatting.None);
 
-    private sealed class Probe : IDisposable, IUnitOfWorkFactory, IWebOperationReadRepository, IWebOperationResendEligibilityRepository
+    internal sealed class Probe : IDisposable, IUnitOfWorkFactory, IWebOperationReadRepository, IWebOperationResendEligibilityRepository
     {
         private readonly AuthFixture _host;
         private string? _token;
@@ -296,7 +296,7 @@ public sealed class Web6ResendEligibilityEndpointTests
                 configure?.Invoke(request);
             });
 
-        private static void IdentityHeaders(HttpRequestMessage request)
+        internal static void IdentityHeaders(HttpRequestMessage request)
         {
             request.Headers.Add("X-MyDmsVn-Deployment-Epoch", Epoch.ToString("D"));
             request.Headers.Add("X-MyDmsVn-Operation-Fingerprint", Fingerprint);
