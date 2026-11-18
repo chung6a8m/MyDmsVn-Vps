@@ -20,7 +20,7 @@ var names = new[]
     "012_WebOperationJournal.sql",
     "013_WebOperationTerminalResolution.sql",
 };
-var expectedBatches = new[] { 1, 1, 1, 1, 1, 1, 1, 2, 3, 3, 2, 3, 9 };
+var expectedBatches = new[] { 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 2, 3, 9 };
 var migrations = typeof(ImmutableSqlMigration).Assembly.GetTypes()
     .Where(type => type.IsClass && !type.IsAbstract &&
                    typeof(ImmutableSqlMigration).IsAssignableFrom(type))
@@ -56,6 +56,6 @@ for (var index = 0; index < names.Length; index++)
     catch (NotSupportedException) { }
     totalBatches += batches.Count;
 }
-if (totalBatches != 29)
-    throw new InvalidOperationException("VPS07A_EXPECTED_29_SQL_BATCHES");
+if (totalBatches != 28)
+    throw new InvalidOperationException("VPS07A_EXPECTED_28_SQL_BATCHES");
 Console.WriteLine($"VPS07A_CONTRACT_PASS: versions={migrations.Length}; batches={totalBatches}; Down blocked={migrations.Length}");

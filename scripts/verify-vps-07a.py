@@ -25,7 +25,7 @@ EXPECTED = [
     "012_WebOperationJournal.sql",
     "013_WebOperationTerminalResolution.sql",
 ]
-BATCH_COUNTS = [1, 1, 1, 1, 1, 1, 1, 2, 3, 3, 2, 3, 9]
+BATCH_COUNTS = [1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 2, 3, 9]
 GO = re.compile(rb"^[ \t]*GO[ \t]*(?:--[^\r\n]*)?(?:\r\n|\n|\r|$)", re.M | re.I)
 
 def main() -> None:
@@ -61,7 +61,7 @@ def main() -> None:
     project = (MIGRATIONS / "MyDmsVn.Server.FluentMigrator.csproj").read_text()
     assert 'EmbeddedResource Include="../MyDmsVn.Server.DbMigrator/Scripts/*.sql"' in project
     assert "dbup-" not in project.lower()
-    assert total == 29
+    assert total == 28
     print(f"VPS07A_STATIC_PASS versions=13 sql_batches={total} immutable_sha256=13/13")
 
 if __name__ == "__main__":

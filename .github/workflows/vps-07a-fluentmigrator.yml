@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   versions:
-    name: SDK10.0.404 / 13 immutable SQL versions / 29 GO batches
+    name: SDK10.0.404 / 13 immutable SQL versions / 28 GO batches
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:

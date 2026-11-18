@@ -30,7 +30,7 @@ Supported old states remain unannounced until run against real SQL Server with i
 
 The independent net10.0 library `src/MyDmsVn.Server.FluentMigrator` now holds 13 explicit
 `[Migration(1..13)]` classes linking (not copying) the pinned original 001-013 SQL bytes.
-Each wrapper executes the existing T-SQL in order, separating the 29 client-side
+Each wrapper executes the existing T-SQL in order, separating the 28 client-side
 `GO` batches; `Down()` fails closed, with no destructive downgrade path.
 
 VPS-07A does not change the DbUp net48 executable, journal or real database.
