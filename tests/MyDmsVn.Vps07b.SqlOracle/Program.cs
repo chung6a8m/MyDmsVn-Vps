@@ -286,6 +286,7 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                 backupPath + "' WITH INIT, FORMAT, CHECKSUM;");
             await ExecMaster("RESTORE VERIFYONLY FROM DISK=N'" + backupPath +
                 "' WITH CHECKSUM;");
+            await AwaitMaintenanceDrain(backupDb);
             await RunCli(backupDb, 13, expectSuccess: true);
             await Check(backupDb, 13);
             await AssertStockAndCogs(backupDb);
@@ -297,6 +298,7 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                 "] FROM DISK=N'" + backupPath + "' WITH REPLACE, RECOVERY, CHECKSUM;");
             await ExecMaster("ALTER DATABASE [" + backupDb +
                 "] SET RESTRICTED_USER WITH ROLLBACK IMMEDIATE;");
+            await AwaitMaintenanceDrain(backupDb);
             Assert(await JournalSignatureOfLegacy(backupDb) == preBackupJournal,
                 "VPS07B_RESTORE_JOURNAL_MISMATCH");
             Assert(await SourceData(backupDb, 12) == preBackupRows,
@@ -882,6 +884,30 @@ AND (r.wait_type LIKE N'WAITFOR%' OR r.command=N'WAITFOR');") > 0)
     private static async Task<string> JournalSignatureOfLegacy(string db) =>
         Hash(await Text(db, @"SELECT Id,ScriptName,CONVERT(varchar(33),Applied,126) AS Applied
    FROM dbo.SchemaVersions ORDER BY Id FOR JSON PATH;"));
+
+    private static async Task AwaitMaintenanceDrain(string db)
+    {
+        // Real SQL BACKUP/RESTORE may briefly retain engine lock/transaction
+        // state. Never waive the original writer-drain preflight or kill users.
+        // Observe a fully clear database DMV boundary before invoking CLI.
+        for (var attempt = 0; attempt < 75; attempt++)
+        {
+            var busy = await Count(db, @"
+SELECT
+ (SELECT COUNT(*) FROM sys.dm_exec_sessions s
+  WHERE s.is_user_process=1 AND s.session_id<>@@SPID AND s.database_id=DB_ID())
++(SELECT COUNT(*) FROM sys.dm_exec_requests r
+  WHERE r.session_id<>@@SPID AND r.database_id=DB_ID())
++(SELECT COUNT(*) FROM sys.dm_tran_locks l
+  WHERE l.request_session_id<>@@SPID AND l.resource_database_id=DB_ID())
++(SELECT COUNT(*) FROM sys.dm_tran_database_transactions t
+  WHERE t.database_id=DB_ID() AND t.database_transaction_type<>3
+  AND t.transaction_id<>(SELECT transaction_id FROM sys.dm_tran_current_transaction));");
+            if (busy == 0) return;
+            await Task.Delay(200);
+        }
+        throw new InvalidOperationException("VPS07B_SQL_BACKUP_RESTORE_NOT_DRAINED");
+    }
 
     private static async Task<string> Text(string db, string sql)
     {
