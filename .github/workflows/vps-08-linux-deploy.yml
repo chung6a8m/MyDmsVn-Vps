@@ -1,0 +1,171 @@
+name: VPS-08 — Linux artifact and protected staging gates
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      reviewed_sha:
+        description: 'Exact reviewed main HEAD (40 hex); protected staging only'
+        required: false
+        type: string
+      approved_scope:
+        description: 'Set reviewed-isolated-sql13-only for protected staging'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps08-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Validate systemd Nginx credentials and artifact refusal cases
+        run: python3 scripts/verify-vps08.py
+
+  linux-publish:
+    needs: source-gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.404'
+      - name: Exact SDK and locked Linux net10 restore
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          set -euo pipefail
+          test "$(dotnet --version)" = "10.0.404"
+          dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode
+          dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode
+      - name: Execute all native proxy cases, exact counts
+        run: |
+          set -euo pipefail
+          mkdir -p vps08-trx
+          dotnet test tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore \
+            --filter FullyQualifiedName~Vps08LoopbackProxyTests \
+            --logger "trx;LogFileName=vps08-proxy.trx" --results-directory "$GITHUB_WORKSPACE/vps08-trx"
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          f = Path('vps08-trx/vps08-proxy.trx')
+          assert f.exists(), 'Missing native proxy TRX'
+          ns = '{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}'
+          node = ET.parse(f).getroot().find(f'./{ns}ResultSummary/{ns}Counters')
+          assert node is not None, 'Missing native TRX counters'
+          counts = {x:int(node.attrib[x]) for x in ['total','executed','passed','failed','notExecuted']}
+          assert counts == {'total':23,'executed':23,'passed':23,'failed':0,'notExecuted':0}, counts
+          print('VPS08_NATIVE_PROXY_PASS: discovered=23 executed=23 passed=23 failed=0 skipped=0')
+          PY
+      - name: Publish framework-dependent net10 host with locked runtime graph
+        run: |
+          set -euo pipefail
+          dotnet publish src/MyDmsVn.Server.AspNetCoreHost/MyDmsVn.Server.AspNetCoreHost.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:UseAppHost=false \
+            -c Release -f net10.0 --no-restore -warnaserror -o "$GITHUB_WORKSPACE/vps08-publish"
+          test -f vps08-publish/MyDmsVn.Server.AspNetCoreHost.dll
+          python3 - <<'PY'
+          from pathlib import Path
+          deps=Path('vps08-publish/MyDmsVn.Server.AspNetCoreHost.deps.json').read_text()
+          assert 'Newtonsoft.Json/' not in deps
+          assert 'MediatR/' not in deps
+          print('VPS08_RUNTIME_DEPENDENCIES_PASS: Newtonsoft=0, MediatR=0')
+          PY
+      - name: Create and verify exact-source manifest
+        run: |
+          set -euo pipefail
+          python3 scripts/vps08-manifest.py create vps08-publish "$GITHUB_SHA"
+          python3 scripts/vps08-manifest.py verify vps08-publish "$GITHUB_SHA"
+      - name: Preserve source-pinned release candidate, never credentials
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps08-linux-net10-${{ github.sha }}
+          path: vps08-publish/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Preserve native proxy test counters
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps08-proxy-test-evidence
+          path: vps08-trx/*.trx
+          if-no-files-found: warn
+
+  protected-staging:
+    # Intentionally SKIPPED for PRs/push. Needs an independently reviewed
+    # GitHub Environment and a dedicated NONPRODUCTION self-hosted runner.
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.approved_scope == 'reviewed-isolated-sql13-only' &&
+      inputs.reviewed_sha == github.sha
+    needs: linux-publish
+    runs-on: [self-hosted, linux, vps08-staging]
+    environment: vps08-sql13-nonproduction
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v6
+        with:
+          name: vps08-linux-net10-${{ github.sha }}
+          path: vps08-publish
+      - name: Require exact SHA, restricted isolated host and owner attestation
+        env:
+          STAGING_PROBE: ${{ vars.VPS08_STAGING_PROBE_URL }}
+          STAGING_HOST_ATTESTATION: ${{ secrets.VPS08_STAGING_HOST_ATTESTATION }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$RUNNER_OS" = Linux
+          test -n "$STAGING_PROBE" && test -n "$STAGING_HOST_ATTESTATION"
+          test "$STAGING_HOST_ATTESTATION" = reviewed-isolated-sql13-only
+          python3 scripts/vps08-manifest.py verify vps08-publish "$GITHUB_SHA"
+          test "$(id -un)" = vps08runner
+          test -f /etc/mydmsvn/runtime.env
+          test -f /etc/systemd/system/mydmsvn-vps.service
+      - name: Deploy exact reviewed SHA and prove verified TLS health
+        env:
+          STAGING_PROBE: ${{ vars.VPS08_STAGING_PROBE_URL }}
+        run: |
+          set -euo pipefail
+          sudo /usr/local/libexec/vps08-rollout deploy "$GITHUB_WORKSPACE/vps08-publish" \
+            "$GITHUB_SHA" "$STAGING_PROBE"
+          sudo systemctl restart mydmsvn-vps.service
+          curl --fail --silent --show-error --max-time 8 --proto '=https' --tlsv1.2 \
+            "$STAGING_PROBE" >/dev/null
+          echo "VPS08_STAGING_DEPLOY_SMOKE_PASS: actual_systemd_https=true"
+      - name: Prove restart after killed main process
+        env:
+          STAGING_PROBE: ${{ vars.VPS08_STAGING_PROBE_URL }}
+        run: |
+          set -euo pipefail
+          sudo systemctl kill --kill-whom=main --signal=SIGKILL mydmsvn-vps.service
+          recovered=0
+          for i in $(seq 1 30); do
+            if sudo systemctl is-active --quiet mydmsvn-vps.service &&
+               curl --fail --silent --max-time 3 --proto '=https' --tlsv1.2 \
+                 "$STAGING_PROBE" >/dev/null 2>&1; then recovered=1; break; fi
+            sleep 2
+          done
+          test "$recovered" = 1
+          echo "VPS08_STAGING_SIGKILL_RECOVERY_PASS"
