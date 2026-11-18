@@ -17,6 +17,7 @@ namespace MyDmsVn.Architecture.Tests
                 ["MyDmsVn.Server.Application"] = Set("MyDmsVn.Contracts", "MyDmsVn.Server.Domain"),
                 ["MyDmsVn.Server.Infrastructure"] = Set("MyDmsVn.Server.Application", "MyDmsVn.Server.Domain"),
                 ["MyDmsVn.Server.DbMigrator"] = Set("MyDmsVn.Server.Infrastructure"),
+                ["MyDmsVn.Server.FluentMigrator"] = Set(),
                 ["MyDmsVn.Server.HttpHost"] = Set("MyDmsVn.Contracts", "MyDmsVn.Server.Application", "MyDmsVn.Server.Infrastructure"),
                 ["MyDmsVn.Server.AspNetCoreHost"] = Set("MyDmsVn.Contracts", "MyDmsVn.Server.Application", "MyDmsVn.Server.Infrastructure"),
                 ["MyDmsVn.Desktop.Application"] = Set("MyDmsVn.Contracts"),
@@ -37,6 +38,7 @@ namespace MyDmsVn.Architecture.Tests
             {
                 ["MyDmsVn.Contracts"] = new[] { "ErrorOr", "MediatR", "RepoDb", "Dapper", "linq2db", "SqlClient", "AspNetCore", "Windows.Forms" },
                 ["MyDmsVn.SharedKernel"] = new[] { "RepoDb", "Dapper", "linq2db", "SqlClient", "AspNetCore", "Windows.Forms" },
+                ["MyDmsVn.Server.FluentMigrator"] = new[] { "DbUp", "MediatR", "SqlClient", "Windows.Forms", "AspNetCore" },
                 ["MyDmsVn.Server.Domain"] = new[] { "RepoDb", "Dapper", "linq2db", "SqlClient", "AspNetCore", "Windows.Forms" },
                 ["MyDmsVn.Server.Application"] = new[] { "RepoDb", "Dapper", "linq2db", "SqlClient", "AspNetCore", "Windows.Forms" },
                 ["MyDmsVn.Desktop.Application"] = new[] { "ErrorOr", "MediatR", "RepoDb", "Dapper", "linq2db", "SqlClient", "AspNetCore", "Windows.Forms" },

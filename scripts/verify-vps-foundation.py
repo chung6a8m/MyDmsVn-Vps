@@ -147,7 +147,7 @@ def validate_links(path: str, tracked: set[str], errors: list[str]) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default="foundation-report.json")
-    parser.add_argument("--expected-projects", type=int, default=52)
+    parser.add_argument("--expected-projects", type=int, default=54)
     args = parser.parse_args()
     errors: list[str] = []
     index, blob_shas, index_errors = tracked_files()
@@ -176,6 +176,12 @@ def main() -> int:
         errors.append("Missing approved VPS-06A isolated generator canary project")
     elif "ProjectReference" in (ROOT / canary).read_text(encoding="utf-8-sig"):
         errors.append("VPS-06A canary may not reference production projects")
+    # VPS-07A adds an isolated net10 FluentMigrator source assembly and one
+    # explicit non-xUnit contract executable; neither joins legacy net48 graphs.
+    fm_library = "src/MyDmsVn.Server.FluentMigrator/MyDmsVn.Server.FluentMigrator.csproj"
+    fm_contract = "tests/MyDmsVn.Vps07a.ContractTests/MyDmsVn.Vps07a.ContractTests.csproj"
+    if fm_library not in projects or fm_contract not in projects:
+        errors.append("Missing exact VPS-07A library/contract project pair")
     if len(projects) != args.expected_projects:
         errors.append(
             f"Project count drift: expected {args.expected_projects}; "
