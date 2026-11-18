@@ -110,8 +110,9 @@ else
   [[ "$current" != "$new_target" ]] || abort
 fi
 swap "$new_target"
-systemctl restart "$service" || true
-if probe "$new_target"; then
+restart_ok=0
+if systemctl restart "$service"; then restart_ok=1; fi
+if [[ "$restart_ok" == 1 ]] && probe "$new_target"; then
   printf 'VPS08_ROLLOUT_PASS: action=%s sha=%s health=verified_tls\n' "$action" "$sha"
   exit 0
 fi
@@ -120,8 +121,7 @@ if [[ -n "$current" ]]; then
   prior_sha="${current#releases/}"
   trusted_release "$root/$current" "$prior_sha"
   swap "$current"
-  systemctl restart "$service" || true
-  if probe "$current"; then printf 'VPS08_ROLLOUT_RECOVERED: restored=%s health=verified_tls\n' "$prior_sha"; fi
+  if systemctl restart "$service" && probe "$current"; then printf 'VPS08_ROLLOUT_RECOVERED: restored=%s health=verified_tls\n' "$prior_sha"; fi
 else
   rm -f -- "$root/current"
   systemctl stop "$service" || true
