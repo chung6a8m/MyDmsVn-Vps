@@ -236,6 +236,59 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                 "VPS07B_UNKNOWN_SCHEMA_CHANGED_HISTORY");
             Pass("unknown object refused before mutation");
 
+            // Forged versions, unexpected objects, mis-shaped journals and
+            // future legacy history are refused without replay or trust bypass.
+            _stage = "future-and-tampered-journals";
+            await Exec(denied, @"INSERT dbo.FluentMigratorVersionInfo(Version,AppliedOn,Description)
+VALUES(14,GETUTCDATE(),N'014_UnknownFuture.sql');");
+            await RunCli(denied, 13, expectSuccess: false,
+                expectedCode: "Migration.UnknownFluentMigratorJournal");
+            Assert(await Count(denied, "SELECT COUNT(*) FROM dbo.FluentMigratorVersionInfo") == 14,
+                "VPS07B_FUTURE_FM_ADMISSION_MUTATED");
+            await Exec(denied, "DELETE dbo.FluentMigratorVersionInfo WHERE Version=14;");
+            Assert(await JournalSignature(denied) == stable,
+                "VPS07B_FUTURE_FM_CLEANUP_MISMATCH");
+            Pass("future FM journal refused");
+
+            await Exec(denied, @"INSERT dbo.SchemaVersions(ScriptName,Applied)
+VALUES(N'MyDmsVn.Server.DbMigrator.Scripts.014_Unexpected.sql',GETDATE());");
+            await RunCli(denied, 13, expectSuccess: false,
+                expectedCode: "Migration.FutureLegacyJournal");
+            await Exec(denied, "DELETE dbo.SchemaVersions WHERE ScriptName LIKE N'%014_Unexpected.sql';");
+            Assert(await JournalSignature(denied) == stable,
+                "VPS07B_FUTURE_DBUP_CLEANUP_MISMATCH");
+            Pass("future DbUp journal refused");
+
+            await Exec(denied, "ALTER TABLE dbo.FluentMigratorVersionInfo ADD InjectedFlag bit NULL;");
+            await RunCli(denied, 13, expectSuccess: false);
+            Assert(await Count(denied, "SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo') AND name=N'InjectedFlag';") == 1,
+                "VPS07B_BAD_FM_SHAPE_UNEXPECTED_MUTATION");
+            await Exec(denied, "ALTER TABLE dbo.FluentMigratorVersionInfo DROP COLUMN InjectedFlag;");
+            Assert(await JournalSignature(denied) == stable,
+                "VPS07B_BAD_FM_SHAPE_CLEANUP_MISMATCH");
+            Pass("tampered FM table definition refused");
+
+            var bogus = await Create();
+            await Exec(bogus, "CREATE VIEW dbo.FluentMigratorVersionInfo AS SELECT CAST(1 AS bigint) AS Version;");
+            await RunCli(bogus, 13, expectSuccess: false,
+                expectedCode: "Migration.UnknownExistingObjects");
+            Assert(await Count(bogus,
+                "SELECT CASE WHEN OBJECT_ID(N'dbo.SchemaVersions',N'U') IS NULL THEN 0 ELSE 1 END;") == 0,
+                "VPS07B_BOGUS_VIEW_CREATED_LEGACY_JOURNAL");
+            Pass("FM journal name spoofed by view refused");
+
+            var orphan = await Create();
+            await Exec(orphan, @"CREATE TABLE dbo.FluentMigratorVersionInfo
+(Version bigint NOT NULL, AppliedOn datetime NULL, Description nvarchar(1024) NULL);
+CREATE UNIQUE CLUSTERED INDEX UC_FluentMigratorVersion
+ON dbo.FluentMigratorVersionInfo(Version);");
+            await RunCli(orphan, 13, expectSuccess: false,
+                expectedCode: "Migration.OrphanFluentMigratorJournal");
+            Assert(await Count(orphan,
+                "SELECT CASE WHEN OBJECT_ID(N'dbo.SchemaVersions',N'U') IS NULL THEN 0 ELSE 1 END;") == 0,
+                "VPS07B_ORPHAN_JOURNAL_CREATED_LEGACY");
+            Pass("FM journal without DbUp provenance refused");
+
             // Separate session owns the app lock. Runner must fail immediately.
             using (var locked = new SqlConnection(For(denied)))
             {

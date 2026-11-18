@@ -15,20 +15,27 @@ public static class SqlFluentMigratorVersionTableProof
         using var command = connection.CreateCommand();
         command.CommandTimeout = 30;
         command.CommandText = @"
-IF OBJECT_ID(N'dbo.FluentMigratorVersionInfo', N'U') IS NULL SELECT 1;
+IF OBJECT_ID(N'dbo.FluentMigratorVersionInfo', N'U') IS NULL
+    SELECT CASE WHEN OBJECT_ID(N'dbo.FluentMigratorVersionInfo') IS NULL THEN 1 ELSE 0 END;
 ELSE SELECT CASE WHEN
-    (SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U'))=3
+    EXISTS(SELECT 1 FROM sys.tables t
+        WHERE t.object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U')
+        AND t.is_ms_shipped=0 AND t.is_memory_optimized=0
+        AND t.temporal_type=0 AND t.is_filetable=0 AND t.is_tracked_by_cdc=0)
+    AND (SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U'))=3
     AND EXISTS(SELECT 1 FROM sys.columns c WHERE c.object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U')
-        AND c.name=N'Version' AND TYPE_NAME(c.user_type_id)=N'bigint' AND c.is_nullable=0)
+        AND c.name=N'Version' AND TYPE_NAME(c.user_type_id)=N'bigint' AND c.is_nullable=0 AND c.is_identity=0 AND c.is_computed=0 AND c.generated_always_type=0 AND c.encryption_type IS NULL)
     AND EXISTS(SELECT 1 FROM sys.columns c WHERE c.object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U')
-        AND c.name=N'AppliedOn' AND TYPE_NAME(c.user_type_id)=N'datetime' AND c.is_nullable=1)
+        AND c.name=N'AppliedOn' AND TYPE_NAME(c.user_type_id)=N'datetime' AND c.is_nullable=1 AND c.is_identity=0 AND c.is_computed=0 AND c.generated_always_type=0 AND c.encryption_type IS NULL)
     AND EXISTS(SELECT 1 FROM sys.columns c WHERE c.object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U')
-        AND c.name=N'Description' AND TYPE_NAME(c.user_type_id)=N'nvarchar' AND c.max_length=2048 AND c.is_nullable=1)
+        AND c.name=N'Description' AND TYPE_NAME(c.user_type_id)=N'nvarchar' AND c.max_length=2048 AND c.is_nullable=1 AND c.is_identity=0 AND c.is_computed=0 AND c.generated_always_type=0 AND c.encryption_type IS NULL)
     AND (SELECT COUNT(*) FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U') AND index_id>0)=1
     AND EXISTS(SELECT 1 FROM sys.indexes i JOIN sys.index_columns ic ON ic.object_id=i.object_id AND ic.index_id=i.index_id
         JOIN sys.columns c ON c.object_id=ic.object_id AND c.column_id=ic.column_id
         WHERE i.object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U')
         AND i.name=N'UC_FluentMigratorVersion' AND i.is_unique=1 AND i.is_disabled=0
+        AND i.type=1 AND i.ignore_dup_key=0 AND i.is_hypothetical=0
+        AND i.allow_row_locks=1 AND i.allow_page_locks=1
         AND i.is_primary_key=0 AND i.is_unique_constraint=0 AND i.has_filter=0
         AND ic.key_ordinal=1 AND c.name=N'Version'
         AND NOT EXISTS (SELECT 1 FROM sys.index_columns extra
