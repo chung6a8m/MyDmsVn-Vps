@@ -186,10 +186,7 @@
         "contentHash": "675Rk4RwaVrWo09wrR2rpDVKixtgtnhd5NhPrn6O21uj92JvE61KTGupn76M2N6Ff/xJjY3SHSfSg0MIanEzGw=="
       },
       "mydmsvn.contracts": {
-        "type": "Project",
-        "dependencies": {
-          "Newtonsoft.Json": "[13.0.4, )"
-        }
+        "type": "Project"
       },
       "mydmsvn.server.application": {
         "type": "Project",
@@ -197,11 +194,10 @@
           "ErrorOr": "[2.1.1, )",
           "FluentValidation": "[11.12.0, )",
           "FluentValidation.DependencyInjectionExtensions": "[11.12.0, )",
+          "Mediator.Abstractions": "[3.0.2, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[8.0.2, )",
           "MyDmsVn.Contracts": "[1.0.0, )",
-          "MyDmsVn.Server.Domain": "[1.0.0, )",
-          "Newtonsoft.Json": "[13.0.4, )",
-          "Mediator.Abstractions": "[3.0.2, )"
+          "MyDmsVn.Server.Domain": "[1.0.0, )"
         }
       },
       "mydmsvn.server.domain": {
@@ -235,11 +231,14 @@
           "Microsoft.Extensions.Dependencyinjection.Abstractions": "2.1.0"
         }
       },
-      "Newtonsoft.Json": {
+      "Mediator.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[13.0.4, )",
-        "resolved": "13.0.4",
-        "contentHash": "pdgNNMai3zv51W5aq268sujXUyx7SNdE2bj1wZcWjAQrKMFZV260lbqYop1d2GM67JI1huLRwxo9ZqnfF/lC6A=="
+        "requested": "[3.0.2, )",
+        "resolved": "3.0.2",
+        "contentHash": "TytjnyN8gLObZBxkM7HHPFJF3LHtk6Y8mHW56ONuXRuVEK6Fmed3f0z79H9TpmoZQP2zQAIS4/0O9R2w0v02qw==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "8.0.0"
+        }
       },
       "System.IdentityModel.Tokens.Jwt": {
         "type": "CentralTransitive",
@@ -262,15 +261,6 @@
         "requested": "[10.0.13, )",
         "resolved": "10.0.13",
         "contentHash": "aUSmC6cPjFLSE0rDTsmkR3wvUOnscqewebOaaELEToh12sNmoltZqT3f0C81mJ1zhxKjWco25soHTvYwsXCsUw=="
-      },
-      "Mediator.Abstractions": {
-        "type": "CentralTransitive",
-        "requested": "[3.0.2, )",
-        "resolved": "3.0.2",
-        "contentHash": "TytjnyN8gLObZBxkM7HHPFJF3LHtk6Y8mHW56ONuXRuVEK6Fmed3f0z79H9TpmoZQP2zQAIS4/0O9R2w0v02qw==",
-        "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "8.0.0"
-        }
       }
     }
   }

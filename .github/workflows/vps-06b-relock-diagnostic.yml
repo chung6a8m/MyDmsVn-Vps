@@ -22,9 +22,14 @@ jobs:
           set -eu
           test "$(dotnet --version)" = "10.0.404"
           dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -p:Vps06bMediator=true --force-evaluate -v minimal
+          dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true --force-evaluate -v minimal
           for project in MyDmsVn.Server.Application MyDmsVn.Server.Infrastructure MyDmsVn.Server.AspNetCoreHost; do
             path="../$project/packages.vps06b.lock.json"
             echo "===VPS06B_LOCK_BEGIN:$path==="
             cat "$path"
             echo "===VPS06B_LOCK_END:$path==="
           done
+          path="../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/packages.vps06b.lock.json"
+          echo "===VPS06B_LOCK_BEGIN:$path==="
+          cat "$path"
+          echo "===VPS06B_LOCK_END:$path==="

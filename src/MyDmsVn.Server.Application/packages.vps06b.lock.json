@@ -24,6 +24,15 @@
           "Microsoft.Extensions.Dependencyinjection.Abstractions": "2.1.0"
         }
       },
+      "Mediator.Abstractions": {
+        "type": "Direct",
+        "requested": "[3.0.2, )",
+        "resolved": "3.0.2",
+        "contentHash": "TytjnyN8gLObZBxkM7HHPFJF3LHtk6Y8mHW56ONuXRuVEK6Fmed3f0z79H9TpmoZQP2zQAIS4/0O9R2w0v02qw==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "8.0.0"
+        }
+      },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
         "type": "Direct",
         "requested": "[8.0.2, )",
@@ -31,10 +40,7 @@
         "contentHash": "3iE7UF7MQkCv1cxzCahz+Y/guQbTqieyxyaWKhrRO91itI9cOKO76OHeQDahqG4MmW5umr3CcCvGmK92lWNlbg=="
       },
       "mydmsvn.contracts": {
-        "type": "Project",
-        "dependencies": {
-          "Newtonsoft.Json": "[13.0.4, )"
-        }
+        "type": "Project"
       },
       "mydmsvn.server.domain": {
         "type": "Project",
@@ -44,15 +50,6 @@
       },
       "mydmsvn.sharedkernel": {
         "type": "Project"
-      },
-      "Mediator.Abstractions": {
-        "type": "Direct",
-        "requested": "[3.0.2, )",
-        "resolved": "3.0.2",
-        "contentHash": "TytjnyN8gLObZBxkM7HHPFJF3LHtk6Y8mHW56ONuXRuVEK6Fmed3f0z79H9TpmoZQP2zQAIS4/0O9R2w0v02qw==",
-        "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "8.0.0"
-        }
       }
     }
   }
