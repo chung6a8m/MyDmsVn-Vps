@@ -21,7 +21,7 @@ ELSE SELECT CASE WHEN
     AND EXISTS(SELECT 1 FROM sys.columns c WHERE c.object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U')
         AND c.name=N'Version' AND TYPE_NAME(c.user_type_id)=N'bigint' AND c.is_nullable=0)
     AND EXISTS(SELECT 1 FROM sys.columns c WHERE c.object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U')
-        AND c.name=N'AppliedOn' AND TYPE_NAME(c.user_type_id)=N'datetime' AND c.is_nullable=0)
+        AND c.name=N'AppliedOn' AND TYPE_NAME(c.user_type_id)=N'datetime' AND c.is_nullable=1)
     AND EXISTS(SELECT 1 FROM sys.columns c WHERE c.object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U')
         AND c.name=N'Description' AND TYPE_NAME(c.user_type_id)=N'nvarchar' AND c.max_length=2048 AND c.is_nullable=1)
     AND (SELECT COUNT(*) FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U') AND index_id>0)=1
