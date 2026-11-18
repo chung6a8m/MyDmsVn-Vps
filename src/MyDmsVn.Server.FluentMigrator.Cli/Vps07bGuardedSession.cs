@@ -68,10 +68,10 @@ internal sealed class Vps07bGuardedSession : IDisposable
             throw new Vps07bRefusal("Migration.TamperedFluentMigratorBridgeMarker");
         if (!hasFm && marker != null)
             throw new Vps07bRefusal("Migration.MissingFluentMigratorJournalAfterBridge");
-        if (hasFm && marker == null)
-            throw new Vps07bRefusal("Migration.MissingFluentMigratorBridgeMarker");
         if (!hasLegacy && hasFm)
             throw new Vps07bRefusal("Migration.OrphanFluentMigratorJournal");
+        if (hasFm && marker == null)
+            throw new Vps07bRefusal("Migration.MissingFluentMigratorBridgeMarker");
 
         int version;
         if (!hasLegacy)
