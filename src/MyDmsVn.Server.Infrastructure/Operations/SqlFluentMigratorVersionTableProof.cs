@@ -15,9 +15,21 @@ public static class SqlFluentMigratorVersionTableProof
         using var command = connection.CreateCommand();
         command.CommandTimeout = 30;
         command.CommandText = @"
+-- A durable database-scope bridge marker distinguishes a genuine DbUp-only
+-- source from a previously cut-over database whose FM journal was deleted.
+DECLARE @bridgeCount int = (
+    SELECT COUNT(*) FROM sys.extended_properties
+    WHERE class=0 AND major_id=0 AND minor_id=0
+      AND name=N'MyDmsVn.FluentMigratorBridge');
+DECLARE @bridgeValid bit = CASE WHEN EXISTS (
+    SELECT 1 FROM sys.extended_properties
+    WHERE class=0 AND major_id=0 AND minor_id=0
+      AND name=N'MyDmsVn.FluentMigratorBridge'
+      AND CONVERT(nvarchar(32), value)=N'vps07b-v1') THEN 1 ELSE 0 END;
 IF OBJECT_ID(N'dbo.FluentMigratorVersionInfo', N'U') IS NULL
-    SELECT CASE WHEN OBJECT_ID(N'dbo.FluentMigratorVersionInfo') IS NULL THEN 1 ELSE 0 END;
-ELSE SELECT CASE WHEN
+    SELECT CASE WHEN OBJECT_ID(N'dbo.FluentMigratorVersionInfo') IS NULL
+        AND @bridgeCount=0 THEN 1 ELSE 0 END;
+ELSE SELECT CASE WHEN @bridgeCount=1 AND @bridgeValid=1 AND
     EXISTS(SELECT 1 FROM sys.tables t
         WHERE t.object_id=OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U')
         AND t.is_ms_shipped=0 AND t.is_memory_optimized=0

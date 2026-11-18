@@ -63,6 +63,13 @@ internal sealed class Vps07bGuardedSession : IDisposable
 
         var hasLegacy = Exists("dbo.SchemaVersions");
         var hasFm = Exists(JournalName);
+        var marker = BridgeMarker();
+        if (marker != null && marker != "vps07b-v1")
+            throw new Vps07bRefusal("Migration.TamperedFluentMigratorBridgeMarker");
+        if (!hasFm && marker != null)
+            throw new Vps07bRefusal("Migration.MissingFluentMigratorJournalAfterBridge");
+        if (hasFm && marker == null)
+            throw new Vps07bRefusal("Migration.MissingFluentMigratorBridgeMarker");
         if (!hasLegacy && hasFm)
             throw new Vps07bRefusal("Migration.OrphanFluentMigratorJournal");
 
@@ -193,6 +200,10 @@ WHERE is_ms_shipped=0 AND (parent_object_id=0 OR type IN (N'TR',N'TA'));") != 0 
 );
 CREATE UNIQUE CLUSTERED INDEX UC_FluentMigratorVersion
 ON dbo.FluentMigratorVersionInfo(Version);");
+            // The marker and the FM version table commit atomically; a
+            // dropped FM table must never be mistaken for a first-time bridge.
+            Execute(tx, @"EXEC sys.sp_addextendedproperty
+@name=N'MyDmsVn.FluentMigratorBridge', @value=N'vps07b-v1';");
             for (var index = 1; index <= admitted.Version; index++)
             {
                 using var cmd = new SqlCommand(
@@ -280,6 +291,15 @@ ON dbo.FluentMigratorVersionInfo(Version);");
         }
         if (seen != count)
             throw new Vps07bRefusal("Migration.FluentMigratorJournalGap");
+    }
+
+    private string? BridgeMarker()
+    {
+        using var command = new SqlCommand(@"
+SELECT CONVERT(nvarchar(64), value) FROM sys.extended_properties
+WHERE class=0 AND major_id=0 AND minor_id=0
+AND name=N'MyDmsVn.FluentMigratorBridge';", _lock);
+        return command.ExecuteScalar() as string;
     }
 
     private bool Exists(string table)
