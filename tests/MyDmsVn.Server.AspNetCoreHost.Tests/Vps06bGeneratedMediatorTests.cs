@@ -1,8 +1,10 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ErrorOr;
+using FluentValidation;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -84,6 +86,25 @@ public sealed class Vps06bGeneratedMediatorTests
     }
 
     [Fact]
+    public async Task Native_product_pipeline_awaits_scoped_async_validators_in_registration_order()
+    {
+        var services = CreateServices();
+        services.AddScoped<ValidationTrace>();
+        services.AddScoped<IValidator<GetFoundationStatusQuery>, FirstScopedValidator>();
+        services.AddScoped<IValidator<GetFoundationStatusQuery>, SecondScopedValidator>();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+        var trace = scope.ServiceProvider.GetRequiredService<ValidationTrace>();
+        var result = await mediator.Send(new GetFoundationStatusQuery("Desktop"), CancellationToken.None);
+
+        Assert.False(result.IsError);
+        Assert.False(trace.InFlight);
+        Assert.Equal(new[] { "first-enter", "first-exit", "second-enter", "second-exit" }, trace.Events);
+    }
+
+    [Fact]
     public async Task Cancellation_from_product_handler_is_propagated_not_sanitized()
     {
         using var provider = CreateServices().BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
@@ -145,6 +166,45 @@ public sealed class Vps06bGeneratedMediatorTests
     {
         public int Count { get; private set; }
         public void Report(Type type, Exception exception) => Count++;
+    }
+    private sealed class ValidationTrace
+    {
+        public bool InFlight { get; set; }
+        public List<string> Events { get; } = new();
+    }
+    private sealed class FirstScopedValidator : AbstractValidator<GetFoundationStatusQuery>
+    {
+        public FirstScopedValidator(ValidationTrace trace)
+        {
+            RuleFor(request => request.ClientName).CustomAsync(async (value, context, token) =>
+            {
+                if (trace.InFlight)
+                    throw new InvalidOperationException("validators overlap");
+                trace.InFlight = true;
+                trace.Events.Add("first-enter");
+                await Task.Yield();
+                token.ThrowIfCancellationRequested();
+                trace.InFlight = false;
+                trace.Events.Add("first-exit");
+            });
+        }
+    }
+    private sealed class SecondScopedValidator : AbstractValidator<GetFoundationStatusQuery>
+    {
+        public SecondScopedValidator(ValidationTrace trace)
+        {
+            RuleFor(request => request.ClientName).CustomAsync(async (value, context, token) =>
+            {
+                if (trace.InFlight)
+                    throw new InvalidOperationException("validators overlap");
+                trace.InFlight = true;
+                trace.Events.Add("second-enter");
+                await Task.Yield();
+                token.ThrowIfCancellationRequested();
+                trace.InFlight = false;
+                trace.Events.Add("second-exit");
+            });
+        }
     }
     private sealed class RequestState
     {
