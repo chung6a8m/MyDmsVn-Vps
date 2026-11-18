@@ -25,12 +25,12 @@ jobs:
           dotnet-version: '10.0.404'
       - name: Freeze SQL checksums and version/batch mapping
         run: python3 scripts/verify-vps-07a.py
-      - name: Compile FluentMigrator 8.0.1 and exercise executable version contract
+      - name: Strict locked restore / compile FluentMigrator 8.0.1 / executable contract
         working-directory: src/MyDmsVn.Server.FluentMigrator
         run: |
           set -euo pipefail
           test "$(dotnet --version)" = "10.0.404"
-          dotnet restore ../../tests/MyDmsVn.Vps07a.ContractTests/MyDmsVn.Vps07a.ContractTests.csproj --force-evaluate -v minimal
+          dotnet restore ../../tests/MyDmsVn.Vps07a.ContractTests/MyDmsVn.Vps07a.ContractTests.csproj --locked-mode -v minimal
           dotnet build ../../tests/MyDmsVn.Vps07a.ContractTests/MyDmsVn.Vps07a.ContractTests.csproj -c Release -f net10.0 --no-restore -warnaserror -v minimal
           dotnet run --project ../../tests/MyDmsVn.Vps07a.ContractTests/MyDmsVn.Vps07a.ContractTests.csproj -c Release -f net10.0 --no-build --no-restore
       - name: Upload generated NuGet locks for explicit pinning before review
