@@ -218,7 +218,20 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
             Assert(await Count(writersLive,
                 "SELECT CASE WHEN OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U') IS NULL THEN 0 ELSE 1 END;") == 0,
                 "VPS07B_MAINTENANCE_REFUSAL_CREATED_JOURNAL");
-            Pass("missing restricted maintenance rejected before bridge");
+            await ExecMaster("ALTER DATABASE [" + writersLive +
+                "] SET RESTRICTED_USER WITH ROLLBACK IMMEDIATE;");
+            using (var liveWriter = new SqlConnection(For(writersLive)))
+            {
+                await liveWriter.OpenAsync();
+                await RunCli(writersLive, 13, expectSuccess: false,
+                    expectedCode: "Migration.WritersNotDrained");
+            }
+            Assert(await JournalSignatureOfLegacy(writersLive) == priorHistory,
+                "VPS07B_CONCURRENT_WRITER_MUTATED_HISTORY");
+            Assert(await Count(writersLive,
+                "SELECT CASE WHEN OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U') IS NULL THEN 0 ELSE 1 END;") == 0,
+                "VPS07B_CONCURRENT_WRITER_CREATED_FM_JOURNAL");
+            Pass("missing RESTRICTED_USER or active writer refused before bridge");
 
             _stage = "killed-in-flight-transaction-and-retry";
             var interrupted = await PrepareDbUp(12);
