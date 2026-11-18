@@ -199,9 +199,14 @@ INSERT dbo.Products(Code,Name,Unit) VALUES(N'CI-PROD',N'Product retained',N'EA')
 INSERT dbo.Warehouses(Code,Name) VALUES(N'CI-WH',N'Warehouse retained');
 INSERT dbo.Customers(Code,Name) VALUES(N'CI-CUST',N'Customer retained');
 INSERT dbo.Employees(Code,Name) VALUES(N'CI-EMP',N'Employee retained');
-INSERT dbo.StockBalances(WarehouseId,ProductId,Quantity)
-SELECT WarehouseId,ProductId,CAST(0 AS decimal(18,4))
-FROM dbo.Warehouses CROSS JOIN dbo.Products;");
+IF COL_LENGTH(N'dbo.StockBalances',N'InventoryValue') IS NULL
+    INSERT dbo.StockBalances(WarehouseId,ProductId,Quantity)
+    SELECT WarehouseId,ProductId,CAST(0 AS decimal(18,4))
+    FROM dbo.Warehouses CROSS JOIN dbo.Products;
+ELSE
+    INSERT dbo.StockBalances(WarehouseId,ProductId,Quantity,InventoryValue)
+    SELECT WarehouseId,ProductId,CAST(0 AS decimal(18,4)),CAST(0 AS decimal(28,4))
+    FROM dbo.Warehouses CROSS JOIN dbo.Products;");
     }
 
     private static async Task<string> SourceData(string db)
@@ -241,7 +246,7 @@ FROM sys.indexes WHERE OBJECTPROPERTY(object_id,'IsMSShipped')=0
  AND object_id<>ISNULL(OBJECT_ID(N'dbo.FluentMigratorVersionInfo'),-1)
 UNION ALL SELECT CONCAT(N'T|',name,N'|',is_disabled,N'|',is_instead_of_trigger)
 FROM sys.triggers WHERE is_ms_shipped=0
-ORDER BY Sig COLLATE Latin1_General_100_BIN2;", c);
+ORDER BY Sig;", c);
         using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
             signatures.Add(reader.GetString(0));
