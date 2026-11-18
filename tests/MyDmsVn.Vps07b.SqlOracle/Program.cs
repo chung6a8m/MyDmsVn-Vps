@@ -87,6 +87,15 @@ type_desc COLLATE Latin1_General_100_BIN2,N':',is_unique,N':',is_primary_key)
 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.SchemaVersions') AND index_id>0 ORDER BY index_id;";
                 Console.Error.WriteLine("VPS07B_SOURCE_DBUP_INDEX=" + await Text(baseline, journalIndexSql));
                 Console.Error.WriteLine("VPS07B_FRESH_JOURNAL_INDEX=" + await Text(fresh, journalIndexSql));
+                const string moduleShape = @"SELECT CONCAT(DATALENGTH(definition),N':',
+UNICODE(LEFT(definition,1)),N':',UNICODE(RIGHT(definition,1)),N':',
+UNICODE(RIGHT(RTRIM(definition),1)),N':',
+LEN(definition),N':',
+LEN(definition)-LEN(REPLACE(definition,CHAR(13),N'')),N':',
+LEN(definition)-LEN(REPLACE(definition,CHAR(10),N'')))
+FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImportTarget');";
+                Console.Error.WriteLine("VPS07B_SOURCE_MODULE_SHAPE=" + await Text(baseline, moduleShape));
+                Console.Error.WriteLine("VPS07B_FRESH_MODULE_SHAPE=" + await Text(fresh, moduleShape));
                 throw;
             }
             await Check(fresh, 13);
