@@ -68,9 +68,13 @@ public sealed class RouteRunner
         }
         foreach (var header in scenario.Headers)
         {
-            PreflightValidator.Block(!header.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
-                                     && !header.Key.Equals("Cookie", StringComparison.OrdinalIgnoreCase),
-                "VPS09.SecretHeaderMustUseProtectedActorInput");
+            var protectedHeader = header.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
+                || header.Key.Equals("Cookie", StringComparison.OrdinalIgnoreCase)
+                || header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase)
+                || header.Key.Equals("X-Forwarded-For", StringComparison.OrdinalIgnoreCase)
+                || header.Key.Equals("X-Forwarded-Proto", StringComparison.OrdinalIgnoreCase)
+                || header.Key.Equals("X-MyDmsVn-Proxy-Token", StringComparison.OrdinalIgnoreCase);
+            PreflightValidator.Block(!protectedHeader, "VPS09.ProtectedHeaderOverrideForbidden");
             PreflightValidator.Block(request.Headers.TryAddWithoutValidation(header.Key, header.Value),
                 "VPS09.RouteHeaderInvalid:" + header.Key);
         }

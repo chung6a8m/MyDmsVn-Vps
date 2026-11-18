@@ -13,10 +13,17 @@ Issue [#12](https://github.com/chung6a8m/MyDmsVn-Vps/issues/12). Independent sou
 ## Implemented in the VPS-09 source increment (pending independent PR review)
 
 - Machine-readable 14-gate registry in `docs/testing/vps-09-gates.json` including 57 routes / 293 frozen case-pairs / 12 independent SQL Oracle scenario families / required exact-SHA workflow list.
+- Executable `docs/testing/vps-09-live-scenarios.json`: 57 routes, 293 unique pair recipes and 12 Oracle/fault mappings, validated against the frozen corpus.
+- .NET 10 `MyDmsVn.Vps09.Acceptance` external orchestrator: protected preflight, 293 public HTTPS observations, 12 read-only SQL Oracle comparisons and sanitized summary. It rejects stale/dirty source, redirects, invalid SQL TLS, actor or coverage gaps, response/Oracle mismatches and incomplete cleanup; it cannot approve a release.
+- Linux eight-event receipt, nine-checkpoint attended Windows checklist and unsigned packet index builder. These hash external artifacts but retain mandatory human review and never sign on behalf of Owner.
 - `scripts/vps09_verify.py` signed ED25519 SHA/file/case/gate/Owner-assertion verifier; source inventory mode (no SQL execution).
 - `scripts/tests/test_vps09_verify.py`: synthetic positive and negative admission checks; results must come from new final-HEAD CI, not from this prose.
-- `scripts/Invoke-Vps09WindowsAcceptance.ps1`: opt-in Windows x86 net48 publish + bounded 4-case deployed remote HTTPS→SQL suite, with strict TLS, opt-in, SHA, SDK and TRX verification. **Does not run attended GUI**, nor attest the Linux process binary or 57/293 SQL live matrix.
-- `.github/workflows/vps-09-evidence.yml`: mandatory Linux/Python and Windows PowerShell source-only gates on PR/main, protected manual Windows SQL and separately reviewed signed packet gate. No automatic staging or production rollout.
+- `scripts/Invoke-Vps09WindowsAcceptance.ps1`: retained opt-in bounded 4-case Windows x86 net48 publish + deployed remote HTTPS→SQL suite.
+- `scripts/Invoke-Vps09IntegratedAcceptance.ps1`: exact-SHA Desktop/CLI publish, protected three-actor login, 293 route and 12 Oracle prepare phase, followed by attended GUI/Linux receipt/cleanup finalize phase. Bearer tokens are process-only; no production API hook is added.
+- `.github/workflows/vps-09-evidence.yml`: mandatory Linux/Python/.NET and Windows PowerShell source-only gates on PR/main; protected `bounded`, `prepare`, `finalize`, and independent signed-packet `review` phases. No protected job runs on ordinary PR/push and no automatic production rollout exists.
+- `scripts/configure_vps09_gates.py`: exact-main/self-review/admin-bypass/setting-name/dedicated-runner policy for the three environments. It cannot verify secret values or physical infrastructure.
+
+Source test results generated locally while implementing are development evidence only: manifest 5/5, orchestrator 25/25, receipt/checklist/packet/Windows 14+ tests, and environment policy 3/3. They must be rerun by mandatory CI on the final PR HEAD. No protected acceptance phase was run.
 
 ## Real acceptance ledger (must remain NOT VERIFIED until actual proof)
 

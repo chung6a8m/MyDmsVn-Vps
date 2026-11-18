@@ -3,6 +3,12 @@
   "repository": "chung6a8m/MyDmsVn-Vps",
   "description": "Executable request policy for protected real-SQL acceptance. Contract digests are SQL-free references only; each live expected digest must be independently derived.",
   "frozenObservations": "docs/contracts/vps-05c-desktop-route-net48.json",
+  "seedDataPolicy": {
+    "recipe": "owned-fixture-per-scenario",
+    "source": "protected-external-route-plan",
+    "isolation": "isolated-nonproduction-sql13",
+    "cleanup": "owned-fixture"
+  },
   "oracleScenarios": [
     "web5-terminal",
     "web6-audit",

@@ -63,6 +63,29 @@ public sealed class ExecutionTests
         Assert.Equal("VPS09.RedirectRefused", error.Code);
     }
 
+    [Theory]
+    [InlineData("Host")]
+    [InlineData("X-Forwarded-For")]
+    [InlineData("X-Forwarded-Proto")]
+    [InlineData("X-MyDmsVn-Proxy-Token")]
+    public async Task RouteRunnerRefusesHeadersThatCouldBypassPublicNginx(string header)
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, "{\"data\":true}");
+        var runner = new RouteRunner(new HttpMessageInvoker(handler));
+        var scenario = Scenario(200, OkDigest) with
+        {
+            Headers = new Dictionary<string, string> { [header] = "attacker-controlled" }
+        };
+
+        var error = await Assert.ThrowsAsync<AcceptanceBlockedException>(() => runner.ExecuteAsync(
+            new Uri("https://staging.example"), scenario,
+            new Dictionary<string, string> { ["writer"] = "token" },
+            "runner", "artifact.json", CancellationToken.None));
+
+        Assert.Equal("VPS09.ProtectedHeaderOverrideForbidden", error.Code);
+        Assert.Null(handler.LastRequest);
+    }
+
     [Fact]
     public async Task OracleRunnerHashesQueryAndCanonicalExpectedActualValues()
     {

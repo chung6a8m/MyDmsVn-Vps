@@ -73,6 +73,16 @@ def validate_manifest(root: Path, manifest_path: Path) -> dict[str, int]:
     assert_secret_free(document)
     require(document.get("schemaVersion") == 1, "SchemaVersionUnsupported")
     require(document.get("repository") == REPOSITORY, "RepositoryMismatch")
+    seed_policy = document.get("seedDataPolicy")
+    require(
+        seed_policy == {
+            "recipe": "owned-fixture-per-scenario",
+            "source": "protected-external-route-plan",
+            "isolation": "isolated-nonproduction-sql13",
+            "cleanup": "owned-fixture",
+        },
+        "SeedDataPolicyInvalid",
+    )
 
     frozen_path = checked_source_path(root, document.get("frozenObservations", ""))
     frozen = load_json(frozen_path)

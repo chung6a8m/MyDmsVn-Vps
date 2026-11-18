@@ -12,7 +12,7 @@ Three secrets (restricted SQL string, JWT signing allowlist and proxy token) are
 
 1. Independently reviewed **isolated nonproduction SQL13**, compatible verified DbUp/FluentMigrator journal bridge and schema fingerprint, tested backups/restores, restricted runtime principal and a **separate read-only SQL Oracle**. All SQL connections verify a trusted CA and hostname with Encrypt=True and TrustServerCertificate=False. No production account, database or shared backup. The Host must never auto-migrate. Use [VPS-07B migration procedure](vps-07b-sql-migration.md).
 2. Dedicated staging Linux machine with monitored disk, systemd, Nginx, ASP.NET Core Runtime 10, approved firewall and TLS certificate. Allow external 443 only, never internet 5080/SQL. Configure protected audit pre-provisioning from the [VPS-04B runbook](vps-04b-protected-audit.md): private candidate root 0700, regular file 0600 created only once with exclusive/no-follow flags and fsync. Do not truncate or independently rotate the audit file.
-3. GitHub Environment named vps08-sql13-nonproduction, a reviewer **independent of the actor**, prevent self review, admin bypass disabled, only exact main branch allowed, secret name VPS08_STAGING_HOST_ATTESTATION, variables VPS08_STAGING_PROBE_URL and VPS08_STAGING_MACHINE_SHA256 (SHA-256 of the independently reviewed host /etc/machine-id; do not publish the raw identifier), and a dedicated nonproduction self-hosted runner labeled vps08-staging and operating as vps08runner. No staging job can run on normal PR or push. GitHub Environment configuration is an external admin step, not established by CI.
+3. GitHub Environment named vps08-sql13-nonproduction, a reviewer **independent of the actor**, prevent self review, admin bypass disabled, only exact main branch allowed, secret name VPS08_STAGING_HOST_ATTESTATION, variables VPS08_STAGING_PROBE_URL, VPS08_STAGING_MACHINE_SHA256 (SHA-256 of the independently reviewed host /etc/machine-id; do not publish the raw identifier), VPS08_RECEIPT_STATE_PATH and VPS08_OPERATOR, and a dedicated nonproduction self-hosted runner labeled vps08-staging and operating as vps08runner. The receipt state path must be a new protected path for one candidate execution; do not overwrite a prior run. No staging job can run on normal PR or push. GitHub Environment configuration is an external admin step, not established by CI.
 4. Pin the full reviewed 40-character main SHA, reviewed artifact and complete same-SHA required CI. Confirm external Owner authorization to use staging SQL and ensure backup/restore and sensitive host cleanup plan are approved.
 
 The staging operator pins the actual machine independently before enabling the protected Environment. Record only the hash (not raw machine-id) as the Environment variable `VPS08_STAGING_MACHINE_SHA256`:
@@ -21,9 +21,9 @@ The staging operator pins the actual machine independently before enabling the p
 
 An independent admin can configure and verify (with locally authenticated gh CLI):
 
-    python3 scripts/configure-vps08-staging-gate.py configure --reviewer INDEPENDENT_LOGIN
+    python3 scripts/configure_vps09_gates.py configure --environment vps08-sql13-nonproduction --reviewer INDEPENDENT_LOGIN
     # Manually disable admin bypass and set environment secret/variable names
-    python3 scripts/configure-vps08-staging-gate.py verify --expected-sha EXACT_MAIN_SHA
+    python3 scripts/configure_vps09_gates.py verify --environment vps08-sql13-nonproduction --expected-sha EXACT_MAIN_SHA
 
 The helper checks protection and names, **not secret values or SQL/VPS reality**. The previous PR #9 SQL job skipped by design and all disposable GitHub Actions SQL containers are not staging acceptance.
 
@@ -78,4 +78,15 @@ After Environment and host admission are independently verified, a protected man
 
     gh workflow run vps-08-linux-deploy.yml --repo chung6a8m/MyDmsVn-Vps --ref main -f reviewed_sha=EXACT_MAIN_SHA -f approved_scope=reviewed-isolated-sql13-only
 
-The optional self-hosted job tests deployment, public TLS health, two direct-loopback bypass denials, manual service restart and SIGKILL recovery, after checking the independently approved machine fingerprint. It does **not** automatically certify host reboot, independent SQL Oracle reconciliation, full negative proxy matrix or a failed-deploy rollback. Record those separately with exact machine identity, versions, TLS chain, commands (sanitized), audit/SQL expected vs actual, tested backup recovery and cleanup. Never treat a skipped job as passed. Windows Desktop-to-Linux-to-SQL integrated acceptance and production release decision belong to VPS-09.
+The optional self-hosted job tests deployment, public TLS health, two direct-loopback bypass denials, manual service restart and SIGKILL recovery, after checking the independently approved machine fingerprint. It also creates an exclusive receipt state bound to the candidate SHA, machine hash and artifact manifest hash. It does **not** automatically certify host reboot, independent SQL Oracle reconciliation, full negative proxy matrix or a failed-deploy rollback.
+
+After each real operator drill, create a sanitized event JSON containing `schemaVersion: 1`, the fixed `event`, the same `sourceSha`, `machineSha256` and `operator` as receipt state, UTC `observedAtUtc`, outcome, and SHA-256 `evidenceDigest` of the separately retained raw evidence. The eight event names are fixed: `environment-admission`, `sql13-tls-oracle`, `nginx-proxy`, `systemd-audit`, `restart-sigkill`, `reboot-resume`, `failed-deploy-rollback`, and `final-reconciliation`. Normal events use `PASS`; the injected broken deployment must use `EXPECTED_FAILURE_RECOVERED`, preserving that the attempted deployment failed even when rollback recovered service:
+
+    python3 scripts/vps09_linux_receipt.py record --state /protected/run/state.json \
+      --evidence /protected/sanitized/reboot-resume.event.json
+    python3 scripts/vps09_linux_receipt.py record --state /protected/run/state.json \
+      --evidence /protected/sanitized/failed-deploy-rollback.event.json
+    python3 scripts/vps09_linux_receipt.py finalize --state /protected/run/state.json \
+      --output /protected/run/vps08-linux-receipt.json
+
+`finalize` verifies structure and hashes only. Its review state remains `REQUIRED`; it is not permission to close #11. The independent reviewer must compare the receipt with original logs, process identities, TLS and SQL queries, then record VPS08-01..08 as PASS with zero skipped/failed gates. Record cleanup separately with exact machine identity, versions, TLS chain, sanitized commands, audit/SQL expected vs actual and tested backup recovery. Never treat a skipped job as passed. Windows Desktop-to-Linux-to-SQL integrated acceptance and production release decision belong to VPS-09.

@@ -11,6 +11,12 @@
 - Native proxy, SQL TLS and live SQL-free Kestrel regressions (33/33 PASS on final reviewed source HEAD), static source/refusal tests, exact SDK 10.0.404 locked publish, and separate manually dispatched protected Environment job.
 - Operator-specific Environment provisioning script and [Linux runbook](../runbooks/vps-08-linux-deployment.md).
 
+## VPS-09 acceptance-tooling extension (pending PR review)
+
+The current tooling branch adds an exclusive, SHA/machine/artifact-bound Linux receipt state machine and initializes it from the protected VPS-08 workflow. It requires all eight VPS08-01..08 event families; an injected failed deployment is recorded as `EXPECTED_FAILURE_RECOVERED`, never silently converted to PASS by a successful rollback. The receipt hashes protected external evidence and deliberately ends as `STRUCTURE_COMPLETE_NOT_REVIEWED` with physical review `REQUIRED`.
+
+This source change does not alter the disposition below. No protected runner, SQL13 instance, reboot, rollback or independent review was executed in this implementation session. Issue #11 remains OPEN and every real staging row remains NOT VERIFIED until an exact main candidate is run and reviewed.
+
 ## Observed review checkpoints — not final deployment acceptance
 
 - **Initial source HEAD `e0e705954039cab22146663ed0452bcc4ee0c53b`:** all **10/10 mandatory PR workflows SUCCESS**, including [VPS-08 #44295115796](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/44295115796); original **27/27** native proxy/SQL TLS cases PASS, zero failure/skip, 59-file Linux publish with exact source SHA. Protected staging job was **SKIPPED**.

@@ -159,6 +159,9 @@ if ($linuxReceipt.sourceSha -cne $ReviewedSha -or
     @($linuxReceipt.events).Count -ne 8) {
     throw 'VPS09.LinuxReceiptInvalid'
 }
+$retainedLinuxReceipt = Join-Path $evidence 'linux-receipt.json'
+if (Test-Path -LiteralPath $retainedLinuxReceipt) { throw 'VPS09.EvidenceFileMustBeNew' }
+[IO.File]::Copy([IO.Path]::GetFullPath($LinuxReceiptPath), $retainedLinuxReceipt, $false)
 
 $guiReceipt = Join-Path $evidence 'gui-checklist-receipt.json'
 python scripts/vps09_gui_checklist.py validate --input ([IO.Path]::GetFullPath($GuiChecklistPath)) --output $guiReceipt

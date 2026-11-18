@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -125,7 +126,9 @@ public static class CommandLine
             await error.WriteLineAsync("VPS09_ACCEPTANCE_BLOCKED: " + blocked.Code).ConfigureAwait(false);
             return 1;
         }
-        catch (Exception unexpected) when (unexpected is IOException or JsonException or UnauthorizedAccessException)
+        catch (Exception unexpected) when (unexpected is IOException or JsonException
+            or UnauthorizedAccessException or DbException or HttpRequestException
+            or TaskCanceledException or UriFormatException)
         {
             await error.WriteLineAsync("VPS09_ACCEPTANCE_BLOCKED: " + unexpected.GetType().Name)
                 .ConfigureAwait(false);

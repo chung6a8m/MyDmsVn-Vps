@@ -78,7 +78,7 @@ public static class PreflightValidator
             "VPS09.ReviewMustBeIndependent");
 
         return new PreflightReceipt(input.ReviewedSha, admittedOrigin.Host, database!, input.Operator,
-            input.Reviewer, input.Owner, "encrypt-verified");
+            input.Reviewer, input.Owner, "encrypt-config-admitted; handshake-required-by-oracles");
     }
 
     private static Dictionary<string, string> ParseSql(string connectionString)

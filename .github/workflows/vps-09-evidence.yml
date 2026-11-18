@@ -269,7 +269,8 @@ jobs:
             -LinuxReceiptPath $env:VPS09_LINUX_RECEIPT_PATH -CleanupConfirmed
           python scripts/vps09_packet_builder.py --root $evidence --source-sha '${{ github.sha }}' `
             --artifact route-observations.json --artifact sql-oracle.json `
-            --artifact gui-checklist-receipt.json --artifact vps09-sanitized-summary.json `
+            --artifact linux-receipt.json --artifact gui-checklist-receipt.json `
+            --artifact vps09-sanitized-summary.json `
             --output "$env:RUNNER_TEMP/vps09-finalize-index.json"
       - name: Upload sanitized hashes only; packet remains unsigned
         uses: actions/upload-artifact@v6

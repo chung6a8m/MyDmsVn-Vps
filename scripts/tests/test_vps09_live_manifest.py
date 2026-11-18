@@ -47,6 +47,13 @@ class Vps09LiveManifestTests(unittest.TestCase):
         with self.assertRaisesRegex(ManifestError, "OracleScenarioUnknown"):
             self._validate(document)
 
+    def test_missing_protected_seed_data_policy_is_refused(self):
+        document = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        document.pop("seedDataPolicy")
+
+        with self.assertRaisesRegex(ManifestError, "SeedDataPolicyInvalid"):
+            self._validate(document)
+
     def _validate(self, document):
         with tempfile.TemporaryDirectory(prefix="vps09-manifest-") as folder:
             path = Path(folder) / "manifest.json"
