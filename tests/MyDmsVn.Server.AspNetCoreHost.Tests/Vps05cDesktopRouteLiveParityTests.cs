@@ -375,7 +375,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 caseId == "VPS01-AUTH-LOGIN" ? "/api/v1/auth/login" : "/api/v1/auth/refresh",
                 caseId == "VPS01-AUTH-LOGIN"
                     ? "{\"username\":\"missing-" + attempt + "\",\"password\":\"wrong-secret\"}" : null,
-                authenticated: false, cookie: false);
+                authenticated: false, cookie: caseId == "VPS01-AUTH-REFRESH");
             Assert.NotEqual(429, (int)rejected.StatusCode);
         }
         using var response = await fixture.SendControlAsync("POST",
@@ -384,6 +384,8 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 ? "{\"username\":\"alice\",\"password\":\"correct-secret\"}" : null,
             authenticated: false, cookie: caseId == "VPS01-AUTH-REFRESH");
         var bytes = await response.Content.ReadAsByteArrayAsync();
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.Equal(TimeSpan.FromMinutes(5), response.Headers.RetryAfter?.Delta);
         AssertMatchesNet48(caseId, "rate-limited", response, bytes);
     }
 

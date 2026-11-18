@@ -309,9 +309,11 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         var attempts = caseId == "VPS01-AUTH-LOGIN" ? 30 : 30;
         for (var attempt = 0; attempt < attempts; attempt++)
         {
-            using var rejected = caseId == "VPS01-AUTH-LOGIN"
-                ? await fixture.Post(route, "{\"username\":\"missing-" + attempt + "\",\"password\":\"wrong-secret\"}")
-                : await fixture.Post(route, null);
+            using var attemptRequest = fixture.PostRequest(route, caseId == "VPS01-AUTH-LOGIN"
+                ? "{\"username\":\"missing-" + attempt + "\",\"password\":\"wrong-secret\"}" : null);
+            if (caseId == "VPS01-AUTH-REFRESH")
+                attemptRequest.Headers.Add("Cookie", "__Host-mydmsvn-rt=" + AuthFixture.InitialRefresh);
+            using var rejected = await fixture.Server.HttpClient.SendAsync(attemptRequest);
             Assert.NotEqual(429, (int)rejected.StatusCode);
         }
         using var request = fixture.PostRequest(route,
@@ -320,6 +322,8 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         if (caseId == "VPS01-AUTH-REFRESH")
             request.Headers.Add("Cookie", "__Host-mydmsvn-rt=" + AuthFixture.InitialRefresh);
         using var response = await fixture.Server.HttpClient.SendAsync(request);
+        Assert.Equal(429, (int)response.StatusCode);
+        Assert.Equal(TimeSpan.FromMinutes(5), response.Headers.RetryAfter?.Delta);
         return await Observe(caseId, "rate-limited", response);
     }
 

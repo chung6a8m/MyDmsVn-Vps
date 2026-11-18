@@ -3182,7 +3182,7 @@
   {
     "CaseId": "VPS01-AUTH-REFRESH",
     "Variant": "rate-limited",
-    "Status": 200,
+    "Status": 429,
     "ContentType": "application/json; charset=utf-8",
     "CorrelationId": "vps05c_live_28",
     "CacheControl": "no-store",
@@ -3190,9 +3190,9 @@
     "WwwAuthenticate": "",
     "XContentTypeOptions": "nosniff",
     "Hsts": "max-age=31536000",
-    "RetryAfter": "",
-    "SetCookie": "__Host-mydmsvn-rt=33333333-3333-4333-8333-333333333333; Max-Age=604800; Path=/; Secure; HttpOnly; SameSite=Strict",
-    "BodyBase64": "eyJkYXRhIjp7ImFjY2Vzc1Rva2VuIjoiPGR5bmFtaWMtand0PiIsImV4cGlyZXNBdFV0YyI6IjIwMjYtMTAtMzFUMDk6MTA6MDBaIiwidXNlciI6eyJ1c2VySWQiOjEsInVzZXJuYW1lIjoiYXV0aG9yaXRhdGl2ZS1hbGljZSIsImRpc3BsYXlOYW1lIjoiQXV0aG9yaXRhdGl2ZSBBbGljZSJ9fX0="
+    "RetryAfter": "300",
+    "SetCookie": "",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5SYXRlTGltaXRlZCIsIm1lc3NhZ2UiOiJUb28gbWFueSBhdXRoZW50aWNhdGlvbiBhdHRlbXB0cy4gVHJ5IGFnYWluIGxhdGVyLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
   },
   {
     "CaseId": "VPS01-SALES-LIST",
