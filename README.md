@@ -10,9 +10,11 @@ Independent Windows Desktop + Linux VPS modernization of MyDmsVn, starting from 
 
 See [Owner decisions](docs/decisions/README.md), [target architecture](docs/architecture/overview.md), and the [single authoritative roadmap status](docs/roadmap/README.md).
 
-## Current implementation stage: VPS-08 source candidate for review; deployment NOT VERIFIED
+## Current implementation stage: VPS-08 SOURCE-ONLY MERGED; deployment NOT VERIFIED
 
-**VPS-08 Linux deployment & hardening is implemented as [draft PR #27](https://github.com/chung6a8m/MyDmsVn-Vps/pull/27), NOT ACCEPTED.** The source candidate adds opt-in Nginx/TLS and authenticated loopback Kestrel, hardened systemd service and credentials, protected-audit provisioning, SHA-pinned Linux package/rollback, net10 CI, and a separately reviewed protected staging gate. Actual VPS/SQL13 staging, independent Oracle, restart/reboot/failure/rollback evidence, final-HEAD CI and merge are outstanding. See the [single canonical roadmap](docs/roadmap/README.md), [VPS-08 runbook](docs/runbooks/vps-08-linux-deployment.md) and [acceptance ledger](docs/evidence/vps-08-linux-deployment.md). PR #9's historical staging SKIPPED is not PASS. **VPS-09** integrated Windows Desktop→deployed Linux→SQL and production approval remain NOT VERIFIED.
+**VPS-08 source-only integration is MERGED** in [PR #27](https://github.com/chung6a8m/MyDmsVn-Vps/pull/27) after explicit Owner approval on **2026-11-18**. Reviewed source HEAD `516e4cc9ffd378412b2a370b04ab269a6f49dc70` passed **10/10 mandatory workflows**, including **33/33** native proxy/Kestrel tests and **59/59** SHA-bound published files. Merge commit: [`628aaf994`](https://github.com/chung6a8m/MyDmsVn-Vps/commit/628aaf994556595f5987286e84ab7491b9054c50). Deployment templates, protected staging workflow, credential loader, immutable rollout, and review fixes F05–F07 are integrated.
+
+**This is NOT staging or production acceptance.** `protected-staging` was **SKIPPED (not PASS)**. Actual independently approved SQL13 staging/Oracle, Nginx/TLS/systemd/secret/audit operation, real reboot and induced failed deploy/rollback remain **NOT VERIFIED**. [Issue #11](https://github.com/chung6a8m/MyDmsVn-Vps/issues/11) stays **OPEN** for protected VPS operational gates. The [VPS-08 runbook](docs/runbooks/vps-08-linux-deployment.md), [evidence ledger](docs/evidence/vps-08-linux-deployment.md) and [canonical roadmap](docs/roadmap/README.md) remain authoritative. **VPS-09** Windows Desktop→Linux→SQL E2E and production release approval are separate.
 
 **Earlier VPS-05 and VPS-06A checkpoint evidence (historical):**
 

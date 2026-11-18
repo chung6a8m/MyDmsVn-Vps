@@ -1,6 +1,6 @@
-# Linux VPS hosting — VPS-08 implementation candidate, deployment NOT VERIFIED
+# Linux VPS hosting — VPS-08 source-only merged, deployment NOT VERIFIED
 
-**Decision:** [OWN-VPS-01](../decisions/OWN-VPS-01.md). **Implementation:** [VPS-08 draft PR #27](https://github.com/chung6a8m/MyDmsVn-Vps/pull/27). **Evidence authority:** [VPS-08 ledger](../evidence/vps-08-linux-deployment.md). No server, SQL13 staging or release approval is implied by these checked-in templates.
+**Decision:** [OWN-VPS-01](../decisions/OWN-VPS-01.md). **Implementation (source-only merged 2026-11-18):** [VPS-08 PR #27](https://github.com/chung6a8m/MyDmsVn-Vps/pull/27). **Evidence authority:** [VPS-08 ledger](../evidence/vps-08-linux-deployment.md). No server, SQL13 staging or release approval is implied by these checked-in templates.
 
 ## Reference topology
 
