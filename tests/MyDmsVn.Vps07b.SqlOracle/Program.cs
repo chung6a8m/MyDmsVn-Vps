@@ -237,6 +237,7 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
             await Check(interrupted, 13);
             Assert(await SourceData(interrupted, 12) == interruptedData,
                 "VPS07B_PROCESS_LOSS_RETRY_CHANGED_SOURCE");
+            Pass("two real CLI processes overlap: second refused while first owns app lock");
             Pass("kill dotnet worker during SQL WAITFOR transaction; rollback and retry");
 
             _stage = "schema9-data-readiness-before-bridge";
@@ -731,6 +732,11 @@ AND (r.wait_type LIKE N'WAITFOR%' OR r.command=N'WAITFOR');") > 0)
                     await Task.Delay(300);
                 }
                 Assert(sawInFlightSql, "VPS07B_NO_IN_FLIGHT_SQL_WAIT_WAS_OBSERVED");
+                // A second REAL CLI process must fail to take the same
+                // app lock while the first process remains inside SQL.
+                await RunCli(db, version, expectSuccess: false,
+                    expectedCode: "Migration.AlreadyRunning");
+                Assert(!process.HasExited, "VPS07B_FIRST_MIGRATOR_EXITED_DURING_RACE");
                 process.Kill(entireProcessTree: true);
             }
             await process.WaitForExitAsync(limit.Token);
