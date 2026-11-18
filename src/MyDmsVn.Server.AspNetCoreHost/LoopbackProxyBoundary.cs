@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 
 namespace MyDmsVn.Server.HttpHost;
@@ -47,7 +48,7 @@ internal static class LoopbackProxyBoundary
         options.ForwardLimit = 1;
         options.RequireHeaderSymmetry = true;
         // No wildcard or CIDR-based trust; Nginx and Kestrel share the same host.
-        options.KnownNetworks.Clear();
+        options.KnownIPNetworks.Clear();
         options.KnownProxies.Clear();
         options.KnownProxies.Add(IPAddress.Loopback);
     }

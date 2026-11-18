@@ -82,7 +82,7 @@ internal static class Program
         {
             // Never publish an HTTP Kestrel listener off the loopback interface.
             builder.WebHost.UseUrls(LoopbackProxyBoundary.LoopbackUrl);
-            builder.Services.Configure<Microsoft.AspNetCore.HttpOverrides.ForwardedHeadersOptions>(
+            builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(
                 LoopbackProxyBoundary.ConfigureForwardedHeaders);
         }
         builder.Services.AddServerApplication(superuser).AddHttpRequestIdentity();

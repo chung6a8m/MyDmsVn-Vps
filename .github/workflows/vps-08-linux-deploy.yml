@@ -55,17 +55,18 @@ jobs:
           dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
             -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode
       - name: Execute all native proxy cases, exact counts
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
           set -euo pipefail
-          mkdir -p vps08-trx
-          dotnet test tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+          mkdir -p "$GITHUB_WORKSPACE/vps08-trx"
+          dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
             -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore \
             --filter FullyQualifiedName~Vps08LoopbackProxyTests \
             --logger "trx;LogFileName=vps08-proxy.trx" --results-directory "$GITHUB_WORKSPACE/vps08-trx"
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
           from pathlib import Path
-          f = Path('vps08-trx/vps08-proxy.trx')
+          f = Path('../../vps08-trx/vps08-proxy.trx')
           assert f.exists(), 'Missing native proxy TRX'
           ns = '{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}'
           node = ET.parse(f).getroot().find(f'./{ns}ResultSummary/{ns}Counters')
@@ -75,15 +76,16 @@ jobs:
           print('VPS08_NATIVE_PROXY_PASS: discovered=23 executed=23 passed=23 failed=0 skipped=0')
           PY
       - name: Publish framework-dependent net10 host with locked runtime graph
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
           set -euo pipefail
-          dotnet publish src/MyDmsVn.Server.AspNetCoreHost/MyDmsVn.Server.AspNetCoreHost.csproj \
+          dotnet publish MyDmsVn.Server.AspNetCoreHost.csproj \
             -p:Vps04Server=true -p:Vps06bMediator=true -p:UseAppHost=false \
             -c Release -f net10.0 --no-restore -warnaserror -o "$GITHUB_WORKSPACE/vps08-publish"
-          test -f vps08-publish/MyDmsVn.Server.AspNetCoreHost.dll
+          test -f "$GITHUB_WORKSPACE/vps08-publish/MyDmsVn.Server.AspNetCoreHost.dll"
           python3 - <<'PY'
           from pathlib import Path
-          deps=Path('vps08-publish/MyDmsVn.Server.AspNetCoreHost.deps.json').read_text()
+          deps=Path('../../vps08-publish/MyDmsVn.Server.AspNetCoreHost.deps.json').read_text()
           assert 'Newtonsoft.Json/' not in deps
           assert 'MediatR/' not in deps
           print('VPS08_RUNTIME_DEPENDENCIES_PASS: Newtonsoft=0, MediatR=0')

@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using MyDmsVn.Server.HttpHost;
 using Xunit;
@@ -101,7 +102,7 @@ public sealed class Vps08LoopbackProxyTests
         LoopbackProxyBoundary.ConfigureForwardedHeaders(options);
         Assert.Single(options.KnownProxies);
         Assert.Equal(IPAddress.Loopback, options.KnownProxies[0]);
-        Assert.Empty(options.KnownNetworks);
+        Assert.Empty(options.KnownIPNetworks);
         Assert.Equal(1, options.ForwardLimit);
         Assert.True(options.RequireHeaderSymmetry);
         Assert.Equal(ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto, options.ForwardedHeaders);
