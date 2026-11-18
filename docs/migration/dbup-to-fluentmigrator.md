@@ -24,3 +24,25 @@
 | Failed/retried migration | Consistent journal and application data |
 
 Supported old states remain unannounced until run against real SQL Server with independent oracles. Infrastructure target/SQL topology/backup responsibility can be refined in VPS-08 without revisiting the approved fresh-and-existing requirement.
+
+
+## VPS-07A source implementation (2026-11-18)
+
+The independent net10.0 library `src/MyDmsVn.Server.FluentMigrator` now holds 13 explicit
+`[Migration(1..13)]` classes linking (not copying) the pinned original 001-013 SQL bytes.
+Each wrapper executes the existing T-SQL in order, separating the 29 client-side
+`GO` batches; `Down()` fails closed, with no destructive downgrade path.
+
+VPS-07A does not change the DbUp net48 executable, journal or real database.
+The standalone write-capable FluentMigrator CLI, version table, schema/journal bridge,
+privilege/maintenance policy and production cutover remain **VPS-07B**, which must
+be reviewed and accepted independently before legacy DbUp is retired.
+
+VPS-07B must prove on isolated real SQL Server: fresh install and separately
+admitted schema9, 10, 11, 12 and 13 paths; exact legacy journal, schema definition
+fingerprints, and transaction-per-version semantics; no replay of applied SQL;
+two migrating processes, failure/interruption, retry, data preservation, backup
+and restore rehearsal. Unknown or partial states must be refused without mutation.
+
+**Evidence status:** new 07A source/contract gates are pending CI. Real-SQL
+07A/07B acceptance, stage deployment and production approval remain NOT VERIFIED.
