@@ -27,6 +27,7 @@
 | F04 — failed/partial staging rollout could not be retried on the same reviewed SHA without an operator cleanup | P2 | **FIXED IN SOURCE:** `c35c1b1`: permit same-SHA retry only with identical verified manifest and root-owned existing release, no in-place overwrite. Actual retry/fault rehearsal **NOT RUN** |
 | F05 — Bash `local target="$1" name="$2" file="$CREDENTIALS_DIRECTORY/$name"` expands `$name` before assignment, preventing systemd credential loading and startup | P0 | **FIXED IN SOURCE:** `de245b2`: assign `name` before building the file path; executable shell fixture added in `6e911d8`. Final-HEAD CI and real systemd startup **NOT YET VERIFIED** |
 | F06 — public TLS and active service alone can accept a stale binary/process after rollout | P1 | **FIXED IN SOURCE:** `3eebcb6`: require systemd MainPID with `/proc/PID/cwd` resolving to the exact selected release, both on deploy and rollback. Executable negative simulation added in `6e911d8`; real fault injection **NOT RUN** |
+| F07 — ignored `systemctl restart` exit code could report same-SHA retry healthy without applying updated runtime settings | P1 | **FIXED IN SOURCE:** `f239be2`: require successful restart in addition to exact-process/HTTPS probe; recovery success requires restart success. Static source regression added in `f617b45`; actual service fault injection **NOT RUN** |
 
 Neither an author's code changes nor a second-pass source check is an independent human deployment approval. A protected reviewer must inspect final diff, exact CI and real staging evidence separately.
 
