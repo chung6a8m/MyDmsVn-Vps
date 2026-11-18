@@ -69,7 +69,19 @@ internal static class Program
             _stage = "FM13-fresh-create";
             var fresh = await Create();
             _stage = "FM13-fresh-migrate";
-            await RunCli(fresh, 13, expectSuccess: true);
+            try { await RunCli(fresh, 13, expectSuccess: true); }
+            catch (InvalidOperationException)
+            {
+                // Safe test-only catalog shape probe, never reads client data.
+                Console.Error.WriteLine("VPS07B_FM_FRESH_DEFINITION_DIFF: independent=" +
+                    ((await DefinitionSignature(fresh)) == baselineSignature ? "EQUAL" : "DIFFERENT"));
+                const string journalIndexSql = @"SELECT STRING_AGG(CONCAT(name,N':',type_desc,N':',
+is_unique,N':',is_primary_key),N'|') WITHIN GROUP(ORDER BY index_id)
+FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.SchemaVersions') AND index_id>0;";
+                Console.Error.WriteLine("VPS07B_SOURCE_DBUP_INDEX=" + await Text(baseline, journalIndexSql));
+                Console.Error.WriteLine("VPS07B_FRESH_JOURNAL_INDEX=" + await Text(fresh, journalIndexSql));
+                throw;
+            }
             await Check(fresh, 13);
             Assert(await DefinitionSignature(fresh) == baselineSignature,
                 "VPS07B_FRESH_SCHEMA_DRIFT_FROM_INDEPENDENT_DBUP13");
