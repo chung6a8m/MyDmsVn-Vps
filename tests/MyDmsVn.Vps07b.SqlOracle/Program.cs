@@ -356,6 +356,31 @@ EXEC @r=sys.sp_releaseapplock @Resource=N'MyDmsVn.SchemaMigration',
                 "VPS07B_PARTIAL_SCHEMA_CHANGED_JOURNAL");
             Pass("partial schema rejected with legacy journal unchanged");
 
+            _stage = "dedicated-migration-principal-control-negative";
+            var underprivileged = await Create();
+            var deniedLogin = "vps07b_ci_denied_" + Stamp;
+            var deniedPassword = "CiNoControl@9" + Guid.NewGuid().ToString("N");
+            await ExecMaster("CREATE LOGIN [" + deniedLogin + "] WITH PASSWORD=N'" +
+                deniedPassword + "',CHECK_POLICY=ON;");
+            await Exec(underprivileged, "CREATE USER [" + deniedLogin +
+                "] FOR LOGIN [" + deniedLogin + "]; GRANT CONNECT TO [" + deniedLogin + "];");
+            var withoutControl = new SqlConnectionStringBuilder(For(underprivileged))
+            {
+                UserID = deniedLogin,
+                Password = deniedPassword
+            }.ConnectionString;
+            await RunCli(underprivileged, 13, expectSuccess: false,
+                expectedCode: "Migration.ControlPermissionRequired", connectionOverride: withoutControl);
+            Assert(await Count(underprivileged,
+                "SELECT CASE WHEN OBJECT_ID(N'dbo.SchemaVersions',N'U') IS NULL THEN 0 ELSE 1 END;") == 0,
+                "VPS07B_UNPRIVILEGED_CREATED_LEGACY_JOURNAL");
+            Assert(await Count(underprivileged,
+                "SELECT CASE WHEN OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U') IS NULL THEN 0 ELSE 1 END;") == 0,
+                "VPS07B_UNPRIVILEGED_CREATED_FM_JOURNAL");
+            await Exec(underprivileged, "DROP USER [" + deniedLogin + "];");
+            await ExecMaster("DROP LOGIN [" + deniedLogin + "];");
+            Pass("migration identity without CONTROL denied before mutation");
+
             // Explicitly test no operator approval even with valid disposable SQL.
             await RunCli(denied, 13, expectSuccess: false, approved: false);
             Assert(await JournalSignature(denied) == stable, "VPS07B_UNAPPROVED_MUTATED");
@@ -620,14 +645,23 @@ ORDER BY Sig;", c);
     }
 
     private static async Task RunCli(string db, int version, bool expectSuccess, bool approved = true,
-        string? ciFault = null, string? expectedCode = null)
+        string? ciFault = null, string? expectedCode = null, string? connectionOverride = null)
     {
         var psi = new ProcessStartInfo("dotnet") { RedirectStandardError = true,
             RedirectStandardOutput = true, UseShellExecute = false };
         psi.ArgumentList.Add(_cli);
         psi.ArgumentList.Add("migrate");
         psi.ArgumentList.Add("schema" + version.ToString(CultureInfo.InvariantCulture));
-        psi.Environment["VPS07B_SQL_CONNECTION_STRING"] = For(db);
+        if (connectionOverride != null)
+        {
+            var check = new SqlConnectionStringBuilder(connectionOverride);
+            Assert(Databases.Contains(db, StringComparer.Ordinal) &&
+                check.InitialCatalog == db &&
+                string.Equals(check.DataSource, "localhost,1433", StringComparison.OrdinalIgnoreCase) &&
+                check.Encrypt.ToString() == "True" && !check.TrustServerCertificate,
+                "VPS07B_CI_CONNECTION_OVERRIDE_OUTSIDE_OWNED_SQL");
+        }
+        psi.Environment["VPS07B_SQL_CONNECTION_STRING"] = connectionOverride ?? For(db);
         psi.Environment["VPS07B_OPERATOR_APPROVAL"] =
             approved ? "approved-maintenance-and-verified-backup" : "";
         if (!string.IsNullOrEmpty(ciFault))
