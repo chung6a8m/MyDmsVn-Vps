@@ -121,6 +121,22 @@ def validate_artifacts(folder: Path, attestation: dict[str, Any]) -> set[str]:
     return set(listed)
 
 
+def verified_artifact_document(folder: Path, attestation: dict[str, Any], name: str) -> Any:
+    # validate_artifacts() checks the whole packet, but an external operator
+    # can still change an evidence file before observations/oracles are read.
+    # Parse only bytes whose digest is bound to the signed ledger.
+    require(name in attestation["artifacts"], "ArtifactNotListed")
+    target = folder / checked_relative(name)
+    record = attestation["artifacts"][name]
+    require(target.is_file() and not target.is_symlink()
+            and target.stat().st_size <= MAX_ARTIFACT_BYTES,
+            "ArtifactChangedAfterLedgerVerification")
+    raw = target.read_bytes()
+    require(len(raw) == record["bytes"] and sha256(raw) == record["sha256"],
+            "ArtifactChangedAfterLedgerVerification")
+    return parse_json(raw.decode("utf-8"))
+
+
 def verify_signature(folder: Path, public_key: Path, expected_key_digest: str) -> bytes:
     require(SHA256.fullmatch(expected_key_digest) is not None,
             "TrustedKeyFingerprintMissing")
@@ -166,7 +182,7 @@ def validate_observations(folder: Path, att: dict[str, Any],
                           expected_pairs: set[tuple[str, str]]) -> None:
     location = att.get("routeObservations")
     require(location in att["artifacts"], "RouteObservationArtifactMissing")
-    rows = document(folder / location)
+    rows = verified_artifact_document(folder, att, location)
     require(rows.get("sourceSha") == att["headSha"] and
             rows.get("executionClass") == "protected-real-sql13",
             "RouteObservationProvenance")
@@ -197,7 +213,7 @@ def validate_observations(folder: Path, att: dict[str, Any],
 def validate_oracle(folder: Path, att: dict[str, Any], scenarios: list[str]) -> None:
     location = att.get("sqlOracle")
     require(location in att["artifacts"], "SqlOracleArtifactMissing")
-    doc = document(folder / location)
+    doc = verified_artifact_document(folder, att, location)
     require(doc.get("sourceSha") == att["headSha"] and
             doc.get("principal") == "separate-read-only-sql" and
             doc.get("executionClass") == "protected-real-sql13",

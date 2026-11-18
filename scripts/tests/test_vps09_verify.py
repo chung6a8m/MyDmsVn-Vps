@@ -186,6 +186,23 @@ class Vps09EvidenceGateTests(unittest.TestCase):
             signed = verifier.verify_signature(self.packet, self.public, self.pub_hash)
         self.assertEqual(original, signed)
 
+    def test_hashed_oracle_swap_after_ledger_check_refused(self):
+        self.sign()
+        target = self.packet / "sql-oracle.json"
+        original_check = verifier.validate_artifacts
+
+        def swap_after_ledger(folder, attestation):
+            listed = original_check(folder, attestation)
+            altered = copy.deepcopy(self.oracle)
+            altered["checks"][0]["expected"]["value"] = "99.9999"
+            altered["checks"][0]["actual"]["value"] = "99.9999"
+            target.write_text(json.dumps(altered) + "\n", encoding="utf-8")
+            return listed
+
+        with patch.object(verifier, "validate_artifacts", side_effect=swap_after_ledger):
+            with self.assertRaisesRegex(ValueError, "ArtifactChangedAfterLedgerVerification"):
+                self.verify()
+
     def test_wrong_trusted_public_key_fingerprint(self):
         self.sign()
         with self.assertRaisesRegex(ValueError, "TrustedKeyFingerprintMismatch"):
