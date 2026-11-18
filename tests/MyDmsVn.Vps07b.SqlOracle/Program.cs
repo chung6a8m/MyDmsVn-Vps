@@ -127,12 +127,12 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                 _stage = "DbUp" + sourceVersion + "-source-bootstrap";
                 var db = sourceVersion == 13 ? baseline : await PrepareDbUp(sourceVersion);
                 _stage = "FM" + sourceVersion + "-to-13";
-                var beforeData = await SourceData(db);
+                var beforeData = await SourceData(db, sourceVersion);
                 var beforeHistory = await LegacyJournalPrefix(db, sourceVersion);
                 await RunCli(db, 13, expectSuccess: true);
                 await Check(db, 13);
                 Assert(beforeHistory == sourceVersion, "VPS07B_SOURCE_HISTORY_REWRITTEN");
-                Assert(await SourceData(db) == beforeData, "VPS07B_SOURCE_DATA_LOST");
+                Assert(await SourceData(db, sourceVersion) == beforeData, "VPS07B_SOURCE_DATA_LOST");
                 if (sourceVersion == 9)
                 {
                     var valuation = await Text(db, @"SELECT CONCAT(
@@ -184,7 +184,7 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                 _stage = "rollback-fault-" + fault.script + "-" + fault.batch;
                 var db = await PrepareDbUp(fault.source);
                 var beforeLegacy = await JournalSignatureOfLegacy(db);
-                var beforeRows = await SourceData(db);
+                var beforeRows = await SourceData(db, fault.source);
                 await RunCli(db, 13, expectSuccess: false,
                     ciFault: fault.script + ":" + fault.batch, expectedCode: "sql=51750");
                 Assert(await JournalSignatureOfLegacy(db) == beforeLegacy,
@@ -192,7 +192,7 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                 Assert(await Count(db,
                     "SELECT COUNT(*) FROM dbo.FluentMigratorVersionInfo;") == fault.source,
                     "VPS07B_ROLLBACK_ADVANCED_FM_VERSION");
-                Assert(await SourceData(db) == beforeRows,
+                Assert(await SourceData(db, fault.source) == beforeRows,
                     "VPS07B_ROLLBACK_CHANGED_BUSINESS_ROWS");
                 Assert(await Count(db, "SELECT CASE WHEN OBJECT_ID(N'dbo.WebOperationTerminalAudit',N'U') IS NULL THEN 0 ELSE 1 END;")
                     == 0, "VPS07B_ROLLBACK_LEFT_LATE_OBJECT");
@@ -424,9 +424,50 @@ SELECT WarehouseId,ProductId,CAST(4 AS decimal(18,4)),CAST(10 AS decimal(28,4))
 FROM dbo.Warehouses CROSS JOIN dbo.Products;
 INSERT dbo.StockValuationEntries(LedgerId,ValueChange)
 SELECT LedgerId,CAST(10 AS decimal(28,4)) FROM dbo.StockLedger;");
+
+        if (await Count(db, "SELECT CASE WHEN OBJECT_ID(N'dbo.WebAuthSessions',N'U') IS NULL THEN 0 ELSE 1 END;") == 1)
+            await Exec(db, @"
+DECLARE @actor int = (SELECT UserId FROM dbo.Users WHERE Username=N'ci-operator');
+DECLARE @sid uniqueidentifier=NEWID();
+DECLARE @start datetime2(7)=DATEADD(hour,-1,SYSUTCDATETIME());
+INSERT dbo.WebAuthSessions(SessionId,UserId,CreatedAtUtc,AbsoluteExpiresAtUtc,IdleExpiresAtUtc)
+VALUES(@sid,@actor,@start,DATEADD(day,20,@start),DATEADD(day,7,@start));
+INSERT dbo.WebRefreshTokens(TokenHash,SessionId,IssuedAtUtc,ExpiresAtUtc)
+VALUES(HASHBYTES('SHA2_256',CONVERT(varbinary(16),@sid)),@sid,
+ @start,DATEADD(day,10,@start));");
+
+        if (await Count(db, "SELECT CASE WHEN OBJECT_ID(N'dbo.WebOperationJournal',N'U') IS NULL THEN 0 ELSE 1 END;") == 1)
+            await Exec(db, @"
+DECLARE @epoch uniqueidentifier=(SELECT DeploymentEpoch FROM dbo.WebDeploymentState WHERE Id=1);
+DECLARE @actor int=(SELECT UserId FROM dbo.Users WHERE Username=N'ci-operator');
+DECLARE @op uniqueidentifier=NEWID(), @now datetime2(7)=SYSUTCDATETIME();
+INSERT dbo.WebOperationJournal(ActorUserId,OperationId,DeploymentEpoch,ContractVersion,
+ CodecVersion,OperationKind,RequestTargetId,RequestFingerprint,ResultDocumentId,
+ Disposition,ResultBytes,CreatedAtUtc,CompletedAtUtc,ResultExpiresAtUtc)
+VALUES(@actor,@op,@epoch,1,1,1,NULL,
+ HASHBYTES('SHA2_256',CONVERT(varbinary(16),@op)),1,
+ 'COMMITTED',0x01,@now,@now,DATEADD(day,7,@now));");
+
+        if (await Count(db, "SELECT CASE WHEN OBJECT_ID(N'dbo.WebOperationTerminalAudit',N'U') IS NULL THEN 0 ELSE 1 END;") == 1)
+            await Exec(db, @"
+DECLARE @epoch uniqueidentifier=(SELECT DeploymentEpoch FROM dbo.WebDeploymentState WHERE Id=1);
+DECLARE @actor int=(SELECT UserId FROM dbo.Users WHERE Username=N'ci-operator');
+DECLARE @op uniqueidentifier=NEWID(),@decision uniqueidentifier=NEWID();
+DECLARE @now datetime2(7)=SYSUTCDATETIME();
+DECLARE @fingerprint binary(32)=HASHBYTES('SHA2_256',CONVERT(varbinary(16),@op));
+INSERT dbo.WebOperationTerminalAudit(ActorUserId,OperationId,DeploymentEpoch,
+ OperationKind,RequestTargetId,RequestFingerprint,DecisionId,CaseId,ReasonCode,
+ EvidenceReference,OperatorDatabaseUser,OperatorLogin,DecidedAtUtc)
+VALUES(@actor,@op,@epoch,1,NULL,@fingerprint,@decision,
+ 'CI_CASE_07B','CI_NOT_EXECUTED','urn:ci:vps07b',USER_NAME(),ORIGINAL_LOGIN(),@now);
+INSERT dbo.WebOperationJournal(ActorUserId,OperationId,DeploymentEpoch,ContractVersion,
+ CodecVersion,OperationKind,RequestTargetId,RequestFingerprint,ResultDocumentId,
+ Disposition,ResultBytes,CreatedAtUtc,CompletedAtUtc,ResultExpiresAtUtc)
+VALUES(@actor,@op,@epoch,1,1,1,NULL,@fingerprint,NULL,'CANCELLED',
+ NULL,@now,@now,NULL);");
     }
 
-    private static async Task<string> SourceData(string db)
+    private static async Task<string> SourceData(string db, int preservedVersion = 9)
     {
         var data = await Text(db, @"SELECT CONCAT(
 (SELECT Code,Name,Unit FROM dbo.Products ORDER BY ProductId FOR JSON PATH),
@@ -436,8 +477,35 @@ SELECT LedgerId,CAST(10 AS decimal(28,4)) FROM dbo.StockLedger;");
 (SELECT CONVERT(varchar(32),Quantity) AS Qty FROM dbo.StockBalances ORDER BY WarehouseId,ProductId FOR JSON PATH),
 (SELECT ReceiptNo,Status FROM dbo.GoodsReceipts ORDER BY ReceiptId FOR JSON PATH),
 (SELECT Quantity,UnitCost FROM dbo.GoodsReceiptLines ORDER BY ReceiptLineId FOR JSON PATH),
-(SELECT DocumentType,QuantityChange FROM dbo.StockLedger ORDER BY LedgerId FOR JSON PATH)
+(SELECT DocumentType,QuantityChange FROM dbo.StockLedger ORDER BY LedgerId FOR JSON PATH),
+(SELECT UserId,Username,IsActive FROM dbo.Users ORDER BY UserId FOR JSON PATH),
+(SELECT RoleId,RoleName,IsActive FROM dbo.Roles ORDER BY RoleId FOR JSON PATH),
+(SELECT RoleId,PermissionKey FROM dbo.RolePermissions ORDER BY RolePermissionId FOR JSON PATH),
+(SELECT UserId,PermissionKey,Granted FROM dbo.UserPermissions ORDER BY UserPermissionId FOR JSON PATH)
 );");
+        if (preservedVersion >= 10)
+            data += await Text(db, @"SELECT CONCAT(
+ (SELECT WarehouseId,ProductId,InventoryValue FROM dbo.StockBalances
+   ORDER BY WarehouseId,ProductId FOR JSON PATH),
+ (SELECT LedgerId,ValueChange FROM dbo.StockValuationEntries
+   ORDER BY LedgerId FOR JSON PATH));");
+        if (preservedVersion >= 11)
+            data += await Text(db, @"SELECT CONCAT(
+ (SELECT SessionId,UserId,CreatedAtUtc,AbsoluteExpiresAtUtc,IdleExpiresAtUtc,RevokedAtUtc
+   FROM dbo.WebAuthSessions ORDER BY SessionId FOR JSON PATH),
+ (SELECT TokenHash,SessionId,IssuedAtUtc,ExpiresAtUtc,ConsumedAtUtc,ReplacedByTokenHash,RevokedAtUtc
+   FROM dbo.WebRefreshTokens ORDER BY TokenHash FOR JSON PATH));");
+        if (preservedVersion >= 12)
+            data += await Text(db, @"SELECT CONCAT(
+ (SELECT Id,DeploymentEpoch,RotatedAtUtc FROM dbo.WebDeploymentState ORDER BY Id FOR JSON PATH),
+ (SELECT ActorUserId,OperationId,DeploymentEpoch,OperationKind,RequestFingerprint,
+     Disposition,ResultBytes,ResultDocumentId,CreatedAtUtc,CompletedAtUtc,ResultExpiresAtUtc
+   FROM dbo.WebOperationJournal ORDER BY ActorUserId,OperationId FOR JSON PATH));");
+        if (preservedVersion >= 13)
+            data += await Text(db, @"SELECT
+ (SELECT ActorUserId,OperationId,DeploymentEpoch,DecisionId,CaseId,ReasonCode,
+   EvidenceReference,OperatorDatabaseUser,OperatorLogin,DecidedAtUtc
+  FROM dbo.WebOperationTerminalAudit ORDER BY ActorUserId,OperationId FOR JSON PATH);");
         return Hash(data);
     }
 
