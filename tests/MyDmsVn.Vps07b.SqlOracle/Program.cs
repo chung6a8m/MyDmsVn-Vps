@@ -285,17 +285,20 @@ INSERT dbo.StockLedger(WarehouseId,ProductId,DocumentType,DocumentId,DocumentLin
  QuantityChange,PostedAtUtc,PostedByUserId)
 VALUES(@warehouse,@product,'GoodsReceipt',@receipt,@receiptLine,
  CAST(4 AS decimal(18,4)),@posted,@actor);
-SET @ledger=SCOPE_IDENTITY();
-IF COL_LENGTH(N'dbo.StockBalances',N'InventoryValue') IS NULL
-    INSERT dbo.StockBalances(WarehouseId,ProductId,Quantity)
-    VALUES(@warehouse,@product,CAST(4 AS decimal(18,4)));
-ELSE
-BEGIN
-    INSERT dbo.StockBalances(WarehouseId,ProductId,Quantity,InventoryValue)
-    VALUES(@warehouse,@product,CAST(4 AS decimal(18,4)),CAST(10 AS decimal(28,4)));
-    INSERT dbo.StockValuationEntries(LedgerId,ValueChange)
-    VALUES(@ledger,CAST(10 AS decimal(28,4)));
-END;");
+SET @ledger=SCOPE_IDENTITY();");
+        // Use separate SQL commands. SQL Server binds column names in both IF
+        // branches at compile time: mentioning InventoryValue on schema9 fails
+        // with SQL207 even when the conditional branch would not be executed.
+        if (await Count(db, "SELECT CASE WHEN COL_LENGTH(N'dbo.StockBalances',N'InventoryValue') IS NULL THEN 0 ELSE 1 END;") == 0)
+            await Exec(db, @"INSERT dbo.StockBalances(WarehouseId,ProductId,Quantity)
+SELECT WarehouseId,ProductId,CAST(4 AS decimal(18,4))
+FROM dbo.Warehouses CROSS JOIN dbo.Products;");
+        else
+            await Exec(db, @"INSERT dbo.StockBalances(WarehouseId,ProductId,Quantity,InventoryValue)
+SELECT WarehouseId,ProductId,CAST(4 AS decimal(18,4)),CAST(10 AS decimal(28,4))
+FROM dbo.Warehouses CROSS JOIN dbo.Products;
+INSERT dbo.StockValuationEntries(LedgerId,ValueChange)
+SELECT LedgerId,CAST(10 AS decimal(28,4)) FROM dbo.StockLedger;");
     }
 
     private static async Task<string> SourceData(string db)
