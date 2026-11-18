@@ -44,6 +44,37 @@ jobs:
       - name: Execute synthetic signed-packet admission/refusal tests
         run: python3 -m unittest discover -s scripts/tests -p 'test_vps09_verify.py' -v
 
+  windows-source-policy:
+    name: Windows PowerShell syntax and fail-closed admission (NO SQL or GUI)
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.VPS09_SOURCE_SHA }}
+          persist-credentials: false
+      - name: Reject synthetic ref and malformed Windows operator runner
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD).Trim() -cne "$env:VPS09_SOURCE_SHA") { throw 'VPS09.SourceShaMismatch' }
+          $tokens = $null
+          $parseErrors = $null
+          $script = (Resolve-Path scripts/Invoke-Vps09WindowsAcceptance.ps1).Path
+          $null = [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$parseErrors)
+          if ($parseErrors.Count -ne 0) { throw "VPS09.WindowsScriptParser: $($parseErrors[0].Message)" }
+      - name: Explicitly unapproved execution must refuse before networking/SQL
+        shell: pwsh
+        run: |
+          $env:VPS09_ISOLATED_SQL_ADMISSION = ''
+          try {
+            ./scripts/Invoke-Vps09WindowsAcceptance.ps1 -ReviewedSha ('a' * 40) -Origin 'https://staging.invalid' -EvidenceDirectory "$env:RUNNER_TEMP/vps09-negative"
+            throw 'VPS09.MissingAdmissionAccepted'
+          }
+          catch {
+            if ($_.Exception.Message -notmatch 'VPS09.IsolatedSqlApprovalMissing') { throw }
+          }
+          Write-Host 'VPS09_WINDOWS_SOURCE_REFUSAL_PASS: syntax and missing approval'
+
   windows-live-bounded:
     name: Protected Windows x86 publish and remote HTTPS to SQL tests (NOT GUI closeout)
     if: >-
@@ -51,7 +82,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       inputs.approved_scope == 'reviewed-isolated-fullstack-only' &&
       inputs.reviewed_sha == github.sha
-    needs: source-evidence-policy
+    needs: [source-evidence-policy, windows-source-policy]
     runs-on: [self-hosted, windows, vps09-attended]
     environment: vps09-fullstack-nonproduction
     timeout-minutes: 60

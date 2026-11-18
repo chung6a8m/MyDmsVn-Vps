@@ -16,7 +16,7 @@ Issue [#12](https://github.com/chung6a8m/MyDmsVn-Vps/issues/12). Independent sou
 - `scripts/vps09_verify.py` signed ED25519 SHA/file/case/gate/Owner-assertion verifier; source inventory mode (no SQL execution).
 - `scripts/tests/test_vps09_verify.py`: synthetic positive and negative admission checks; results must come from new final-HEAD CI, not from this prose.
 - `scripts/Invoke-Vps09WindowsAcceptance.ps1`: opt-in Windows x86 net48 publish + bounded 4-case deployed remote HTTPS→SQL suite, with strict TLS, opt-in, SHA, SDK and TRX verification. **Does not run attended GUI**, nor attest the Linux process binary or 57/293 SQL live matrix.
-- `.github/workflows/vps-09-evidence.yml`: mandatory source gate on PR/main, protected manual Windows SQL and separately reviewed signed packet gate. No automatic staging or production rollout.
+- `.github/workflows/vps-09-evidence.yml`: mandatory Linux/Python and Windows PowerShell source-only gates on PR/main, protected manual Windows SQL and separately reviewed signed packet gate. No automatic staging or production rollout.
 
 ## Real acceptance ledger (must remain NOT VERIFIED until actual proof)
 

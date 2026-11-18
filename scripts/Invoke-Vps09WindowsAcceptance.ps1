@@ -46,8 +46,18 @@ foreach ($key in @(
     }
 }
 $sql = $env:VPS04A_SQL_ORACLE_CONNECTION_STRING
-if ($sql -notmatch '(?i)(^|;)\s*Encrypt\s*=\s*(True|Mandatory|Strict)\s*(;|$)' -or
-    $sql -match '(?i)(^|;)\s*TrustServerCertificate\s*=\s*True\s*(;|$)') {
+# Parse quoted values and alternate key spellings; do not accept contradictory
+# encrypt/trust overrides that a positive regex match can miss.
+$builder = [System.Data.Common.DbConnectionStringBuilder]::new()
+try { $builder.ConnectionString = $sql }
+catch { throw 'VPS09.SqlOracleConnectionStringMalformed' }
+$encKeys = @($builder.Keys | Where-Object { (([string]$_ -replace '[\s_]', '').ToLowerInvariant()) -eq 'encrypt' })
+$trustKeys = @($builder.Keys | Where-Object { (([string]$_ -replace '[\s_]', '').ToLowerInvariant()) -eq 'trustservercertificate' })
+if ($encKeys.Count -ne 1 -or $trustKeys.Count -ne 1 -or
+    [regex]::Matches($sql, '(?i)(?:^|;)\s*Encrypt\s*=').Count -ne 1 -or
+    [regex]::Matches($sql, '(?i)(?:^|;)\s*Trust\s*Server\s*Certificate\s*=').Count -ne 1 -or
+    ([string]$builder[$encKeys[0]]).ToLowerInvariant() -notin @('true', 'mandatory', 'strict') -or
+    ([string]$builder[$trustKeys[0]]).ToLowerInvariant() -ne 'false') {
     throw 'VPS09.SqlOracleTlsNotVerified'
 }
 $report = [IO.Path]::GetFullPath($EvidenceDirectory)
