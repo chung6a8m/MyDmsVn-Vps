@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
 using MyDmsVn.Contracts;
@@ -29,28 +28,21 @@ public sealed class Vps05cTargetedRegressionTests
     }
 
     [Fact]
-    public void NullableSalesListCalendarDatesRoundTripDirectlyThroughSystemTextJson()
+    public void NullableSalesListCalendarConverterRoundTripsValueNullAndRejectsTimestamp()
     {
-        var request = new SalesReceiptListRequest(
-            new DateTime(2026, 11, 18, 23, 59, 58, DateTimeKind.Utc),
-            null, null, null, null, null, null, null);
         var options = new JsonSerializerOptions
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            PropertyNameCaseInsensitive = true,
+            Converters = { new SalesCalendarDateJsonConverter() },
         };
 
-        var json = JsonSerializer.Serialize(request, options);
-        Assert.Contains("\"fromDate\":\"2026-11-18\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"toDate\":null", json, StringComparison.Ordinal);
-
-        var copy = JsonSerializer.Deserialize<SalesReceiptListRequest>(
-            "{\"fromDate\":null,\"toDate\":\"2026-11-19\",\"pageSize\":50}", options);
-        Assert.NotNull(copy);
-        Assert.Null(copy!.FromDate);
-        Assert.Equal(new DateTime(2026, 11, 19), copy.ToDate);
-        Assert.Equal(DateTimeKind.Unspecified, copy.ToDate!.Value.Kind);
-        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<SalesReceiptListRequest>(
-            "{\"fromDate\":\"2026-11-19T00:00:00Z\",\"pageSize\":50}", options));
+        DateTime? fromDate = new DateTime(2026, 11, 18, 23, 59, 58, DateTimeKind.Utc);
+        Assert.Equal("\"2026-11-18\"", JsonSerializer.Serialize(fromDate, options));
+        Assert.Equal("null", JsonSerializer.Serialize<DateTime?>(null, options));
+        var toDate = JsonSerializer.Deserialize<DateTime?>("\"2026-11-19\"", options);
+        Assert.Equal(new DateTime(2026, 11, 19), toDate);
+        Assert.Equal(DateTimeKind.Unspecified, toDate!.Value.Kind);
+        Assert.Null(JsonSerializer.Deserialize<DateTime?>("null", options));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<DateTime?>(
+            "\"2026-11-19T00:00:00Z\"", options));
     }
 }

@@ -123,6 +123,24 @@ jobs:
             throw "Smoke test results not fully passed: total=$($counts.total), passed=$($counts.passed), failed=$($counts.failed), notExecuted=$($counts.notExecuted)"
           }
           Write-Host "Test counts: total=$($counts.total), passed=$($counts.passed), executed=$($counts.executed), failed=$($counts.failed), notExecuted=$($counts.notExecuted)"
+      - name: Execute VPS-05C live net48 OWIN route oracle
+        if: matrix.id == 'legacy-http-host'
+        shell: pwsh
+        env:
+          TEST_PROJECT: ${{ matrix.project }}
+        run: |
+          $results = Join-Path $env:RUNNER_TEMP 'vps05c-net48-route-oracle'
+          dotnet test $env:TEST_PROJECT -c Release -f net48 --no-build --no-restore `
+            --filter FullyQualifiedName~Vps05cDesktopRouteNet48OracleTests `
+            --logger "trx;LogFileName=vps05c-net48-route-oracle.trx" --results-directory $results -v minimal
+          if ($LASTEXITCODE -ne 0) { throw 'VPS-05C live net48 OWIN route oracle failed' }
+          [xml]$trx = Get-Content -LiteralPath (Join-Path $results 'vps05c-net48-route-oracle.trx') -Raw
+          $counts = $trx.TestRun.ResultSummary.Counters
+          if ([int]$counts.total -ne 1 -or [int]$counts.executed -ne 1 -or
+              [int]$counts.passed -ne 1 -or [int]$counts.failed -ne 0 -or
+              [int]$counts.notExecuted -ne 0) {
+            throw "VPS-05C net48 route oracle count mismatch: $($counts.OuterXml)"
+          }
       - name: Preserve test evidence even on failure
         if: always()
         uses: actions/upload-artifact@v6

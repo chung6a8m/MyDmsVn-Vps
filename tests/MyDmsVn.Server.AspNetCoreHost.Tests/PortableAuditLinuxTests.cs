@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -109,11 +110,9 @@ public sealed class PortableAuditLinuxTests
             new DateTime(2026, 11, 18, 1, 2, 4, DateTimeKind.Utc),
             documentType: "WebAuthLogout", correlationId: "audit_second"), CancellationToken.None);
 
-        Assert.Equal(new[]
-        {
-            "{\"category\":\"WebAuthRefresh\",\"action\":\"Authentication\",\"outcome\":\"Denied\",\"userId\":null,\"correlationId\":null,\"utc\":\"2026-11-18T01:02:03.0000000Z\"}",
-            "{\"category\":\"WebAuthLogout\",\"action\":\"Authentication\",\"outcome\":\"Succeeded\",\"userId\":19,\"correlationId\":\"audit_second\",\"utc\":\"2026-11-18T01:02:04.0000000Z\"}",
-        }, File.ReadAllLines(destination.Path));
+        var expected = "{\"category\":\"WebAuthRefresh\",\"action\":\"Authentication\",\"outcome\":\"Denied\",\"userId\":null,\"correlationId\":null,\"utc\":\"2026-11-18T01:02:03.0000000Z\"}\n" +
+            "{\"category\":\"WebAuthLogout\",\"action\":\"Authentication\",\"outcome\":\"Succeeded\",\"userId\":19,\"correlationId\":\"audit_second\",\"utc\":\"2026-11-18T01:02:04.0000000Z\"}\n";
+        Assert.Equal(Encoding.UTF8.GetBytes(expected), File.ReadAllBytes(destination.Path));
     }
 
     [Fact]

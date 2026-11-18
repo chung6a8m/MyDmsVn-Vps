@@ -1,0 +1,1010 @@
+[
+  {
+    "CaseId": "VPS02-PRODUCT-LIST",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7Iml0ZW1zIjpbeyJpZCI6MSwiY29kZSI6IlAxIiwibmFtZSI6IlByb2R1Y3QiLCJ1bml0Ijoia2ciLCJpc0FjdGl2ZSI6dHJ1ZX1dLCJwYWdlTnVtYmVyIjoyLCJwYWdlU2l6ZSI6MjUsInRvdGFsQ291bnQiOjF9fQ=="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-LIST",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-LIST",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-LIST",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-GET",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlkIjoxLCJjb2RlIjoiUDEiLCJuYW1lIjoiUHJvZHVjdCIsInVuaXQiOiJrZyIsImlzQWN0aXZlIjp0cnVlfX0="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-GET",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-GET",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-GET",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-CREATE",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlkIjoxLCJjb2RlIjoiUDEiLCJuYW1lIjoiUHJvZHVjdCIsInVuaXQiOiJrZyIsImlzQWN0aXZlIjp0cnVlfX0="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-CREATE",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-CREATE",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoiY29kZSJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-CREATE",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-UPDATE",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlkIjoxLCJjb2RlIjoiUDEiLCJuYW1lIjoiUHJvZHVjdCIsInVuaXQiOiJrZyIsImlzQWN0aXZlIjp0cnVlfX0="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-UPDATE",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-UPDATE",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoiY29kZSJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-UPDATE",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-ACTIVE",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7fX0="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-ACTIVE",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-ACTIVE",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoiaXNBY3RpdmUifV0sImNvcnJlbGF0aW9uSWQiOiJ2cHMwNWNfbGl2ZV8yOCJ9fQ=="
+  },
+  {
+    "CaseId": "VPS02-PRODUCT-ACTIVE",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-LIST",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7Iml0ZW1zIjpbeyJpZCI6MSwiY29kZSI6IlcxIiwibmFtZSI6IldhcmVob3VzZSIsImlzQWN0aXZlIjp0cnVlfV0sInBhZ2VOdW1iZXIiOjIsInBhZ2VTaXplIjoyNSwidG90YWxDb3VudCI6MX19"
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-LIST",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-LIST",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-LIST",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-GET",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlkIjoxLCJjb2RlIjoiVzEiLCJuYW1lIjoiV2FyZWhvdXNlIiwiaXNBY3RpdmUiOnRydWV9fQ=="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-GET",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-GET",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-GET",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-CREATE",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlkIjoxLCJjb2RlIjoiVzEiLCJuYW1lIjoiV2FyZWhvdXNlIiwiaXNBY3RpdmUiOnRydWV9fQ=="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-CREATE",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-CREATE",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoiY29kZSJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-CREATE",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-UPDATE",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlkIjoxLCJjb2RlIjoiVzEiLCJuYW1lIjoiV2FyZWhvdXNlIiwiaXNBY3RpdmUiOnRydWV9fQ=="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-UPDATE",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-UPDATE",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoiY29kZSJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-UPDATE",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-ACTIVE",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7fX0="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-ACTIVE",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-ACTIVE",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoiaXNBY3RpdmUifV0sImNvcnJlbGF0aW9uSWQiOiJ2cHMwNWNfbGl2ZV8yOCJ9fQ=="
+  },
+  {
+    "CaseId": "VPS02-WAREHOUSE-ACTIVE",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-LIST",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7Iml0ZW1zIjpbeyJpZCI6MSwiY29kZSI6IkUxIiwibmFtZSI6IkVtcGxveWVlIiwidXNlcklkIjoxLCJpc0FjdGl2ZSI6dHJ1ZX1dLCJwYWdlTnVtYmVyIjoyLCJwYWdlU2l6ZSI6MjUsInRvdGFsQ291bnQiOjF9fQ=="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-LIST",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-LIST",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-LIST",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-GET",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlkIjoxLCJjb2RlIjoiRTEiLCJuYW1lIjoiRW1wbG95ZWUiLCJ1c2VySWQiOjEsImlzQWN0aXZlIjp0cnVlfX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-GET",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-GET",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-GET",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-CREATE",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlkIjoxLCJjb2RlIjoiRTEiLCJuYW1lIjoiRW1wbG95ZWUiLCJ1c2VySWQiOjEsImlzQWN0aXZlIjp0cnVlfX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-CREATE",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-CREATE",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoiY29kZSJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-CREATE",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-UPDATE",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlkIjoxLCJjb2RlIjoiRTEiLCJuYW1lIjoiRW1wbG95ZWUiLCJ1c2VySWQiOjEsImlzQWN0aXZlIjp0cnVlfX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-UPDATE",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-UPDATE",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoiY29kZSJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-UPDATE",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-ACTIVE",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7fX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-ACTIVE",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-ACTIVE",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoiaXNBY3RpdmUifV0sImNvcnJlbGF0aW9uSWQiOiJ2cHMwNWNfbGl2ZV8yOCJ9fQ=="
+  },
+  {
+    "CaseId": "VPS02-EMPLOYEE-ACTIVE",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-LIST",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7Iml0ZW1zIjpbeyJpZCI6MSwiY29kZSI6IkMxIiwibmFtZSI6IkN1c3RvbWVyIiwiaXNBY3RpdmUiOnRydWV9XSwicGFnZU51bWJlciI6MiwicGFnZVNpemUiOjI1LCJ0b3RhbENvdW50IjoxfX0="
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-LIST",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-LIST",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-LIST",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-GET",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlkIjoxLCJjb2RlIjoiQzEiLCJuYW1lIjoiQ3VzdG9tZXIiLCJpc0FjdGl2ZSI6dHJ1ZX19"
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-GET",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-GET",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-GET",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-CREATE",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlkIjoxLCJjb2RlIjoiQzEiLCJuYW1lIjoiQ3VzdG9tZXIiLCJpc0FjdGl2ZSI6dHJ1ZX19"
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-CREATE",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-CREATE",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoiY29kZSJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-CREATE",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-UPDATE",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlkIjoxLCJjb2RlIjoiQzEiLCJuYW1lIjoiQ3VzdG9tZXIiLCJpc0FjdGl2ZSI6dHJ1ZX19"
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-UPDATE",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-UPDATE",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoiY29kZSJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-UPDATE",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-ACTIVE",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7fX0="
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-ACTIVE",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-ACTIVE",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoiaXNBY3RpdmUifV0sImNvcnJlbGF0aW9uSWQiOiJ2cHMwNWNfbGl2ZV8yOCJ9fQ=="
+  },
+  {
+    "CaseId": "VPS02-CUSTOMER-ACTIVE",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-PERMISSION-CHECK",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7InBlcm1pc3Npb25LZXkiOiJDYXRhbG9nLlByb2R1Y3RzLlJlYWQiLCJpc0FsbG93ZWQiOnRydWV9fQ=="
+  },
+  {
+    "CaseId": "VPS02-PERMISSION-CHECK",
+    "Variant": "permission",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7InBlcm1pc3Npb25LZXkiOiJDYXRhbG9nLlByb2R1Y3RzLlJlYWQiLCJpc0FsbG93ZWQiOmZhbHNlfX0="
+  },
+  {
+    "CaseId": "VPS02-PERMISSION-CHECK",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-PERMISSION-CHECK",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-PERMISSION-CATALOG",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImFwcGxpY2F0aW9uVmVyc2lvbiI6IjEiLCJjYXRhbG9nRGlnZXN0IjoiZGlnZXN0IiwiaXRlbXMiOltdfX0="
+  },
+  {
+    "CaseId": "VPS02-PERMISSION-CATALOG",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-PERMISSION-CATALOG",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-PERMISSION-CATALOG",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-USERS",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjpbXX0="
+  },
+  {
+    "CaseId": "VPS02-USERS",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-USERS",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-USERS",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-ROLES",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjpbXX0="
+  },
+  {
+    "CaseId": "VPS02-ROLES",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-ROLES",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-ROLES",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-SECURITY-MUTATION",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImFzc2lnbm1lbnRSZXZpc2lvbiI6MSwiY2hhbmdlZCI6dHJ1ZX19"
+  },
+  {
+    "CaseId": "VPS02-SECURITY-MUTATION",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-SECURITY-MUTATION",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoidGFyZ2V0In1dLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-SECURITY-MUTATION",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-IMPORT-PREVIEW",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImltcG9ydCI6eyJzY2hlbWFWZXJzaW9uIjoxLCJ0YXJnZXRUeXBlIjoxLCJ0YXJnZXRJZCI6MywiZW50cmllcyI6W119LCJ0YXJnZXROYW1lIjoiUm9sZSIsInRhcmdldFJldmlzaW9uIjowLCJjYXRhbG9nRGlnZXN0IjoiZGlnZXN0IiwiYWRkaXRpb25zIjpbXX19"
+  },
+  {
+    "CaseId": "VPS02-IMPORT-PREVIEW",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-IMPORT-PREVIEW",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoidGFyZ2V0VHlwZSJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-IMPORT-PREVIEW",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-IMPORT-APPLY",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7InRhcmdldFJldmlzaW9uIjoyLCJhZGRlZENvdW50IjoxLCJjaGFuZ2VkIjp0cnVlfX0="
+  },
+  {
+    "CaseId": "VPS02-IMPORT-APPLY",
+    "Variant": "permission",
+    "Status": 403,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiQXV0aC5Gb3JiaWRkZW4iLCJtZXNzYWdlIjoiVGhlIG9wZXJhdGlvbiBpcyBub3QgcGVybWl0dGVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-IMPORT-APPLY",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiIsImZpZWxkIjoidGFyZ2V0VHlwZSJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-IMPORT-APPLY",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  },
+  {
+    "CaseId": "VPS02-FOUNDATION",
+    "Variant": "success",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlzUmVhZHkiOnRydWUsInJ1bnRpbWUiOiJuZXQ0OCJ9fQ=="
+  },
+  {
+    "CaseId": "VPS02-FOUNDATION",
+    "Variant": "permission",
+    "Status": 200,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJkYXRhIjp7ImlzUmVhZHkiOnRydWUsInJ1bnRpbWUiOiJuZXQ0OCJ9fQ=="
+  },
+  {
+    "CaseId": "VPS02-FOUNDATION",
+    "Variant": "invalid",
+    "Status": 400,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiVmFsaWRhdGlvbkVycm9yIiwibWVzc2FnZSI6IlRoZSByZXF1ZXN0IGlzIGludmFsaWQuIiwiZGV0YWlscyI6W3siY29kZSI6IlZhbGlkYXRpb24uSW52YWxpZFZhbHVlIiwibWVzc2FnZSI6IlRoZSBmaWVsZCBvciByZXF1ZXN0IGZvcm1hdCBpcyBpbnZhbGlkLiJ9XSwiY29ycmVsYXRpb25JZCI6InZwczA1Y19saXZlXzI4In19"
+  },
+  {
+    "CaseId": "VPS02-FOUNDATION",
+    "Variant": "failure",
+    "Status": 500,
+    "ContentType": "application/json; charset=utf-8",
+    "CorrelationId": "vps05c_live_28",
+    "CacheControl": "no-store",
+    "BodyBase64": "eyJlcnJvciI6eyJjb2RlIjoiSW50ZXJuYWxFcnJvciIsIm1lc3NhZ2UiOiJBbiB1bmV4cGVjdGVkIGVycm9yIG9jY3VycmVkLiIsImRldGFpbHMiOltdLCJjb3JyZWxhdGlvbklkIjoidnBzMDVjX2xpdmVfMjgifX0="
+  }
+]

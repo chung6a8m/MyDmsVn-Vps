@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -22,16 +23,14 @@ using MyDmsVn.Server.Application.Identity;
 using MyDmsVn.Server.Application.Security;
 using MyDmsVn.Server.HttpHost;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
 using Xunit;
 
 namespace MyDmsVn.Server.AspNetCoreHost.Tests;
 
 /// <summary>
 /// Live native-router/controller differential for the 28 VPS-02 signatures that
-/// were ROUTE_ONLY before VPS-05C. Expected bodies are produced by the isolated
-/// legacy net48 Json.NET settings; the request is admitted by the native JWT and
-/// session boundary before ASP.NET Core dispatches the real controller action.
+/// were ROUTE_ONLY before VPS-05C. Each live Kestrel response is compared byte for
+/// byte with the frozen observations produced by the live net48 OWIN host.
 /// </summary>
 public sealed class Vps05cDesktopRouteLiveParityTests
 {
@@ -74,16 +73,18 @@ public sealed class Vps05cDesktopRouteLiveParityTests
     public async Task PreviouslyRouteOnlySignatureDispatchesAndMatchesLegacyJsonNet(
         string caseId, string method, string path, string? body, string expectedKind)
     {
+        _ = expectedKind;
         await using var fixture = await DesktopLiveFixture.StartAsync();
         using var response = await fixture.SendAsync(method, path, body);
-        var actual = await response.Content.ReadAsStringAsync();
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        var actual = Encoding.UTF8.GetString(bytes);
 
         Assert.True(response.StatusCode == HttpStatusCode.OK,
             caseId + " expected 200, actual " + (int)response.StatusCode + ": " + actual +
             Environment.NewLine + fixture.LastException);
-        Assert.Equal(Correlation, response.Headers.GetValues("X-Correlation-ID").Single());
-        Assert.True(response.Headers.CacheControl!.NoStore, caseId);
-        Assert.Equal(LegacyExpected(expectedKind), actual);
+        AssertMatchesNet48(caseId, "success", response, bytes);
+        Assert.Equal(ExpectedPermissionChecks(caseId), fixture.PermissionChecks);
+        AssertBoundRequest(caseId, fixture.LastRequest);
     }
 
     [Theory]
@@ -94,21 +95,25 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         _ = expectedKind;
         await using var fixture = await DesktopLiveFixture.StartAsync(denyPermissions: true);
         using var response = await fixture.SendAsync(method, path, body);
-        var actual = await response.Content.ReadAsStringAsync();
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        var actual = Encoding.UTF8.GetString(bytes);
 
         if (expectedKind is "permission-check" or "foundation")
         {
             // These authenticated introspection routes intentionally have no
             // separate object permission; their handlers report the decision.
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            Assert.Equal(1, fixture.HandlerCalls);
+            AssertMatchesNet48(caseId, "permission", response, bytes);
+            Assert.Equal(ExpectedPermissionChecks(caseId), fixture.PermissionChecks);
             return;
         }
 
         Assert.True(response.StatusCode == HttpStatusCode.Forbidden,
             caseId + " expected 403, actual " + (int)response.StatusCode + ": " + actual);
         AssertEnvelope(response, actual, "Auth.Forbidden");
+        AssertMatchesNet48(caseId, "permission", response, bytes);
         Assert.Equal(0, fixture.HandlerCalls);
+        Assert.Equal(ExpectedPermissionChecks(caseId), fixture.PermissionChecks);
     }
 
     [Theory]
@@ -120,11 +125,13 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         await using var fixture = await DesktopLiveFixture.StartAsync();
         var invalidPath = method == "GET" ? path + (path.Contains('?') ? "&" : "?") + "unknown=1" : path;
         using var response = await fixture.SendAsync(method, invalidPath, method == "GET" ? body : "{}");
-        var actual = await response.Content.ReadAsStringAsync();
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        var actual = Encoding.UTF8.GetString(bytes);
 
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest,
             caseId + " expected 400, actual " + (int)response.StatusCode + ": " + actual);
         AssertEnvelope(response, actual, "ValidationError");
+        AssertMatchesNet48(caseId, "invalid", response, bytes);
         Assert.Equal(0, fixture.HandlerCalls);
     }
 
@@ -134,15 +141,19 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         string caseId, string method, string path, string? body, string expectedKind)
     {
         _ = expectedKind;
-        await using var fixture = await DesktopLiveFixture.StartAsync(throwHandlers: true);
+        await using var fixture = await DesktopLiveFixture.StartAsync(
+            throwHandlers: caseId != "VPS02-PERMISSION-CHECK",
+            throwPermissionStore: caseId == "VPS02-PERMISSION-CHECK");
         using var response = await fixture.SendAsync(method, path, body);
-        var actual = await response.Content.ReadAsStringAsync();
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        var actual = Encoding.UTF8.GetString(bytes);
 
         Assert.True(response.StatusCode == HttpStatusCode.InternalServerError,
             caseId + " expected 500, actual " + (int)response.StatusCode + ": " + actual);
         AssertEnvelope(response, actual, "InternalError");
+        AssertMatchesNet48(caseId, "failure", response, bytes);
         Assert.DoesNotContain("secret-database", actual, StringComparison.Ordinal);
-        Assert.Equal(1, fixture.HandlerCalls);
+        Assert.Equal(caseId == "VPS02-PERMISSION-CHECK" ? 0 : 1, fixture.HandlerCalls);
     }
 
     private static void AssertEnvelope(HttpResponseMessage response, string body, string code)
@@ -155,38 +166,124 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             json.RootElement.GetProperty("error").GetProperty("correlationId").GetString());
     }
 
-    private static string LegacyExpected(string kind)
+    private static void AssertMatchesNet48(string caseId, string variant,
+        HttpResponseMessage response, byte[] body)
     {
-        object value = kind switch
-        {
-            "product-list" => new PagedResult<ProductDto>(new[] { Product() }, 2, 25, 1),
-            "product" => Product(),
-            "warehouse-list" => new PagedResult<WarehouseDto>(new[] { Warehouse() }, 2, 25, 1),
-            "warehouse" => Warehouse(),
-            "employee-list" => new PagedResult<EmployeeDto>(new[] { Employee() }, 2, 25, 1),
-            "employee" => Employee(),
-            "customer-list" => new PagedResult<CustomerDto>(new[] { Customer() }, 2, 25, 1),
-            "customer" => Customer(),
-            "unit" => UnitResponse.Value,
-            "permission-check" => new PermissionDecisionDto("Catalog.Products.Read", true),
-            "permission-catalog" => new PermissionCatalogDto("1", "digest", Array.Empty<PermissionCatalogItemDto>()),
-            "users" => Array.Empty<SecurityUserDto>(),
-            "roles" => Array.Empty<SecurityRoleDto>(),
-            "mutation" => new SecurityAdministrationResultDto(9007199254740993L, true),
-            "import-preview" => ImportPreview(),
-            "import-apply" => new PermissionAssignmentImportResultDto(9007199254740993L, 1, true),
-            "foundation" => new FoundationStatus(true, "net48"),
-            _ => throw new InvalidOperationException("Unknown expected kind: " + kind),
-        };
-        return JsonConvert.SerializeObject(new { data = value }, new JsonSerializerSettings
-        {
-            ContractResolver = new CamelCasePropertyNamesContractResolver(),
-            DateFormatHandling = DateFormatHandling.IsoDateFormat,
-            DateTimeZoneHandling = DateTimeZoneHandling.Utc,
-            NullValueHandling = NullValueHandling.Ignore,
-            Formatting = Formatting.None,
-        });
+        var expected = Net48Observations.Value.Single(x => x.CaseId == caseId && x.Variant == variant);
+        Assert.Equal(expected.Status, (int)response.StatusCode);
+        Assert.Equal(expected.ContentType, response.Content.Headers.ContentType?.ToString() ?? string.Empty);
+        Assert.Equal(expected.CorrelationId,
+            response.Headers.TryGetValues("X-Correlation-ID", out var correlations)
+                ? correlations.Single() : string.Empty);
+        Assert.Equal(expected.CacheControl,
+            response.Headers.TryGetValues("Cache-Control", out var cache)
+                ? string.Join(",", cache) : string.Empty);
+        Assert.Equal(expected.BodyBase64, Convert.ToBase64String(body));
     }
+
+    private static readonly Lazy<IReadOnlyList<Net48Observation>> Net48Observations = new(() =>
+    {
+        var path = Path.Combine(LocateRoot(), "docs", "contracts", "vps-05c-desktop-route-net48.json");
+        return JsonConvert.DeserializeObject<List<Net48Observation>>(File.ReadAllText(path))
+            ?? throw new InvalidOperationException("The net48 route oracle is empty.");
+    });
+
+    private sealed class Net48Observation
+    {
+        public string CaseId { get; set; } = string.Empty;
+        public string Variant { get; set; } = string.Empty;
+        public int Status { get; set; }
+        public string ContentType { get; set; } = string.Empty;
+        public string CorrelationId { get; set; } = string.Empty;
+        public string CacheControl { get; set; } = string.Empty;
+        public string BodyBase64 { get; set; } = string.Empty;
+    }
+
+    private static string LocateRoot()
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current != null)
+        {
+            if (Directory.Exists(Path.Combine(current.FullName, "docs", "contracts"))) return current.FullName;
+            current = current.Parent;
+        }
+        throw new InvalidOperationException("Repository root not found.");
+    }
+
+    private static IReadOnlyList<string> ExpectedPermissionChecks(string caseId)
+    {
+        if (caseId == "VPS02-PERMISSION-CHECK") return new[] { PermissionKeys.CatalogProductsRead };
+        if (caseId == "VPS02-FOUNDATION") return Array.Empty<string>();
+        if (caseId.StartsWith("VPS02-PRODUCT-", StringComparison.Ordinal))
+            return new[] { caseId.EndsWith("LIST", StringComparison.Ordinal) || caseId.EndsWith("GET", StringComparison.Ordinal)
+                ? PermissionKeys.CatalogProductsRead : PermissionKeys.CatalogProductsWrite };
+        if (caseId.StartsWith("VPS02-WAREHOUSE-", StringComparison.Ordinal))
+            return new[] { caseId.EndsWith("LIST", StringComparison.Ordinal) || caseId.EndsWith("GET", StringComparison.Ordinal)
+                ? PermissionKeys.CatalogWarehousesRead : PermissionKeys.CatalogWarehousesWrite };
+        if (caseId.StartsWith("VPS02-EMPLOYEE-", StringComparison.Ordinal))
+            return new[] { caseId.EndsWith("LIST", StringComparison.Ordinal) || caseId.EndsWith("GET", StringComparison.Ordinal)
+                ? PermissionKeys.CatalogEmployeesRead : PermissionKeys.CatalogEmployeesWrite };
+        if (caseId.StartsWith("VPS02-CUSTOMER-", StringComparison.Ordinal))
+            return new[] { caseId.EndsWith("LIST", StringComparison.Ordinal) || caseId.EndsWith("GET", StringComparison.Ordinal)
+                ? PermissionKeys.CatalogCustomersRead : PermissionKeys.CatalogCustomersWrite };
+        if (caseId == "VPS02-PERMISSION-CATALOG") return new[] { PermissionKeys.SecurityPermissionsRead };
+        if (caseId == "VPS02-USERS") return new[] { PermissionKeys.SecurityUsersManage };
+        return new[] { PermissionKeys.SecurityRolesManage };
+    }
+
+    private static void AssertBoundRequest(string caseId, object? request)
+    {
+        if (caseId == "VPS02-PERMISSION-CHECK")
+        {
+            Assert.Null(request); // Real CheckPermissionQueryHandler, not the capture fake.
+            return;
+        }
+        Assert.NotNull(request);
+        switch (caseId)
+        {
+            case "VPS02-PRODUCT-LIST": AssertList(Assert.IsType<ListProductsQuery>(request).Request); break;
+            case "VPS02-WAREHOUSE-LIST": AssertList(Assert.IsType<ListWarehousesQuery>(request).Request); break;
+            case "VPS02-EMPLOYEE-LIST": AssertList(Assert.IsType<ListEmployeesQuery>(request).Request); break;
+            case "VPS02-CUSTOMER-LIST": AssertList(Assert.IsType<ListCustomersQuery>(request).Request); break;
+            case "VPS02-PRODUCT-GET": Assert.Equal(1, Assert.IsType<GetProductByIdQuery>(request).Id); break;
+            case "VPS02-WAREHOUSE-GET": Assert.Equal(1, Assert.IsType<GetWarehouseByIdQuery>(request).Id); break;
+            case "VPS02-EMPLOYEE-GET": Assert.Equal(1, Assert.IsType<GetEmployeeByIdQuery>(request).Id); break;
+            case "VPS02-CUSTOMER-GET": Assert.Equal(1, Assert.IsType<GetCustomerByIdQuery>(request).Id); break;
+            case "VPS02-PRODUCT-CREATE": AssertProduct(Assert.IsType<CreateProductCommand>(request).Request); break;
+            case "VPS02-PRODUCT-UPDATE": var pu = Assert.IsType<UpdateProductCommand>(request); Assert.Equal(1, pu.Id); AssertProduct(pu.Request); break;
+            case "VPS02-WAREHOUSE-CREATE": AssertWarehouse(Assert.IsType<CreateWarehouseCommand>(request).Request); break;
+            case "VPS02-WAREHOUSE-UPDATE": var wu = Assert.IsType<UpdateWarehouseCommand>(request); Assert.Equal(1, wu.Id); AssertWarehouse(wu.Request); break;
+            case "VPS02-EMPLOYEE-CREATE": AssertEmployee(Assert.IsType<CreateEmployeeCommand>(request).Request); break;
+            case "VPS02-EMPLOYEE-UPDATE": var eu = Assert.IsType<UpdateEmployeeCommand>(request); Assert.Equal(1, eu.Id); AssertEmployee(eu.Request); break;
+            case "VPS02-CUSTOMER-CREATE": AssertCustomer(Assert.IsType<CreateCustomerCommand>(request).Request); break;
+            case "VPS02-CUSTOMER-UPDATE": var cu = Assert.IsType<UpdateCustomerCommand>(request); Assert.Equal(1, cu.Id); AssertCustomer(cu.Request); break;
+            case "VPS02-PRODUCT-ACTIVE": AssertActive(Assert.IsType<SetProductActiveCommand>(request).Id, Assert.IsType<SetProductActiveCommand>(request).IsActive); break;
+            case "VPS02-WAREHOUSE-ACTIVE": AssertActive(Assert.IsType<SetWarehouseActiveCommand>(request).Id, Assert.IsType<SetWarehouseActiveCommand>(request).IsActive); break;
+            case "VPS02-EMPLOYEE-ACTIVE": AssertActive(Assert.IsType<SetEmployeeActiveCommand>(request).Id, Assert.IsType<SetEmployeeActiveCommand>(request).IsActive); break;
+            case "VPS02-CUSTOMER-ACTIVE": AssertActive(Assert.IsType<SetCustomerActiveCommand>(request).Id, Assert.IsType<SetCustomerActiveCommand>(request).IsActive); break;
+            case "VPS02-SECURITY-MUTATION": var mutation = Assert.IsType<MutateSecurityAdministrationCommand>(request); Assert.Equal(9007199254740993L, mutation.ExpectedRevision); Assert.Equal(1, mutation.TargetId); break;
+            case "VPS02-IMPORT-PREVIEW": var preview = Assert.IsType<PreviewPermissionAssignmentImportQuery>(request); Assert.Equal(3, preview.TargetId); Assert.Contains("schemaVersion", preview.Json); break;
+            case "VPS02-IMPORT-APPLY": var apply = Assert.IsType<ApplyPermissionAssignmentImportCommand>(request); Assert.Equal(9007199254740993L, apply.ExpectedTargetRevision); Assert.Equal("digest", apply.ExpectedCatalogDigest); break;
+            case "VPS02-FOUNDATION": Assert.Equal("Desktop", Assert.IsType<GetFoundationStatusQuery>(request).ClientName); break;
+            case "VPS02-PERMISSION-CATALOG": Assert.IsType<ListPermissionCatalogQuery>(request); break;
+            case "VPS02-USERS": Assert.IsType<ListSecurityUsersQuery>(request); break;
+            case "VPS02-ROLES": Assert.IsType<ListSecurityRolesQuery>(request); break;
+            default: throw new InvalidOperationException("Missing binding assertion: " + caseId);
+        }
+    }
+
+    private static void AssertList(CatalogListRequest request)
+    { Assert.Equal("abc", request.Search); Assert.Equal(2, request.PageNumber); Assert.Equal(25, request.PageSize); Assert.True(request.IncludeInactive); }
+    private static void AssertProduct(SaveProductRequest request)
+    { Assert.Equal("P1", request.Code); Assert.Equal("Product", request.Name); Assert.Equal("kg", request.Unit); }
+    private static void AssertWarehouse(SaveWarehouseRequest request)
+    { Assert.Equal("W1", request.Code); Assert.Equal("Warehouse", request.Name); Assert.Null(request.Address); }
+    private static void AssertEmployee(SaveEmployeeRequest request)
+    { Assert.Equal("E1", request.Code); Assert.Equal("Employee", request.Name); Assert.Null(request.Phone); Assert.Equal(1, request.UserId); }
+    private static void AssertCustomer(SaveCustomerRequest request)
+    { Assert.Equal("C1", request.Code); Assert.Equal("Customer", request.Name); Assert.Null(request.Address); Assert.Null(request.Phone); Assert.Null(request.TaxCode); }
+    private static void AssertActive(int id, bool active)
+    { Assert.Equal(1, id); Assert.False(active); }
 
     private static ProductDto Product() => new(1, "P1", "Product", "kg", true);
     private static WarehouseDto Warehouse() => new(1, "W1", "Warehouse", null, true);
@@ -212,9 +309,12 @@ public sealed class Vps05cDesktopRouteLiveParityTests
 
         public Exception? LastException => _errors.LastOrDefault();
         public int HandlerCalls => _state.Calls.Count;
+        public object? LastRequest => _state.Calls.LastOrDefault();
+        public IReadOnlyList<string> PermissionChecks => _state.PermissionChecks;
 
         public static async Task<DesktopLiveFixture> StartAsync(
-            bool denyPermissions = false, bool throwHandlers = false)
+            bool denyPermissions = false, bool throwHandlers = false,
+            bool throwPermissionStore = false)
         {
             var clock = new FrozenClock();
             var options = new WebHostOptions("https://localhost", "https://localhost", "vps05c-live",
@@ -226,6 +326,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             {
                 DenyPermissions = denyPermissions,
                 ThrowHandlers = throwHandlers,
+                ThrowPermissionStore = throwPermissionStore,
             };
             var errors = new ConcurrentQueue<Exception>();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Production" });
@@ -312,13 +413,12 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             Add<CreateCustomerCommand, CustomerDto>(services, state, _ => Customer());
             Add<UpdateCustomerCommand, CustomerDto>(services, state, _ => Customer());
             Add<SetCustomerActiveCommand, UnitResponse>(services, state, _ => UnitResponse.Value);
-            Add<CheckPermissionQuery, PermissionDecisionDto>(services, state, r => new(r.PermissionKey, true));
             Add<ListPermissionCatalogQuery, PermissionCatalogDto>(services, state, _ => new("1", "digest", Array.Empty<PermissionCatalogItemDto>()));
             Add<ListSecurityUsersQuery, IReadOnlyList<SecurityUserDto>>(services, state, _ => Array.Empty<SecurityUserDto>());
             Add<ListSecurityRolesQuery, IReadOnlyList<SecurityRoleDto>>(services, state, _ => Array.Empty<SecurityRoleDto>());
-            Add<MutateSecurityAdministrationCommand, SecurityAdministrationResultDto>(services, state, _ => new(9007199254740993L, true));
+            Add<MutateSecurityAdministrationCommand, SecurityAdministrationResultDto>(services, state, _ => new(1, true));
             Add<PreviewPermissionAssignmentImportQuery, PermissionAssignmentImportPreviewDto>(services, state, _ => ImportPreview());
-            Add<ApplyPermissionAssignmentImportCommand, PermissionAssignmentImportResultDto>(services, state, _ => new(9007199254740993L, 1, true));
+            Add<ApplyPermissionAssignmentImportCommand, PermissionAssignmentImportResultDto>(services, state, _ => new(2, 1, true));
             Add<GetFoundationStatusQuery, FoundationStatus>(services, state, _ => new(true, "net48"));
         }
 
@@ -352,15 +452,23 @@ public sealed class Vps05cDesktopRouteLiveParityTests
     private sealed class DesktopState : IWebAuthSessionStore, IPermissionStore
     {
         public List<object> Calls { get; } = new();
+        public List<string> PermissionChecks { get; } = new();
         public bool DenyPermissions { get; init; }
         public bool ThrowHandlers { get; init; }
+        public bool ThrowPermissionStore { get; init; }
         public Task<CurrentUser?> GetActiveUserAsync(Guid sessionId, int userId, CancellationToken token) =>
             Task.FromResult<CurrentUser?>(sessionId == Guid.Parse("11111111-1111-4111-8111-111111111111") && userId == 1
                 ? CurrentUser.Authenticated(1, "alice", "Alice", true) : null);
         public Task<WebAuthSessionToken?> IssueAsync(int userId, CancellationToken token) => throw new NotSupportedException();
         public Task<WebAuthSessionToken?> RotateAsync(string refreshToken, CancellationToken token) => throw new NotSupportedException();
         public Task RevokeAsync(string refreshToken, CancellationToken token) => throw new NotSupportedException();
-        public Task<PermissionSnapshot> GetSnapshotAsync(int userId, string permissionKey, CancellationToken token) =>
-            Task.FromResult(new PermissionSnapshot(!DenyPermissions, false));
+        public Task<PermissionSnapshot> GetSnapshotAsync(int userId, string permissionKey, CancellationToken token)
+        {
+            if (ThrowPermissionStore)
+                throw new InvalidOperationException("secret-database-connection");
+            Assert.Equal(1, userId);
+            PermissionChecks.Add(permissionKey);
+            return Task.FromResult(new PermissionSnapshot(!DenyPermissions, false));
+        }
     }
 }

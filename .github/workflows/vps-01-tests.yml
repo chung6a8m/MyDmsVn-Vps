@@ -93,3 +93,20 @@ jobs:
             throw "Discovered $($cases.Count) tests, below VPS-01 floor $env:MINIMUM_TESTS for $env:PROJECT"
           }
           Write-Host "Discovered test cases=$($cases.Count); minimum=$env:MINIMUM_TESTS (NOT an SQL/GUI execution PASS)"
+      - name: Execute SQL-free VPS-05C net48 permission-import JSON oracle
+        if: matrix.id == 'sql-security'
+        shell: pwsh
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: |
+          $results = Join-Path $env:RUNNER_TEMP 'vps05c-net48-json-oracle'
+          dotnet test $env:PROJECT -c Release -f net48 --no-build --no-restore `
+            --filter FullyQualifiedName~Vps05cPermissionImportJsonParityTests `
+            --logger "trx;LogFileName=vps05c-net48-json-oracle.trx" --results-directory $results -v minimal
+          if ($LASTEXITCODE -ne 0) { throw "VPS-05C net48 JSON oracle failed" }
+          [xml]$trx = Get-Content -LiteralPath (Join-Path $results 'vps05c-net48-json-oracle.trx') -Raw
+          $counters = $trx.TestRun.ResultSummary.Counters
+          if ([int]$counters.total -ne 1 -or [int]$counters.passed -ne 1 -or
+              [int]$counters.failed -ne 0 -or [int]$counters.notExecuted -ne 0) {
+            throw "VPS-05C net48 JSON oracle count mismatch: $($counters.OuterXml)"
+          }
