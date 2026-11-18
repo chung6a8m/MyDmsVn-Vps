@@ -1,0 +1,139 @@
+name: VPS-07B — Journal Bridge gated build and SQL acceptance
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps07b-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runner-compile:
+    name: SDK10.0.404 / explicit FluentMigrator Runner / source integrity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.404'
+      - name: Verify immutable SQL source and imported checksum
+        run: python3 scripts/verify-vps-07a.py
+      - name: Compile standalone net10 Runner and verify dependency tree
+        working-directory: src/MyDmsVn.Server.FluentMigrator.Cli
+        run: |
+          set -euo pipefail
+          test "$(dotnet --version)" = "10.0.404"
+          dotnet restore MyDmsVn.Server.FluentMigrator.Cli.csproj -p:Vps04Server=true --locked-mode -v minimal
+          dotnet build MyDmsVn.Server.FluentMigrator.Cli.csproj -c Release -f net10.0 -p:Vps04Server=true --no-restore -warnaserror -v minimal
+          test -f packages.lock.json || { echo "::error::Missing NuGet lock file"; exit 1; }
+      - name: Preserve committed deterministic NuGet lock
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps07b-runner-lock
+          path: src/MyDmsVn.Server.FluentMigrator.Cli/packages.lock.json
+          if-no-files-found: warn
+
+  ephemeral-sql:
+    name: Real SQL2022 TLS / independent fresh and DbUp9-13 source oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      DOTNET_NOLOGO: '1'
+      VPS07B_CI_EPHEMERAL_SQL: approved-container-only
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.404'
+      - name: Prepare isolated ephemeral SQL2022 TLS with verified localhost cert
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$(mktemp -d)"
+          sa="CiVps07B@9$(openssl rand -hex 24)"
+          echo "::add-mask::$sa"
+          openssl req -x509 -newkey rsa:3072 -nodes -keyout "$work/sql.key" -out "$work/sql.crt" \
+            -days 1 -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" >/dev/null 2>&1
+          sudo cp "$work/sql.crt" /usr/local/share/ca-certificates/vps07b-sql.crt
+          sudo update-ca-certificates >/dev/null 2>&1
+          cat > "$work/mssql.conf" <<'CONF'
+          [network]
+          tlscert = /tmp/vps07b-sql.pem
+          tlskey = /tmp/vps07b-sql.key
+          tlsprotocols = 1.2
+          forceencryption = 1
+          CONF
+          sudo chown 10001:0 "$work/sql.key"
+          sudo chmod 0400 "$work/sql.key"
+          chmod 0444 "$work/sql.crt" "$work/mssql.conf"
+          {
+            echo "VPS07B_CI_TLS_DIR=$work"
+            echo "MSSQL_SA_PASSWORD=$sa"
+            echo "VPS07B_CI_SQL_ADMIN_CONNECTION_STRING=Server=localhost,1433;Initial Catalog=master;User ID=sa;Password=$sa;Encrypt=True;TrustServerCertificate=False;Connection Timeout=6;Pooling=False"
+            echo "VPS07B_CLI_DLL=$GITHUB_WORKSPACE/src/MyDmsVn.Server.FluentMigrator.Cli/bin/Release/net10.0/MyDmsVn.Server.FluentMigrator.Cli.dll"
+          } >> "$GITHUB_ENV"
+      - name: Start private throwaway SQL2022 with no persistent volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name vps07b-ci-sql --hostname vps07b-ci-sql \
+            --pull=always -e ACCEPT_EULA=Y -e MSSQL_PID=Developer -e MSSQL_SA_PASSWORD \
+            -p 127.0.0.1:1433:1433 \
+            -v "$VPS07B_CI_TLS_DIR/mssql.conf:/var/opt/mssql/mssql.conf:ro" \
+            -v "$VPS07B_CI_TLS_DIR/sql.crt:/tmp/vps07b-sql.pem:ro" \
+            -v "$VPS07B_CI_TLS_DIR/sql.key:/tmp/vps07b-sql.key:ro" \
+            mcr.microsoft.com/mssql/server:2022-latest >/dev/null
+          test "$(docker inspect -f '{{.State.Running}}' vps07b-ci-sql)" = "true"
+          docker exec -u 10001 vps07b-ci-sql test -r /tmp/vps07b-sql.key
+      - name: Strict locked restore and compile write-capable FluentMigrator CLI
+        working-directory: src/MyDmsVn.Server.FluentMigrator.Cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(dotnet --version)" = "10.0.404"
+          dotnet restore MyDmsVn.Server.FluentMigrator.Cli.csproj -p:Vps04Server=true --locked-mode -v minimal
+          dotnet build MyDmsVn.Server.FluentMigrator.Cli.csproj -c Release -f net10.0 -p:Vps04Server=true --no-restore -warnaserror -v minimal
+      - name: Compile independently embedded original DbUp SQL Oracle
+        working-directory: tests/MyDmsVn.Vps07b.SqlOracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore MyDmsVn.Vps07b.SqlOracle.csproj --locked-mode -v minimal
+          dotnet build MyDmsVn.Vps07b.SqlOracle.csproj -c Release -f net10.0 --no-restore -warnaserror -v minimal
+      - name: Execute all real SQL paths with explicit discovered/executed/failed/skipped
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet tests/MyDmsVn.Vps07b.SqlOracle/bin/Release/net10.0/MyDmsVn.Vps07b.SqlOracle.dll all | tee vps07b-sql-cases.txt
+          grep -Fq 'VPS07B_REAL_SQL_PASS: discovered=58; executed=58; passed=58; failed=0; skipped=0;' vps07b-sql-cases.txt
+          test "$(grep -c '^VPS07B_CASE_PASS:' vps07b-sql-cases.txt)" = 58
+      - name: Preserve exact real SQL case manifest
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps07b-real-sql-cases
+          path: vps07b-sql-cases.txt
+          if-no-files-found: warn
+      - name: Preserve independently generated Oracle NuGet lock for review
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps07b-sql-oracle-lock
+          path: tests/MyDmsVn.Vps07b.SqlOracle/packages.lock.json
+          if-no-files-found: warn
+      - name: Remove disposable SQL container, no persisted data
+        if: always()
+        shell: bash
+        run: docker rm -f vps07b-ci-sql >/dev/null 2>&1 || true

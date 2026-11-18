@@ -147,7 +147,7 @@ def validate_links(path: str, tracked: set[str], errors: list[str]) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default="foundation-report.json")
-    parser.add_argument("--expected-projects", type=int, default=54)
+    parser.add_argument("--expected-projects", type=int, default=56)
     args = parser.parse_args()
     errors: list[str] = []
     index, blob_shas, index_errors = tracked_files()
@@ -182,6 +182,14 @@ def main() -> int:
     fm_contract = "tests/MyDmsVn.Vps07a.ContractTests/MyDmsVn.Vps07a.ContractTests.csproj"
     if fm_library not in projects or fm_contract not in projects:
         errors.append("Missing exact VPS-07A library/contract project pair")
+    fm_cli = "src/MyDmsVn.Server.FluentMigrator.Cli/MyDmsVn.Server.FluentMigrator.Cli.csproj"
+    if fm_cli not in projects:
+        errors.append("Missing approved VPS-07B standalone migration CLI project")
+    elif "net10.0" not in (ROOT / fm_cli).read_text(encoding="utf-8-sig"):
+        errors.append("VPS-07B CLI must target net10.0")
+    fm_oracle = "tests/MyDmsVn.Vps07b.SqlOracle/MyDmsVn.Vps07b.SqlOracle.csproj"
+    if fm_oracle not in projects:
+        errors.append("Missing VPS-07B independent SQL oracle executable")
     if len(projects) != args.expected_projects:
         errors.append(
             f"Project count drift: expected {args.expected_projects}; "

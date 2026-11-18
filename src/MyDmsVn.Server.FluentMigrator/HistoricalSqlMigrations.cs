@@ -13,8 +13,59 @@ public abstract class ImmutableSqlMigration : Migration
 
     public sealed override void Up()
     {
+        if (!Vps07bExecutionScope.IsActive)
+            throw new InvalidOperationException("VPS07B_UnguardedMigrationRefused");
+
+        // Script 010 requires session context for a genuinely empty database.
+        // Existing schema9..12 upgrades never receive this exemption.
+        if (ScriptName == "010_DirectSalesAndValuation.sql" && Vps07bExecutionScope.IsFresh)
+            Execute.Sql("EXEC sys.sp_set_session_context @key=N'MyDmsVn.FreshInstall', @value=1, @read_only=1;");
+
+        // DbUp's GO splitter discards delimiter-adjacent leading/trailing CR/LF.
+        // Preserve this exact stored-module definition behavior: untrimmed FM
+        // batches append CRLF to CREATE PROCEDURE/TRIGGER definitions, changing
+        // native schema fingerprints despite immutable original SQL source.
+        // SQL Server stores CREATE PROCEDURE/TRIGGER exactly, including leading
+        // blank lines. Strip only newline characters at batch boundaries,
+        // never SQL tokens or the immutable imported source bytes.
+        var version = Vps07bExecutionScope.VersionOf(ScriptName);
+        var batchIndex = 0;
         foreach (var sqlBatch in ImmutableSqlScript.Batches(ScriptName))
-            Execute.Sql(sqlBatch);
+        {
+            Execute.Sql(sqlBatch.Trim('\r', '\n'));
+            batchIndex++;
+            // Only the separately admitted disposable CI runner can request
+            // this deterministic failure. The original SQL blob is immutable.
+            // FM must roll back this batch, its predecessors and both journals.
+            if (Vps07bExecutionScope.ShouldInjectFault(version, batchIndex))
+                Execute.Sql("THROW 51750, 'VPS07B isolated rollback oracle.', 1;");
+            if (Vps07bExecutionScope.ShouldSuspendForKill(version, batchIndex))
+                Execute.Sql("WAITFOR DELAY '00:00:20'; THROW 51751, 'VPS07B CI process-loss sentinel.', 1;");
+        }
+
+        // Both journals and the original business SQL are in one migration
+        // transaction. VersionInfo is appended by the runner after Up().
+        Execute.WithConnection((connection, transaction) =>
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = @"
+IF (SELECT COUNT_BIG(*) FROM dbo.SchemaVersions) <> @Previous
+    THROW 51711, 'VPS07B journal prefix changed.', 1;
+IF EXISTS (SELECT 1 FROM dbo.SchemaVersions WHERE ScriptName=@Name)
+    THROW 51712, 'VPS07B replay refused.', 1;
+INSERT dbo.SchemaVersions(ScriptName,Applied) VALUES(@Name,GETDATE());";
+            var prior = command.CreateParameter();
+            prior.ParameterName = "@Previous";
+            prior.Value = version - 1;
+            command.Parameters.Add(prior);
+            var name = command.CreateParameter();
+            name.ParameterName = "@Name";
+            name.Value = "MyDmsVn.Server.DbMigrator.Scripts." + ScriptName;
+            command.Parameters.Add(name);
+            if (command.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("VPS07B journal append failed.");
+        });
     }
 
     public sealed override void Down()
