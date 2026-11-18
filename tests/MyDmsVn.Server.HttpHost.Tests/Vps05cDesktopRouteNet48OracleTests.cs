@@ -164,6 +164,7 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-LOGIN"), "invalid"));
         observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-LOGIN"), "failure"));
         observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-REFRESH"), "unauthenticated"));
+        observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-REFRESH"), "invalid"));
         observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-REFRESH"), "failure"));
         observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-LOGOUT"), "invalid"));
         observations.Add(await CaptureControl(ControlCases.Single(x => x.Id == "VPS01-AUTH-LOGOUT"), "failure"));
@@ -177,9 +178,9 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         foreach (var variant in new[] { "success", "permission", "invalid", "failure", "unauthenticated" })
             observations.Add(await CaptureLegacyData(testCase, variant));
 
-        Assert.Equal(263, observations.Count);
+        Assert.Equal(279, observations.Count);
         Assert.Equal(57, observations.Select(x => x.CaseId).Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(263, observations.Select(x => x.CaseId + "\n" + x.Variant)
+        Assert.Equal(279, observations.Select(x => x.CaseId + "\n" + x.Variant)
             .Distinct(StringComparer.Ordinal).Count());
 
         var actual = JsonConvert.SerializeObject(observations, Formatting.Indented);
@@ -304,6 +305,17 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         using (var context = await probe.Get("resend-context", request =>
             request.Headers.Add("X-Correlation-ID", Correlation)))
             result.Add(await Observe("VPS01-RESEND-CONTEXT", "enabled", context));
+        using (var anonymousContext = await probe.Get("resend-context", request =>
+            request.Headers.Add("X-Correlation-ID", Correlation), authenticated: false))
+            result.Add(await Observe("VPS01-RESEND-CONTEXT", "unauthenticated", anonymousContext));
+        using (var invalidContext = await probe.Get("resend-context?unknown=1", request =>
+            request.Headers.Add("X-Correlation-ID", Correlation)))
+            result.Add(await Observe("VPS01-RESEND-CONTEXT", "invalid", invalidContext));
+        probe.FailContextRead = true;
+        using (var failedContext = await probe.Get("resend-context", request =>
+            request.Headers.Add("X-Correlation-ID", Correlation)))
+            result.Add(await Observe("VPS01-RESEND-CONTEXT", "failure", failedContext));
+        probe.FailContextRead = false;
         using (var receipt = await probe.Get(Web6ResendEligibilityEndpointTests.Operation.ToString("D") +
             "/resend-receipt", request =>
             {
@@ -311,10 +323,50 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
                 request.Headers.Add("X-Correlation-ID", Correlation);
             }))
             result.Add(await Observe("VPS01-RESEND-RECEIPT", "enabled", receipt));
+        using (var anonymousReceipt = await probe.Get(Web6ResendEligibilityEndpointTests.Operation.ToString("D") +
+            "/resend-receipt", request =>
+            {
+                Web6ResendEligibilityEndpointTests.Probe.IdentityHeaders(request);
+                request.Headers.Add("X-Correlation-ID", Correlation);
+            }, authenticated: false))
+            result.Add(await Observe("VPS01-RESEND-RECEIPT", "unauthenticated", anonymousReceipt));
+        using (var invalidReceipt = await probe.Get(Web6ResendEligibilityEndpointTests.Operation.ToString("D") +
+            "/resend-receipt?unknown=1", request =>
+            {
+                Web6ResendEligibilityEndpointTests.Probe.IdentityHeaders(request);
+                request.Headers.Add("X-Correlation-ID", Correlation);
+            }))
+            result.Add(await Observe("VPS01-RESEND-RECEIPT", "invalid", invalidReceipt));
+        probe.FailAuthorizeReceipt = true;
+        using (var failedReceipt = await probe.Get(Web6ResendEligibilityEndpointTests.Operation.ToString("D") +
+            "/resend-receipt", request =>
+            {
+                Web6ResendEligibilityEndpointTests.Probe.IdentityHeaders(request);
+                request.Headers.Add("X-Correlation-ID", Correlation);
+            }))
+            result.Add(await Observe("VPS01-RESEND-RECEIPT", "failure", failedReceipt));
+        probe.FailAuthorizeReceipt = false;
+        probe.Deny = true;
+        using (var deniedReceipt = await probe.Get(Web6ResendEligibilityEndpointTests.Operation.ToString("D") +
+            "/resend-receipt", request =>
+            {
+                Web6ResendEligibilityEndpointTests.Probe.IdentityHeaders(request);
+                request.Headers.Add("X-Correlation-ID", Correlation);
+            }))
+            result.Add(await Observe("VPS01-RESEND-RECEIPT", "permission", deniedReceipt));
+        probe.Deny = false;
         var compact = await probe.Receipt();
         using (var eligibility = await probe.Eligibility(compact, request =>
             request.Headers.Add("X-Correlation-ID", Correlation)))
             result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "enabled", eligibility));
+        using (var anonymousEligibility = await probe.Get(Web6ResendEligibilityEndpointTests.Operation.ToString("D") +
+            "/resend-eligibility", request =>
+            {
+                Web6ResendEligibilityEndpointTests.Probe.IdentityHeaders(request);
+                request.Headers.Add("X-MyDmsVn-Resend-Receipt", compact);
+                request.Headers.Add("X-Correlation-ID", Correlation);
+            }, authenticated: false))
+            result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "unauthenticated", anonymousEligibility));
         using (var invalid = await probe.Eligibility("not-a-receipt", request =>
             request.Headers.Add("X-Correlation-ID", Correlation)))
             result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "invalid", invalid));
@@ -322,6 +374,20 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         using (var failure = await probe.Eligibility(compact, request =>
             request.Headers.Add("X-Correlation-ID", Correlation)))
             result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "failure", failure));
+        probe.FailEligibilityRead = false;
+        probe.Deny = true;
+        using (var deniedEligibility = await probe.Eligibility(compact, request =>
+            request.Headers.Add("X-Correlation-ID", Correlation)))
+            result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "permission", deniedEligibility));
+        probe.Deny = false;
+        probe.Resolution = Web6ResendEligibilityEndpointTests.Resolution("RESULT_EXPIRED");
+        using (var deniedDecision = await probe.Eligibility(compact, request =>
+            request.Headers.Add("X-Correlation-ID", Correlation)))
+            result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "deny-decision", deniedDecision));
+        probe.Resolution = Web6ResendEligibilityEndpointTests.Resolution("INDETERMINATE");
+        using (var indeterminate = await probe.Eligibility(compact, request =>
+            request.Headers.Add("X-Correlation-ID", Correlation)))
+            result.Add(await Observe("VPS01-RESEND-ELIGIBILITY", "indeterminate", indeterminate));
         return result;
     }
 
@@ -336,11 +402,11 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         };
         var result = new List<Observation>();
         foreach (var testCase in cases)
-        foreach (var variant in new[] { "enabled", "invalid", "failure" })
+        foreach (var variant in new[] { "enabled", "invalid", "failure", "unauthenticated" })
         {
             using var probe = new OperationProbe { Throw = variant == "failure" };
             using var response = await probe.Get(testCase.Path + (variant == "invalid" ? "?unknown=1" : string.Empty),
-                testCase.Id.EndsWith("STATUS", StringComparison.Ordinal));
+                testCase.Id.EndsWith("STATUS", StringComparison.Ordinal), variant != "unauthenticated");
             result.Add(await Observe(testCase.Id, variant, response));
         }
         return result;
@@ -357,15 +423,15 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
         internal bool Throw;
         internal OperationProbe() => _host = new AuthFixture(
             services => services.AddSingleton<IUnitOfWorkFactory>(this), web4Enabled: true, web5Enabled: true);
-        internal async Task<HttpResponseMessage> Get(string path, bool status)
+        internal async Task<HttpResponseMessage> Get(string path, bool status, bool authenticated)
         {
-            if (_token == null)
+            if (authenticated && _token == null)
             {
                 using var login = await _host.Login();
                 _token = (string)JObject.Parse(await login.Content.ReadAsStringAsync())["data"]!["accessToken"]!;
             }
             using var request = new HttpRequestMessage(HttpMethod.Get, AuthFixture.Origin + path);
-            request.Headers.Add("Authorization", "Bearer " + _token);
+            if (authenticated) request.Headers.Add("Authorization", "Bearer " + _token);
             request.Headers.Add("X-Correlation-ID", Correlation);
             if (status)
             {
@@ -375,9 +441,14 @@ public sealed class Vps05cDesktopRouteNet48OracleTests
             return await _host.Server.HttpClient.SendAsync(request);
         }
         private static byte[] FingerprintBytes() => Enumerable.Range(0, 32).Select(x => (byte)x).ToArray();
-        private static WebOperationStatus Status() => new(Operation, Epoch, WebOperationKind.SalesCreate,
-            null, FingerprintBytes(), null, new DateTime(2026, 10, 31, 9, 0, 0, DateTimeKind.Utc),
-            "RESULT_EXPIRED", null);
+        private static WebOperationStatus Status()
+        {
+            var detail = WireCorpus.Dto<MyDmsVn.Contracts.SalesReceiptDto>("sales-create-response.json");
+            var bytes = new WebOperationResultCodec().Encode(WebOperationKind.SalesCreate, detail);
+            return new WebOperationStatus(Operation, Epoch, WebOperationKind.SalesCreate,
+                null, FingerprintBytes(), detail.SaleId,
+                new DateTime(2026, 10, 31, 9, 0, 0, DateTimeKind.Utc), "COMMITTED", bytes);
+        }
         public IUnitOfWork Create() => new Uow(this);
         public Task<IUnitOfWork> CreateAsync(System.Threading.CancellationToken token) => Task.FromResult<IUnitOfWork>(Create());
         public Task<Guid> ReadContextAsync(int actorUserId, Guid sessionId, System.Threading.CancellationToken token) =>
