@@ -39,7 +39,7 @@ public sealed class Vps05JsonEgressParityTests
 
     private sealed class LegacyContractResolver : CamelCasePropertyNamesContractResolver
     {
-        protected override JsonProperty CreateProperty(MemberInfo member, MemberSerialization memberSerialization)
+        protected override Newtonsoft.Json.Serialization.JsonProperty CreateProperty(MemberInfo member, MemberSerialization memberSerialization)
         {
             var property = base.CreateProperty(member, memberSerialization);
             if ((property.PropertyType == typeof(DateTime) || property.PropertyType == typeof(DateTime?)) &&
