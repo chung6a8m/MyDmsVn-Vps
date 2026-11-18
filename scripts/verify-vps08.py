@@ -69,6 +69,90 @@ def check_configs() -> None:
     print("VPS08_SOURCE_POLICY_PASS: systemd, nginx, credential isolation, rollback syntax")
 
 
+def _extract_shell_function(source: str, name: str) -> str:
+    marker = f"{name}() {{\n"
+    require(source.count(marker) == 1, f"Expected one shell function: {name}")
+    tail = source.split(marker, 1)[1]
+    require("\n}\n" in tail, f"Unterminated shell function: {name}")
+    return marker + tail.split("\n}\n", 1)[0] + "\n}\n"
+
+
+def check_credential_loader() -> None:
+    # Execute the actual production credential function, not just bash -n.
+    source = (LINUX / "mydmsvn-vps-start").read_text()
+    function = _extract_shell_function(source, "load_credential")
+    shell = (
+        "set -euo pipefail\n"
+        "fail() { exit 17; }\n" + function +
+        "load_credential SQL_VALUE sql_connection_string\n"
+        "load_credential JWT_VALUE jwt_keys\n"
+        "load_credential PROXY_VALUE proxy_token\n"
+        '[[ "$SQL_VALUE" == "Server=sql.example;Encrypt=True;" ]]\n'
+        '[[ "$JWT_VALUE" == "example-jwt-value" ]]\n'
+        '[[ "$PROXY_VALUE" == "RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR" ]]\n'
+        'printf "VPS08_CREDENTIAL_READ_PASS\n"\n'
+    )
+    with tempfile.TemporaryDirectory(prefix="vps08-credentials-") as directory:
+        root = Path(directory)
+        (root / "sql_connection_string").write_text("Server=sql.example;Encrypt=True;\n")
+        (root / "jwt_keys").write_text("example-jwt-value")
+        proxy = root / "proxy_token"
+        proxy.write_text("R" * 32)
+        env = {"PATH": "/usr/bin:/bin", "CREDENTIALS_DIRECTORY": directory}
+
+        def execute() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(["bash", "-c", shell], env=env, text=True,
+                                  capture_output=True, check=False)
+
+        good = execute()
+        require(good.returncode == 0 and good.stdout == "VPS08_CREDENTIAL_READ_PASS\n",
+                "Valid independent systemd credential files were not loaded")
+        proxy.write_text("R" * 32 + "\nsecond-value")
+        invalid = execute()
+        require(invalid.returncode != 0 and not invalid.stdout,
+                "Embedded newline credential was accepted")
+        proxy.unlink()
+        outside = root / "outside"
+        outside.write_text("R" * 32)
+        proxy.symlink_to(outside)
+        linked = execute()
+        require(linked.returncode != 0 and not linked.stdout,
+                "Symlink credential was accepted")
+    print("VPS08_CREDENTIAL_LOADER_PASS: valid=3, injected-newline=denied, symlink=denied")
+
+
+def check_rollout_process_identity() -> None:
+    # Model a green public HTTPS probe while an *old* release still runs.
+    # The rollout must reject it, and also reject missing systemd MainPID.
+    source = (LINUX / "vps08-rollout").read_text()
+    function = _extract_shell_function(source, "probe")
+    shell = (
+        "set -euo pipefail\n"
+        "root=/opt/mydmsvn\n"
+        "service=mydmsvn-vps.service\n"
+        'systemctl() { case "$1" in is-active) return 0;; show) printf "%s\n" "$SIM_PID";; *) return 1;; esac; }\n'
+        'readlink() { printf "%s\n" "$SIM_CWD"; }\n'
+        'curl() { return 0; }\n'
+        'seq() { echo 1; }\n'
+        'sleep() { :; }\n' + function +
+        'probe "$SIM_EXPECTED"\n'
+    )
+    desired = "a" * 40
+    approved_cwd = "/opt/mydmsvn/releases/" + desired
+    for cwd, pid, allow in (
+        (approved_cwd, "4242", True),
+        ("/opt/mydmsvn/releases/" + "b" * 40, "4242", False),
+        (approved_cwd, "0", False),
+    ):
+        env = {"PATH": "/usr/bin:/bin", "SIM_CWD": cwd, "SIM_PID": pid,
+               "SIM_EXPECTED": "releases/" + desired}
+        run = subprocess.run(["bash", "-c", shell], env=env, text=True,
+                             capture_output=True, check=False)
+        require((run.returncode == 0) == allow,
+                "HTTPS/systemd probe was accepted without running expected release")
+    print("VPS08_ROLLOUT_PID_GATE_PASS: expected_release=pass, stale_release=deny, no_pid=deny")
+
+
 def check_artifact() -> None:
     spec = importlib.util.spec_from_file_location("vps08_manifest", SCRIPT)
     require(spec is not None and spec.loader is not None, "Manifest loader missing")
@@ -128,3 +212,5 @@ def check_artifact() -> None:
 if __name__ == "__main__":
     check_configs()
     check_artifact()
+    check_credential_loader()
+    check_rollout_process_identity()
