@@ -2,6 +2,8 @@
 
 **Scope:** frozen source route inventories `docs/contracts/vps-01-route-inventory.json` (29) and `docs/contracts/vps-02-route-additions.json` (28), **57 compiled signatures**. Updated for code checkpoint `62544462326e413474f7d402f851a4bcf8fd4c2f` (2026-11-17); exact final documentation HEAD CI evidence will be recorded in PR #9. This is a **coverage ledger**, not a claim of exhaustive live response parity. The canonical live roadmap status remains `docs/roadmap/README.md`.
 
+> **VPS-05C overlay (2026-11-18):** the `ROUTE_ONLY` and bounded labels below remain the historical PR #9 accounting. PR #17 code checkpoint `3be7fa0` adds a separate source-independent live net48 OWIN → frozen raw observation → live net10 Kestrel gate with **279 unique observations across all 57 route IDs**. See [VPS-05C evidence](vps-05c-json-runtime.md) and [`vps-05c-desktop-route-net48.json`](../contracts/vps-05c-desktop-route-net48.json). Do not use the old PR #9 labels to describe current VPS-05C coverage.
+
 ## Evidence definitions
 
 - `GROUP_EAD_SQL`: endpoint reached in new disposable Linux Kestrel HTTPS SQL-backed WEB2–WEB5 group tests; **expected/actual/diff are bounded selected response fields/statuses and independent SQL rows**, not every JSON property or every query/body variant. Source-frozen fixture files identify the expected contract for selected cases; dynamic synthetic SQL values are independent.
@@ -89,6 +91,6 @@
 
 ## Unverified acceptance boundaries
 
-Full response parity for all 57 routes requires dedicated positive and negative runtime cases for `ROUTE_ONLY`, remaining variants of `GROUP_EAD_SQL` and `PRIOR_LIVE_BOUNDED`, authorization/strict JSON/cursor/rowversion cases and independent JSON/wire reconciliation. WEB6 enabled mode **cannot** run under the current net10 host with protected audit paths: startup intentionally refuses Windows-only protected audit until VPS-04B portable durable audit is implemented and approved. This CI runner does not provision or approve the independently protected `vps04a-sql-nonproduction` GitHub Environment, nor provide Linux systemd/reverse-proxy/VPS production acceptance.
+The historical PR #9 matrix did not provide full response parity. VPS-05C now provides SQL-free live legacy-vs-new wire differentials for all 57 signatures plus the bounded disposable SQL suite. That does **not** provision or approve the independently protected `vps04a-sql-nonproduction` GitHub Environment and does not establish Linux systemd/reverse-proxy/VPS production acceptance; those remain VPS-08/09.
 
 **PR disposition:** DRAFT / NOT MERGE APPROVED; no Owner exception, staging approval or production readiness implied.
