@@ -102,8 +102,36 @@ WHERE is_ms_shipped=0 AND (parent_object_id=0 OR type IN (N'TR',N'TA'));") != 0 
         if (version != 0 && (version < _target || !hasFm))
             MyDmsVn.Server.DbMigrator.Schema9MaintenanceValidator.Validate(_lock);
 
+        // Historical 010 calculates COGS/valuation from existing stock. Run
+        // its *unchanged read-only pre-DDL prefix* BEFORE any FM bridge write.
+        // Otherwise a data-invalid exact9 database would acquire a new FM
+        // journal despite 010 refusing. Temp tables are connection-local.
+        if (version == 9 && _target >= 10)
+            VerifySchema9ValuationReadiness();
+
         _admitted = true;
         return new AdmittedSource(version, version == 0, hasFm);
+    }
+
+    private void VerifySchema9ValuationReadiness()
+    {
+        var firstBatch = ImmutableSqlScript.Batches("010_DirectSalesAndValuation.sql")[0];
+        const string firstPermanentDdl = "CREATE TABLE dbo.StockValuationEntries";
+        var boundary = firstBatch.IndexOf(firstPermanentDdl, StringComparison.Ordinal);
+        if (boundary < 0 || firstBatch.IndexOf(firstPermanentDdl, boundary + 1, StringComparison.Ordinal) >= 0)
+            throw new Vps07bRefusal("Migration.ValuationOracleSourceChanged");
+        var readOnlySql = firstBatch.Substring(0, boundary).TrimEnd();
+        if (readOnlySql.Length < 2000 || readOnlySql.Contains("CREATE TABLE dbo.", StringComparison.Ordinal))
+            throw new Vps07bRefusal("Migration.ValuationOracleUnsafe");
+        try
+        {
+            using var command = new SqlCommand(readOnlySql, _lock) { CommandTimeout = 180 };
+            command.ExecuteNonQuery();
+        }
+        catch (SqlException error) when (error.Number >= 51010 && error.Number <= 51016)
+        {
+            throw new Vps07bRefusal("Migration.DataReadinessRefused");
+        }
     }
 
     public void Bridge(AdmittedSource admitted)

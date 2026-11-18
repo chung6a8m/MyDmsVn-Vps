@@ -198,7 +198,7 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
                     == 0, "VPS07B_ROLLBACK_LEFT_LATE_OBJECT");
                 await RunCli(db, 13, expectSuccess: true);
                 await Check(db, 13);
-                Assert(await SourceData(db) == beforeRows, "VPS07B_RETRY_CHANGED_SOURCE_ROWS");
+                Assert(await SourceData(db, fault.source) == beforeRows, "VPS07B_RETRY_CHANGED_SOURCE_ROWS");
                 Assert(await DefinitionSignature(db) == baselineSignature,
                     "VPS07B_RETRY_DEFINITION_DRIFT");
                 Pass("batch fault " + fault.script + ":" + fault.batch + " rollback and same-source retry");
@@ -238,6 +238,22 @@ FROM sys.sql_modules WHERE object_id=OBJECT_ID(N'dbo.ReadSecurityPermissionImpor
             Assert(await SourceData(interrupted, 12) == interruptedData,
                 "VPS07B_PROCESS_LOSS_RETRY_CHANGED_SOURCE");
             Pass("kill dotnet worker during SQL WAITFOR transaction; rollback and retry");
+
+            _stage = "schema9-data-readiness-before-bridge";
+            var badStock = await PrepareDbUp(9);
+            await Exec(badStock, "UPDATE dbo.StockBalances SET Quantity=Quantity+1;");
+            var badLegacy = await JournalSignatureOfLegacy(badStock);
+            var badRows = await SourceData(badStock, 9);
+            await RunCli(badStock, 13, expectSuccess: false,
+                expectedCode: "Migration.DataReadinessRefused");
+            Assert(await JournalSignatureOfLegacy(badStock) == badLegacy,
+                "VPS07B_DATA_INVALID_CHANGED_HISTORY");
+            Assert(await SourceData(badStock, 9) == badRows,
+                "VPS07B_DATA_INVALID_MUTATED_ROWS");
+            Assert(await Count(badStock,
+                "SELECT CASE WHEN OBJECT_ID(N'dbo.FluentMigratorVersionInfo',N'U') IS NULL THEN 0 ELSE 1 END;") == 0,
+                "VPS07B_DATA_INVALID_BRIDGED_BEFORE_READINESS");
+            Pass("schema9 invalid stock/ledger source refused before FM journal creation");
 
             // A real SQL Server BACKUP ... WITH CHECKSUM, RESTORE VERIFYONLY,
             // RESTORE ... WITH REPLACE is rehearsed only on an owned disposable
