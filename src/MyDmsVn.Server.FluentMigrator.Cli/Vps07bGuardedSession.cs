@@ -103,7 +103,25 @@ WHERE is_ms_shipped=0 AND (parent_object_id=0 OR type IN (N'TR',N'TA'));") != 0 
         // writers may still be operating. This is the unchanged original
         // exact9/10/11 restricted-user, complete-drain, visibility validator.
         if (version != 0 && (version < _target || !hasFm))
-            MyDmsVn.Server.DbMigrator.Schema9MaintenanceValidator.Validate(_lock);
+        {
+            // A just-closed DbUp/SQL client session may still appear during
+            // the first DMV snapshot. The original full validator remains
+            // the *only* approval oracle; never bypass or alter its SQL.
+            // Keep our exclusive app lock and do not mutate any journal here.
+            for (var attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    MyDmsVn.Server.DbMigrator.Schema9MaintenanceValidator.Validate(_lock);
+                    break;
+                }
+                catch (MyDmsVn.Server.DbMigrator.DatabaseMigrationPreflightException ex)
+                    when (ex.Code == "Migration.WritersNotDrained" && attempt < 3)
+                {
+                    System.Threading.Thread.Sleep(200);
+                }
+            }
+        }
 
         // Historical 010 calculates COGS/valuation from existing stock. Run
         // its *unchanged read-only pre-DDL prefix* BEFORE any FM bridge write.
