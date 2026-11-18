@@ -10,7 +10,7 @@ project_docs = {path: ET.parse(path).getroot() for path in projects}
 helpers = [path for path, doc in project_docs.items()
            if any(node.text == "false" for node in doc.iter("IsTestProject"))]
 suites = [path for path in projects if path not in helpers]
-assert len(projects) == 20 and len(helpers) == 6 and len(suites) == 14, \
+assert len(projects) == 21 and len(helpers) == 7 and len(suites) == 14, \
     "Test project inventory drift (VPS-07A adds one non-xUnit net10 contract executable)"
 ci_bootstrap = root / "tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj"
 assert ci_bootstrap in helpers and ci_bootstrap not in suites, \
@@ -27,6 +27,8 @@ assert [n.text for n in project_docs[ci_bootstrap].iter("OutputType")] == ["Exe"
 assert "dbup-sqlserver" in {n.attrib["Include"] for n in project_docs[ci_bootstrap].iter("PackageReference")}
 fm_contract = root / "tests/MyDmsVn.Vps07a.ContractTests/MyDmsVn.Vps07a.ContractTests.csproj"
 assert fm_contract in helpers and fm_contract not in suites, "VPS-07A contract executable is not an xUnit suite"
+fm_oracle = root / "tests/MyDmsVn.Vps07b.SqlOracle/MyDmsVn.Vps07b.SqlOracle.csproj"
+assert fm_oracle in helpers, "VPS-07B oracle must be non-xUnit executable"
 assert [n.text for n in project_docs[fm_contract].iter("TargetFramework")] == ["net10.0"]
 assert [n.text for n in project_docs[fm_contract].iter("OutputType")] == ["Exe"]
 assert {n.attrib["Include"] for n in project_docs[fm_contract].iter("ProjectReference")} == {
@@ -92,7 +94,7 @@ for test_id, floor in expected_smoke_floors.items():
     assert smoke_matrix.count(row) == 1, f"Missing smoke floor {test_id}={floor}"
 assert smoke_matrix.count("minimum_tests:") == len(expected_smoke_floors), "Unexpected smoke floor inventory"
 
-print("VPS-01 static topology: PASS 13 legacy + 1 net10 executable xUnit v3 projects, 6 non-test helpers (including VPS-06A canary and VPS-07A contract); 29 routes; 178 fixtures; 4 smoke floors")
+print("VPS-01 static topology: PASS 13 legacy + 1 net10 executable xUnit v3 projects, 7 non-test helpers (including VPS-07B SQL oracle); 29 routes; 178 fixtures; 4 smoke floors")
 
 
 # VPS-02 retains the 29 legacy routes; additions and Desktop mappings are versioned independently.
