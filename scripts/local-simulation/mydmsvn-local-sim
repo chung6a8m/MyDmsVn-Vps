@@ -30,7 +30,7 @@ load_instance() {
   [[ "$INSTANCE_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]] || fail 'LocalSimulation.InstanceInvalid'
   [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'LocalSimulation.SourceShaInvalid'
   [[ "$PUBLIC_ORIGIN" == 'https://localhost:50443' ]] || fail 'LocalSimulation.OriginInvalid'
-  [[ "$SQL_SERVER" == 'host.docker.internal,11433' ]] || fail 'LocalSimulation.SqlServerInvalid'
+  [[ "$SQL_SERVER" == 'localhost,11433' ]] || fail 'LocalSimulation.SqlServerInvalid'
 }
 
 render() {
