@@ -25,7 +25,9 @@ class Vps09GuiChecklistTests(unittest.TestCase):
         self.assertEqual(9, receipt["executed"])
         self.assertEqual(9, receipt["passed"])
         self.assertEqual("STRUCTURE_COMPLETE_NOT_REVIEWED", receipt["overall"])
-        self.assertEqual("REQUIRED", receipt["attendedEvidenceReview"])
+        self.assertEqual("OWNER_SECOND_PASS_REQUIRED", receipt["attendedEvidenceReview"])
+        self.assertEqual("NO_INDEPENDENT_HUMAN_REVIEW", receipt["assurance"])
+        self.assertEqual(9, len(receipt["checkpoints"]))
 
     def test_missing_checkpoint_is_refused(self):
         document = self._document()
@@ -35,12 +37,14 @@ class Vps09GuiChecklistTests(unittest.TestCase):
         with self.assertRaisesRegex(ChecklistBlocked, "CheckpointCoverageGap"):
             validate(self.path)
 
-    def test_operator_cannot_review_own_attended_run(self):
+    def test_legacy_independent_reviewer_schema_is_refused(self):
         document = self._document()
-        document["reviewer"] = "OPERATOR01"
+        document["schemaVersion"] = 1
+        document["operator"] = "operator01"
+        document["reviewer"] = "reviewer02"
         self._write(document)
 
-        with self.assertRaisesRegex(ChecklistBlocked, "ReviewMustBeIndependent"):
+        with self.assertRaisesRegex(ChecklistBlocked, "ChecklistFieldsInvalid"):
             validate(self.path)
 
     def test_reused_checkpoint_evidence_is_refused(self):
@@ -53,11 +57,14 @@ class Vps09GuiChecklistTests(unittest.TestCase):
 
     def _document(self):
         return {
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "sourceSha": SHA,
             "desktopExecutableSha256": "f" * 64,
-            "operator": "operator01",
-            "reviewer": "reviewer02",
+            "firstPassRunnerSha256": "e" * 64,
+            "governanceMode": "single-owner-exception",
+            "decisionId": "OWN-VPS-04",
+            "assurance": "NO_INDEPENDENT_HUMAN_REVIEW",
+            "owner": "chung6a8m",
             "sessionType": "interactive",
             "checkpoints": [
                 {

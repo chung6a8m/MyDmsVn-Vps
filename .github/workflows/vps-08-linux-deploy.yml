@@ -122,10 +122,12 @@ jobs:
           if-no-files-found: warn
 
   protected-staging:
-    # Intentionally SKIPPED for PRs/push. Needs an independently reviewed
-    # GitHub Environment and a dedicated NONPRODUCTION self-hosted runner.
+    # Intentionally SKIPPED for PRs/push. OWN-VPS-04 requires exact-main
+    # admission, disabled admin bypass and a dedicated NONPRODUCTION runner.
     if: >-
       github.event_name == 'workflow_dispatch' &&
+      github.actor == 'chung6a8m' &&
+      github.triggering_actor == 'chung6a8m' &&
       github.ref == 'refs/heads/main' &&
       inputs.approved_scope == 'reviewed-isolated-sql13-only' &&
       inputs.reviewed_sha == github.sha
@@ -148,15 +150,18 @@ jobs:
           STAGING_MACHINE_SHA256: ${{ vars.VPS08_STAGING_MACHINE_SHA256 }}
           STAGING_HOST_ATTESTATION: ${{ secrets.VPS08_STAGING_HOST_ATTESTATION }}
           RECEIPT_STATE_PATH: ${{ vars.VPS08_RECEIPT_STATE_PATH }}
-          VPS08_OPERATOR: ${{ vars.VPS08_OPERATOR }}
+          VPS08_OWNER: ${{ vars.VPS08_OWNER }}
+          CLOSEOUT_CANDIDATE_SHA: ${{ vars.VPS09_CLOSEOUT_CANDIDATE_SHA }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_ACTOR" = chung6a8m && test "$GITHUB_TRIGGERING_ACTOR" = chung6a8m
+          test "$CLOSEOUT_CANDIDATE_SHA" = "$GITHUB_SHA"
           test "$RUNNER_OS" = Linux
           test -n "$STAGING_PROBE" && test -n "$STAGING_HOST_ATTESTATION"
-          test -n "$RECEIPT_STATE_PATH" && test -n "$VPS08_OPERATOR"
+          test -n "$RECEIPT_STATE_PATH" && test "$VPS08_OWNER" = chung6a8m
           test "$STAGING_HOST_ATTESTATION" = reviewed-isolated-sql13-only
-          # Pin to the independently reviewed machine; runner labels alone
+          # Pin to the Owner-reviewed machine; runner labels alone
           # are not sufficient proof that the host is approved staging.
           [[ "$STAGING_MACHINE_SHA256" =~ ^[0-9a-f]{64}$ ]]
           test -r /etc/machine-id
@@ -169,7 +174,7 @@ jobs:
           python3 scripts/vps09_linux_receipt.py init \
             --state "$RECEIPT_STATE_PATH" --source-sha "$GITHUB_SHA" \
             --machine-sha256 "$STAGING_MACHINE_SHA256" --artifact-sha256 "$artifact_sha" \
-            --operator "$VPS08_OPERATOR"
+            --owner "$VPS08_OWNER"
           echo "VPS08_RECEIPT_INITIALIZED: eight physical evidence events remain required"
       - name: Deploy exact reviewed SHA and prove verified TLS health
         env:

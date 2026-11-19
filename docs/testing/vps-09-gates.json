@@ -76,7 +76,7 @@
     },
     {
       "id": "VPS09-14",
-      "name": "Independent final SHA review CI and explicit Owner release decision",
+      "name": "OWN-VPS-04 delayed second-pass final SHA CI and explicit Owner release decision",
       "minimumExecuted": 11
     }
   ],

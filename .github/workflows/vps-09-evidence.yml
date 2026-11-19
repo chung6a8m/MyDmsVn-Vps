@@ -99,7 +99,7 @@ jobs:
           try {
             ./scripts/Invoke-Vps09IntegratedAcceptance.ps1 -Phase Prepare -ReviewedSha ('a' * 40) `
               -Origin 'https://staging.invalid' -EvidenceDirectory "$env:RUNNER_TEMP/vps09-integrated-negative" `
-              -Operator operator01 -Reviewer reviewer02 -Owner reviewer02 `
+              -Owner chung6a8m `
               -RoutePlanPath missing-routes.json -OraclePlanPath missing-oracles.json
             throw 'VPS09.MissingIntegratedAdmissionAccepted'
           }
@@ -112,6 +112,8 @@ jobs:
     name: Protected Windows x86 publish and remote HTTPS to SQL tests (NOT GUI closeout)
     if: >-
       github.event_name == 'workflow_dispatch' &&
+      github.actor == 'chung6a8m' &&
+      github.triggering_actor == 'chung6a8m' &&
       github.ref == 'refs/heads/main' &&
       inputs.approved_scope == 'reviewed-isolated-fullstack-only' &&
       inputs.acceptance_phase == 'bounded' &&
@@ -147,8 +149,13 @@ jobs:
             8.0.400
             10.0.404
       - name: Require exact reviewed main HEAD
+        env:
+          CLOSEOUT_CANDIDATE_SHA: ${{ vars.VPS09_CLOSEOUT_CANDIDATE_SHA }}
+          VPS09_OWNER: ${{ vars.VPS09_OWNER }}
         shell: pwsh
         run: |
+          if ($env:GITHUB_ACTOR -cne 'chung6a8m' -or $env:GITHUB_TRIGGERING_ACTOR -cne 'chung6a8m') { throw 'VPS09.OwnerDispatchRequired' }
+          if ($env:VPS09_OWNER -cne 'chung6a8m' -or $env:CLOSEOUT_CANDIDATE_SHA -cne '${{ github.sha }}') { throw 'VPS09.CandidateNotPinned' }
           if ((git rev-parse HEAD).Trim() -cne '${{ github.sha }}') {
             throw 'VPS09.NotReviewedMainHead'
           }
@@ -169,6 +176,8 @@ jobs:
     name: Prepare 293-route, 12-Oracle and attended GUI evidence (GUI remains pending)
     if: >-
       github.event_name == 'workflow_dispatch' &&
+      github.actor == 'chung6a8m' &&
+      github.triggering_actor == 'chung6a8m' &&
       github.ref == 'refs/heads/main' &&
       inputs.approved_scope == 'reviewed-isolated-fullstack-only' &&
       inputs.acceptance_phase == 'prepare' &&
@@ -192,9 +201,9 @@ jobs:
       VPS09_ROUTE_PLAN_SHA256: ${{ vars.VPS09_ROUTE_PLAN_SHA256 }}
       VPS09_ORACLE_PLAN_SHA256: ${{ vars.VPS09_ORACLE_PLAN_SHA256 }}
       VPS09_EVIDENCE_ROOT: ${{ vars.VPS09_EVIDENCE_ROOT }}
-      VPS09_OPERATOR: ${{ vars.VPS09_OPERATOR }}
-      VPS09_REVIEWER: ${{ vars.VPS09_REVIEWER }}
+      VPS09_FIRST_PASS_RUNNER_SHA256: ${{ vars.VPS09_FIRST_PASS_RUNNER_SHA256 }}
       VPS09_OWNER: ${{ vars.VPS09_OWNER }}
+      VPS09_CLOSEOUT_CANDIDATE_SHA: ${{ vars.VPS09_CLOSEOUT_CANDIDATE_SHA }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -208,11 +217,12 @@ jobs:
       - name: Execute protected prepare phase; GUI is explicitly NOT_RECORDED
         shell: pwsh
         run: |
+          if ($env:GITHUB_ACTOR -cne 'chung6a8m' -or $env:GITHUB_TRIGGERING_ACTOR -cne 'chung6a8m') { throw 'VPS09.OwnerDispatchRequired' }
+          if ($env:VPS09_CLOSEOUT_CANDIDATE_SHA -cne '${{ github.sha }}') { throw 'VPS09.CandidateNotPinned' }
           $evidence = Join-Path $env:VPS09_EVIDENCE_ROOT '${{ github.sha }}'
           ./scripts/Invoke-Vps09IntegratedAcceptance.ps1 -Phase Prepare `
             -ReviewedSha '${{ github.sha }}' -Origin $env:VPS09_PUBLIC_ORIGIN `
-            -EvidenceDirectory $evidence -Operator $env:VPS09_OPERATOR `
-            -Reviewer $env:VPS09_REVIEWER -Owner $env:VPS09_OWNER `
+            -EvidenceDirectory $evidence -Owner $env:VPS09_OWNER `
             -RoutePlanPath $env:VPS09_ROUTE_PLAN_PATH -OraclePlanPath $env:VPS09_ORACLE_PLAN_PATH
           python scripts/vps09_packet_builder.py --root $evidence --source-sha '${{ github.sha }}' `
             --artifact preflight-receipt.json --artifact route-observations.json `
@@ -230,6 +240,8 @@ jobs:
     name: Validate attended GUI, Linux receipt and cleanup (no release approval)
     if: >-
       github.event_name == 'workflow_dispatch' &&
+      github.actor == 'chung6a8m' &&
+      github.triggering_actor == 'chung6a8m' &&
       github.ref == 'refs/heads/main' &&
       inputs.approved_scope == 'reviewed-isolated-fullstack-only' &&
       inputs.acceptance_phase == 'finalize' &&
@@ -245,9 +257,9 @@ jobs:
       VPS09_EVIDENCE_ROOT: ${{ vars.VPS09_EVIDENCE_ROOT }}
       VPS09_GUI_CHECKLIST_PATH: ${{ vars.VPS09_GUI_CHECKLIST_PATH }}
       VPS09_LINUX_RECEIPT_PATH: ${{ vars.VPS09_LINUX_RECEIPT_PATH }}
-      VPS09_OPERATOR: ${{ vars.VPS09_OPERATOR }}
-      VPS09_REVIEWER: ${{ vars.VPS09_REVIEWER }}
+      VPS09_FIRST_PASS_RUNNER_SHA256: ${{ vars.VPS09_FIRST_PASS_RUNNER_SHA256 }}
       VPS09_OWNER: ${{ vars.VPS09_OWNER }}
+      VPS09_CLOSEOUT_CANDIDATE_SHA: ${{ vars.VPS09_CLOSEOUT_CANDIDATE_SHA }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -259,33 +271,56 @@ jobs:
       - name: Require explicit owned-resource cleanup and finalize structural evidence
         shell: pwsh
         run: |
+          if ($env:GITHUB_ACTOR -cne 'chung6a8m' -or $env:GITHUB_TRIGGERING_ACTOR -cne 'chung6a8m') { throw 'VPS09.OwnerDispatchRequired' }
+          if ($env:VPS09_CLOSEOUT_CANDIDATE_SHA -cne '${{ github.sha }}') { throw 'VPS09.CandidateNotPinned' }
           if ($env:VPS09_CLEANUP_ATTESTATION -cne 'confirmed-owned-nonproduction-cleanup') {
             throw 'VPS09.CleanupNotConfirmed'
           }
           $evidence = Join-Path $env:VPS09_EVIDENCE_ROOT '${{ github.sha }}'
           ./scripts/Invoke-Vps09IntegratedAcceptance.ps1 -Phase Finalize `
             -ReviewedSha '${{ github.sha }}' -Origin $env:VPS09_PUBLIC_ORIGIN `
-            -EvidenceDirectory $evidence -Operator $env:VPS09_OPERATOR `
-            -Reviewer $env:VPS09_REVIEWER -Owner $env:VPS09_OWNER `
+            -EvidenceDirectory $evidence -Owner $env:VPS09_OWNER `
             -GuiChecklistPath $env:VPS09_GUI_CHECKLIST_PATH `
             -LinuxReceiptPath $env:VPS09_LINUX_RECEIPT_PATH -CleanupConfirmed
           python scripts/vps09_packet_builder.py --root $evidence --source-sha '${{ github.sha }}' `
-            --artifact route-observations.json --artifact sql-oracle.json `
+            --artifact preflight-receipt.json --artifact route-observations.json --artifact sql-oracle.json `
             --artifact linux-receipt.json --artifact gui-checklist-receipt.json `
             --artifact vps09-sanitized-summary.json `
-            --output "$env:RUNNER_TEMP/vps09-finalize-index.json"
+            --output (Join-Path $evidence 'finalization-index.json')
+          $indexPath = Join-Path $evidence 'finalization-index.json'
+          $indexBytes = [IO.File]::ReadAllBytes($indexPath)
+          $indexSha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($indexBytes)).ToLowerInvariant()
+          $receipt = [ordered]@{
+            schemaVersion = 2; sourceSha = '${{ github.sha }}'; candidateSha = $env:VPS09_CLOSEOUT_CANDIDATE_SHA
+            governanceMode = 'single-owner-exception'; decisionId = 'OWN-VPS-04'
+            assurance = 'NO_INDEPENDENT_HUMAN_REVIEW'; owner = $env:VPS09_OWNER
+            firstPassRunnerSha256 = $env:VPS09_FIRST_PASS_RUNNER_SHA256
+            finalizedAtUtc = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+            workflowRunUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            finalizationIndex = 'finalization-index.json'; finalizationIndexSha256 = $indexSha
+            finalizationIndexBytes = $indexBytes.Length
+          }
+          $receiptPath = Join-Path $evidence 'finalization-receipt.json'
+          if (Test-Path -LiteralPath $receiptPath) { throw 'VPS09.FinalizationReceiptMustBeNew' }
+          [IO.File]::WriteAllText($receiptPath, (($receipt | ConvertTo-Json -Depth 5) + [Environment]::NewLine), [Text.UTF8Encoding]::new($false))
+          Copy-Item -LiteralPath $indexPath -Destination "$env:RUNNER_TEMP/vps09-finalize-index.json" -ErrorAction Stop
+          Copy-Item -LiteralPath $receiptPath -Destination "$env:RUNNER_TEMP/vps09-finalization-receipt.json" -ErrorAction Stop
       - name: Upload sanitized hashes only; packet remains unsigned
         uses: actions/upload-artifact@v6
         with:
           name: vps09-finalize-index-${{ github.sha }}
-          path: ${{ runner.temp }}/vps09-finalize-index.json
+          path: |
+            ${{ runner.temp }}/vps09-finalize-index.json
+            ${{ runner.temp }}/vps09-finalization-receipt.json
           if-no-files-found: error
           retention-days: 7
 
-  independent-release-review:
-    name: Verify signed fullstack receipt (structural only; no implicit release)
+  single-owner-second-pass-review:
+    name: Verify signed fullstack receipt under OWN-VPS-04 (no independent human review)
     if: >-
       github.event_name == 'workflow_dispatch' &&
+      github.actor == 'chung6a8m' &&
+      github.triggering_actor == 'chung6a8m' &&
       github.ref == 'refs/heads/main' &&
       inputs.approved_scope == 'reviewed-isolated-fullstack-only' &&
       inputs.acceptance_phase == 'review' &&
@@ -294,6 +329,9 @@ jobs:
     runs-on: [self-hosted, linux, vps09-reviewer]
     environment: vps09-release-review
     timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v5
         with:
@@ -304,16 +342,33 @@ jobs:
           TRUSTED_PUBKEY_SHA256: ${{ vars.VPS09_OWNER_PUBKEY_SHA256 }}
           REVIEWED_BUNDLE_PATH: ${{ vars.VPS09_REVIEW_PACKET_PATH }}
           REVIEWED_PUBKEY_PATH: ${{ vars.VPS09_OWNER_PUBKEY_PATH }}
+          SECOND_PASS_RUNNER_SHA256: ${{ vars.VPS09_SECOND_PASS_RUNNER_SHA256 }}
+          FIRST_PASS_RUNNER_SHA256: ${{ vars.VPS09_FIRST_PASS_RUNNER_SHA256 }}
+          CLOSEOUT_CANDIDATE_SHA: ${{ vars.VPS09_CLOSEOUT_CANDIDATE_SHA }}
+          VPS09_OWNER: ${{ vars.VPS09_OWNER }}
+          VPS09_GITHUB_READ_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_ACTOR" = chung6a8m && test "$GITHUB_TRIGGERING_ACTOR" = chung6a8m
+          test "$CLOSEOUT_CANDIDATE_SHA" = "$GITHUB_SHA"
           test "$RUNNER_OS" = Linux
+          test "$VPS09_OWNER" = chung6a8m
+          [[ "$SECOND_PASS_RUNNER_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          [[ "$FIRST_PASS_RUNNER_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          test "$FIRST_PASS_RUNNER_SHA256" != "$SECOND_PASS_RUNNER_SHA256"
+          test -r /etc/machine-id
+          test "$(sha256sum /etc/machine-id | cut -d ' ' -f1)" = "$SECOND_PASS_RUNNER_SHA256"
           [[ "$TRUSTED_PUBKEY_SHA256" =~ ^[a-f0-9]{64}$ ]]
           test -n "$REVIEWED_BUNDLE_PATH" && test -n "$REVIEWED_PUBKEY_PATH"
           python3 scripts/vps09_verify.py verify \
             --bundle "$REVIEWED_BUNDLE_PATH" \
-            --expected-sha "$GITHUB_SHA" \
+            --expected-sha "$CLOSEOUT_CANDIDATE_SHA" \
             --trusted-key "$REVIEWED_PUBKEY_PATH" \
-            --trusted-key-sha256 "$TRUSTED_PUBKEY_SHA256"
-          echo "VPS09_RECEIPT_STRUCTURAL_ONLY: independent reviewer must audit physical evidence."
+            --trusted-key-sha256 "$TRUSTED_PUBKEY_SHA256" \
+            --expected-first-pass-runner-sha256 "$FIRST_PASS_RUNNER_SHA256" \
+            --expected-second-pass-runner-sha256 "$SECOND_PASS_RUNNER_SHA256"
+          python3 scripts/vps09_finalize_provenance.py verify \
+            --bundle "$REVIEWED_BUNDLE_PATH" --expected-sha "$CLOSEOUT_CANDIDATE_SHA"
+          echo "VPS09_RECEIPT_STRUCTURAL_ONLY: OWN-VPS-04 protected GitHub finalize provenance verified; NO_INDEPENDENT_HUMAN_REVIEW."

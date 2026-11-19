@@ -7,8 +7,6 @@ param(
     [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{40}$')][string]$ReviewedSha,
     [Parameter(Mandatory = $true)][string]$Origin,
     [Parameter(Mandatory = $true)][string]$EvidenceDirectory,
-    [Parameter(Mandatory = $true)][string]$Operator,
-    [Parameter(Mandatory = $true)][string]$Reviewer,
     [Parameter(Mandatory = $true)][string]$Owner,
     [string]$RoutePlanPath,
     [string]$OraclePlanPath,
@@ -24,10 +22,14 @@ if ($env:VPS09_ISOLATED_SQL_ADMISSION -cne 'reviewed-isolated-sql13-only') {
     throw 'VPS09.IsolatedSqlApprovalMissing'
 }
 if ($env:OS -ne 'Windows_NT') { throw 'VPS09.WindowsOnly' }
-if ($Operator.Trim().Length -lt 3 -or $Reviewer.Trim().Length -lt 3 -or $Owner.Trim().Length -lt 3) {
-    throw 'VPS09.PeopleMissing'
+if ($Owner -cne 'chung6a8m') { throw 'VPS09.SingleOwnerGovernanceMissing' }
+$machineGuid = [string](Get-ItemPropertyValue -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Cryptography' -Name MachineGuid)
+$machineBytes = [Text.Encoding]::UTF8.GetBytes($machineGuid)
+$actualRunnerSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($machineBytes)).ToLowerInvariant()
+if ($env:VPS09_FIRST_PASS_RUNNER_SHA256 -cnotmatch '^[0-9a-f]{64}$' -or
+    $env:VPS09_FIRST_PASS_RUNNER_SHA256 -cne $actualRunnerSha256) {
+    throw 'VPS09.FirstPassRunnerIdentityMismatch'
 }
-if ($Operator -ieq $Reviewer -or $Operator -ieq $Owner) { throw 'VPS09.ReviewMustBeIndependent' }
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $root
@@ -121,9 +123,11 @@ if ($Phase -eq 'Prepare') {
         origin = $canonical
         sqlOracleConnectionStringEnvironment = 'VPS04A_SQL_ORACLE_CONNECTION_STRING'
         admission = 'reviewed-isolated-sql13-only'
-        operator = $Operator
-        reviewer = $Reviewer
+        governanceMode = 'single-owner-exception'
+        decisionId = 'OWN-VPS-04'
+        assurance = 'NO_INDEPENDENT_HUMAN_REVIEW'
         owner = $Owner
+        runnerSha256 = $actualRunnerSha256
         databaseClassification = 'isolated-nonproduction'
     })
     Invoke-Acceptance 'preflight' $preflightInput (Join-Path $evidence 'preflight-receipt.json')
@@ -141,7 +145,7 @@ if ($Phase -eq 'Prepare') {
     Invoke-Acceptance 'oracles' ([IO.Path]::GetFullPath($OraclePlanPath)) (Join-Path $evidence 'sql-oracle.json')
 
     python scripts/vps09_gui_checklist.py template --source-sha $ReviewedSha `
-        --desktop-sha256 $desktopHash --operator $Operator --reviewer $Reviewer `
+        --desktop-sha256 $desktopHash --first-pass-runner-sha256 $actualRunnerSha256 --owner $Owner `
         --output (Join-Path $evidence 'gui-checklist.template.json')
     if ($LASTEXITCODE -ne 0) { throw 'VPS09.GuiTemplateFailed' }
     Write-Host "VPS09_PREPARE_PASS: SHA=$ReviewedSha routes=293 oracles=12 GUI=NOT_RECORDED release=NOT_APPROVED"
@@ -159,33 +163,51 @@ if ([string]::IsNullOrWhiteSpace($env:SESSIONNAME) -or $env:SESSIONNAME -ieq 'Se
 }
 if (-not $CleanupConfirmed) { throw 'VPS09.CleanupNotConfirmed' }
 
-$linuxReceipt = Get-Content -LiteralPath $LinuxReceiptPath -Raw | ConvertFrom-Json
+$linuxReceiptBytes = [IO.File]::ReadAllBytes([IO.Path]::GetFullPath($LinuxReceiptPath))
+$linuxReceipt = [Text.Encoding]::UTF8.GetString($linuxReceiptBytes) | ConvertFrom-Json
 if ($linuxReceipt.sourceSha -cne $ReviewedSha -or
     $linuxReceipt.overall -cne 'STRUCTURE_COMPLETE_NOT_REVIEWED' -or
-    $linuxReceipt.physicalEvidenceReview -cne 'REQUIRED' -or
+    $linuxReceipt.schemaVersion -ne 2 -or
+    $linuxReceipt.governanceMode -cne 'single-owner-exception' -or
+    $linuxReceipt.decisionId -cne 'OWN-VPS-04' -or
+    $linuxReceipt.assurance -cne 'NO_INDEPENDENT_HUMAN_REVIEW' -or
+    $linuxReceipt.owner -cne $Owner -or
+    $linuxReceipt.physicalEvidenceReview -cne 'OWNER_SECOND_PASS_REQUIRED' -or
     @($linuxReceipt.events).Count -ne 8) {
     throw 'VPS09.LinuxReceiptInvalid'
 }
 $retainedLinuxReceipt = Join-Path $evidence 'linux-receipt.json'
 if (Test-Path -LiteralPath $retainedLinuxReceipt) { throw 'VPS09.EvidenceFileMustBeNew' }
-[IO.File]::Copy([IO.Path]::GetFullPath($LinuxReceiptPath), $retainedLinuxReceipt, $false)
+[IO.File]::WriteAllBytes($retainedLinuxReceipt, $linuxReceiptBytes)
+python scripts/vps09_linux_receipt.py validate --input $retainedLinuxReceipt
+if ($LASTEXITCODE -ne 0) { throw 'VPS09.LinuxReceiptTypedValidationFailed' }
 
 $templatePath = Join-Path $evidence 'gui-checklist.template.json'
 $desktopExe = Join-Path $evidence 'desktop-net48-x86\MyDmsVn.Desktop.App.exe'
 if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf) -or
     -not (Test-Path -LiteralPath $desktopExe -PathType Leaf)) { throw 'VPS09.PreparedDesktopEvidenceMissing' }
 $prepared = Get-Content -LiteralPath $templatePath -Raw | ConvertFrom-Json
-$completed = Get-Content -LiteralPath $GuiChecklistPath -Raw | ConvertFrom-Json
+$completedBytes = [IO.File]::ReadAllBytes([IO.Path]::GetFullPath($GuiChecklistPath))
+$completed = [Text.Encoding]::UTF8.GetString($completedBytes) | ConvertFrom-Json
 $actualExeDigest = (Get-FileHash -LiteralPath $desktopExe -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($prepared.sourceSha -cne $ReviewedSha -or $completed.sourceSha -cne $ReviewedSha -or
     $prepared.desktopExecutableSha256 -cne $actualExeDigest -or
     $completed.desktopExecutableSha256 -cne $actualExeDigest -or
-    $prepared.operator -cne $Operator -or $completed.operator -cne $Operator -or
-    $prepared.reviewer -cne $Reviewer -or $completed.reviewer -cne $Reviewer) {
+    $prepared.governanceMode -cne 'single-owner-exception' -or
+    $completed.governanceMode -cne 'single-owner-exception' -or
+    $prepared.decisionId -cne 'OWN-VPS-04' -or $completed.decisionId -cne 'OWN-VPS-04' -or
+    $prepared.assurance -cne 'NO_INDEPENDENT_HUMAN_REVIEW' -or
+    $completed.assurance -cne 'NO_INDEPENDENT_HUMAN_REVIEW' -or
+    $prepared.firstPassRunnerSha256 -cne $actualRunnerSha256 -or
+    $completed.firstPassRunnerSha256 -cne $actualRunnerSha256 -or
+    $prepared.owner -cne $Owner -or $completed.owner -cne $Owner) {
     throw 'VPS09.GuiCandidateIdentityMismatch'
 }
 $guiReceipt = Join-Path $evidence 'gui-checklist-receipt.json'
-python scripts/vps09_gui_checklist.py validate --input ([IO.Path]::GetFullPath($GuiChecklistPath)) --output $guiReceipt
+$retainedCompleted = Join-Path $evidence 'gui-checklist.completed.json'
+if (Test-Path -LiteralPath $retainedCompleted) { throw 'VPS09.EvidenceFileMustBeNew' }
+[IO.File]::WriteAllBytes($retainedCompleted, $completedBytes)
+python scripts/vps09_gui_checklist.py validate --input $retainedCompleted --output $guiReceipt
 if ($LASTEXITCODE -ne 0) { throw 'VPS09.GuiChecklistInvalid' }
 $gates = Get-Content -LiteralPath 'docs/testing/vps-09-gates.json' -Raw | ConvertFrom-Json
 $summaryInput = Join-Path $evidence 'summary-input.json'
@@ -197,4 +219,4 @@ Write-NewJson $summaryInput ([ordered]@{
     cleanupConfirmed = $true
 })
 Invoke-Acceptance 'summarize' $summaryInput (Join-Path $evidence 'vps09-sanitized-summary.json')
-Write-Host "VPS09_FINALIZE_STRUCTURE_PASS: SHA=$ReviewedSha GUI=9/9 cleanup=confirmed physical_review=REQUIRED release=NOT_APPROVED"
+Write-Host "VPS09_FINALIZE_STRUCTURE_PASS: SHA=$ReviewedSha GUI=9/9 cleanup=confirmed owner_second_pass=REQUIRED governance=OWN-VPS-04 assurance=NO_INDEPENDENT_HUMAN_REVIEW release=NOT_APPROVED"

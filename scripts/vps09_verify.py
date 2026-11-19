@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""VPS-09: fail-closed independent signed *evidence* verifier, not an E2E runner.
+"""VPS-09: fail-closed signed *evidence* verifier, not an E2E runner.
 
 A valid signature binds the named signer's assertions to file digests, not the
-truth of physical SQL/VPS/GUI operations. External review remains mandatory.
+truth of physical SQL/VPS/GUI operations. OWN-VPS-04 permits a narrowly scoped
+single-Owner closeout with explicit reduced assurance and compensating controls.
 """
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ import hashlib
 import json
 import re
 import subprocess
+from datetime import datetime, timedelta, timezone
 from tempfile import TemporaryDirectory
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -23,11 +25,27 @@ RUN_URL = re.compile(
     r"^https://github\.com/chung6a8m/MyDmsVn-Vps/actions/runs/[1-9][0-9]*$"
 )
 MAX_ARTIFACT_BYTES = 8 * 1024 * 1024
+UTC_TIMESTAMP = re.compile(r"^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
+DECISION_EFFECTIVE_UTC = datetime(2026, 11, 19, tzinfo=timezone.utc)
+ASSURANCE = "NO_INDEPENDENT_HUMAN_REVIEW"
+LINUX_EVENTS = {
+    "environment-admission", "sql13-tls-oracle", "nginx-proxy", "systemd-audit",
+    "restart-sigkill", "reboot-resume", "failed-deploy-rollback", "final-reconciliation",
+}
+GUI_CHECKPOINTS = {
+    ("startup", 100), ("login-session", 100), ("permissions", 100),
+    ("sales-workflow", 100), ("inventory-workflow", 100), ("startup", 125),
+    ("login-session", 125), ("unknown-recovery", 125), ("logout", 125),
+}
 
 
 def require(ok: bool, message: str) -> None:
     if not ok:
         raise ValueError("VPS09." + message)
+
+
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def reject_duplicate_members(members: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -137,6 +155,137 @@ def verified_artifact_document(folder: Path, attestation: dict[str, Any], name: 
     return parse_json(raw.decode("utf-8"))
 
 
+def utc_timestamp(value: Any, code: str) -> datetime:
+    raw = str(value)
+    require(UTC_TIMESTAMP.fullmatch(raw) is not None, code)
+    try:
+        return datetime.strptime(raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError as error:
+        raise ValueError("VPS09." + code) from error
+
+
+def exact_fields(value: Any, expected: set[str], code: str) -> dict[str, Any]:
+    require(isinstance(value, dict) and set(value) == expected, code)
+    return value
+
+
+def validate_finalization(folder: Path, att: dict[str, Any], expected_sha: str,
+                          owner: str, first_runner: str) -> datetime:
+    receipt_name = att.get("finalizationReceipt")
+    index_name = att.get("finalizationIndex")
+    require(receipt_name in att["artifacts"] and index_name in att["artifacts"],
+            "FinalizationArtifactsMissing")
+    receipt = exact_fields(verified_artifact_document(folder, att, receipt_name), {
+        "schemaVersion", "sourceSha", "candidateSha", "governanceMode", "decisionId",
+        "assurance", "owner", "firstPassRunnerSha256", "finalizedAtUtc", "workflowRunUrl",
+        "finalizationIndex", "finalizationIndexSha256", "finalizationIndexBytes",
+    }, "FinalizationReceiptFieldsInvalid")
+    require(receipt.get("schemaVersion") == 2 and receipt.get("sourceSha") == expected_sha
+            and receipt.get("candidateSha") == expected_sha
+            and receipt.get("governanceMode") == "single-owner-exception"
+            and receipt.get("decisionId") == "OWN-VPS-04"
+            and receipt.get("assurance") == ASSURANCE and receipt.get("owner") == owner
+            and receipt.get("firstPassRunnerSha256") == first_runner,
+            "FinalizationReceiptIdentityMismatch")
+    require(receipt.get("finalizationIndex") == index_name
+            and receipt.get("finalizationIndexSha256") == att["artifacts"][index_name]["sha256"]
+            and receipt.get("finalizationIndexBytes") == att["artifacts"][index_name]["bytes"],
+            "FinalizationIndexBindingMismatch")
+    require(RUN_URL.fullmatch(str(receipt.get("workflowRunUrl", ""))) is not None,
+            "FinalizationWorkflowRunInvalid")
+    finalized = utc_timestamp(receipt.get("finalizedAtUtc"), "FinalizationTimestampInvalid")
+    require(finalized >= DECISION_EFFECTIVE_UTC and finalized <= now_utc(),
+            "FinalizationTimestampOutsideDecision")
+    index = exact_fields(verified_artifact_document(folder, att, index_name), {
+        "schemaVersion", "sourceSha", "artifacts", "signingStatus",
+        "ownerReleaseDecision", "nextStep",
+    }, "FinalizationIndexFieldsInvalid")
+    require(index.get("schemaVersion") == 1 and index.get("sourceSha") == expected_sha
+            and index.get("signingStatus") == "UNSIGNED"
+            and index.get("ownerReleaseDecision") == "NOT_ATTACHED",
+            "FinalizationIndexInvalid")
+    required = {att.get("preflightReceipt"), att.get("linuxReceipt"), att.get("guiReceipt"),
+                att.get("routeObservations"), att.get("sqlOracle")}
+    ledger = index.get("artifacts")
+    require(isinstance(ledger, dict) and None not in required and required <= set(ledger),
+            "FinalizationIndexCoverageGap")
+    for name in required:
+        require(ledger.get(name) == att["artifacts"].get(name),
+                "FinalizationIndexArtifactMismatch")
+    return finalized
+
+
+def validate_linux_receipt(folder: Path, att: dict[str, Any], expected_sha: str,
+                           owner: str) -> None:
+    name = att.get("linuxReceipt")
+    require(name in att["artifacts"], "LinuxReceiptArtifactMissing")
+    receipt = exact_fields(verified_artifact_document(folder, att, name), {
+        "schemaVersion", "sourceSha", "machineSha256", "artifactSha256", "governanceMode",
+        "decisionId", "assurance", "owner", "events", "physicalEvidenceReview", "overall",
+    }, "LinuxReceiptFieldsInvalid")
+    require(receipt.get("schemaVersion") == 2 and receipt.get("sourceSha") == expected_sha
+            and receipt.get("machineSha256") == att["environment"]["linuxMachineSha256"]
+            and receipt.get("artifactSha256") == att["environment"]["linuxArtifactSha256"]
+            and receipt.get("governanceMode") == "single-owner-exception"
+            and receipt.get("decisionId") == "OWN-VPS-04" and receipt.get("assurance") == ASSURANCE
+            and receipt.get("owner") == owner
+            and receipt.get("physicalEvidenceReview") == "OWNER_SECOND_PASS_REQUIRED"
+            and receipt.get("overall") == "STRUCTURE_COMPLETE_NOT_REVIEWED",
+            "LinuxReceiptIdentityMismatch")
+    events = receipt.get("events")
+    require(isinstance(events, list) and len(events) == 8, "LinuxReceiptCoverageGap")
+    seen: set[str] = set()
+    for event in events:
+        require(isinstance(event, dict), "LinuxReceiptEventInvalid")
+        event_id = event.get("event")
+        require(event_id in LINUX_EVENTS and event_id not in seen, "LinuxReceiptCoverageGap")
+        seen.add(event_id)
+        expected = "EXPECTED_FAILURE_RECOVERED" if event_id == "failed-deploy-rollback" else "PASS"
+        require(event.get("outcome") == expected
+                and SHA256.fullmatch(str(event.get("evidenceDigest", ""))) is not None
+                and SHA256.fullmatch(str(event.get("evidenceFileSha256", ""))) is not None
+                and type(event.get("evidenceFileBytes")) is int and event["evidenceFileBytes"] > 0,
+                "LinuxReceiptEventInvalid")
+        utc_timestamp(event.get("observedAtUtc"), "LinuxReceiptTimestampInvalid")
+    require(seen == LINUX_EVENTS, "LinuxReceiptCoverageGap")
+
+
+def validate_gui_receipt(folder: Path, att: dict[str, Any], expected_sha: str,
+                         owner: str, first_runner: str) -> None:
+    name = att.get("guiReceipt")
+    require(name in att["artifacts"], "GuiReceiptArtifactMissing")
+    receipt = exact_fields(verified_artifact_document(folder, att, name), {
+        "schemaVersion", "sourceSha", "desktopExecutableSha256", "firstPassRunnerSha256",
+        "governanceMode", "decisionId", "assurance", "owner", "checkpoints", "executed",
+        "passed", "failed", "skipped", "attendedEvidenceReview", "overall",
+    }, "GuiReceiptFieldsInvalid")
+    require(receipt.get("schemaVersion") == 2 and receipt.get("sourceSha") == expected_sha
+            and receipt.get("desktopExecutableSha256") == att["environment"]["desktopExecutableSha256"]
+            and receipt.get("firstPassRunnerSha256") == first_runner
+            and receipt.get("governanceMode") == "single-owner-exception"
+            and receipt.get("decisionId") == "OWN-VPS-04" and receipt.get("assurance") == ASSURANCE
+            and receipt.get("owner") == owner and receipt.get("executed") == 9
+            and receipt.get("passed") == 9 and receipt.get("failed") == 0
+            and receipt.get("skipped") == 0
+            and receipt.get("attendedEvidenceReview") == "OWNER_SECOND_PASS_REQUIRED"
+            and receipt.get("overall") == "STRUCTURE_COMPLETE_NOT_REVIEWED",
+            "GuiReceiptIdentityMismatch")
+    rows = receipt.get("checkpoints")
+    require(isinstance(rows, list) and len(rows) == 9, "GuiReceiptCoverageGap")
+    seen: set[tuple[str, int]] = set()
+    evidence: set[str] = set()
+    for row in rows:
+        pair = (row.get("id"), row.get("scalePercent"))
+        digest = str(row.get("evidenceSha256", ""))
+        require(pair in GUI_CHECKPOINTS and pair not in seen and row.get("outcome") == "PASS"
+                and SHA256.fullmatch(digest) is not None and digest not in evidence,
+                "GuiReceiptCheckpointInvalid")
+        utc_timestamp(row.get("observedAtUtc"), "GuiReceiptTimestampInvalid")
+        seen.add(pair)
+        evidence.add(digest)
+    require(seen == GUI_CHECKPOINTS, "GuiReceiptCoverageGap")
+
+
 def verify_signature(folder: Path, public_key: Path, expected_key_digest: str) -> bytes:
     require(SHA256.fullmatch(expected_key_digest) is not None,
             "TrustedKeyFingerprintMissing")
@@ -235,25 +384,38 @@ def validate_oracle(folder: Path, att: dict[str, Any], scenarios: list[str]) -> 
 
 
 def validate_packet(folder: Path, expected_sha: str,
-                    trusted_key: Path, trusted_digest: str) -> None:
+                    trusted_key: Path, trusted_digest: str,
+                    expected_first_pass_runner_sha256: str,
+                    expected_second_pass_runner_sha256: str) -> None:
     spec, _, pairs = inventory()
     require(SHA40.fullmatch(expected_sha) is not None, "ExpectedShaInvalid")
     raw = verify_signature(folder, trusted_key, trusted_digest)
     att = parse_json(raw.decode("utf-8"))
-    require(att.get("schemaVersion") == 1 and att.get("repository") == spec["repository"],
+    require("people" not in att and "operator" not in att and "reviewer" not in att,
+            "LegacyGovernanceFieldRefused")
+    exact_fields(att, {
+        "schemaVersion", "repository", "headSha", "desktopSourceSha",
+        "linuxDeployedSourceSha", "environment", "governance", "releaseDecision",
+        "routeObservations", "sqlOracle", "preflightReceipt", "linuxReceipt", "guiReceipt",
+        "finalizationIndex", "finalizationReceipt", "gates", "ciRuns", "artifacts",
+    }, "PacketFieldsInvalid")
+    require(att.get("schemaVersion") == 2 and att.get("repository") == spec["repository"],
             "PacketSchemaOrRepository")
     require(att.get("headSha") == expected_sha
             and att.get("desktopSourceSha") == expected_sha
             and att.get("linuxDeployedSourceSha") == expected_sha, "CrossArtifactShaMismatch")
-    env = att.get("environment")
-    require(isinstance(env, dict), "EnvironmentMissing")
+    env = exact_fields(att.get("environment"), {
+        "desktop", "host", "sql", "sqlTls", "oracle", "staging", "cleanup",
+        "desktopExecutableSha256", "linuxArtifactSha256", "linuxMachineSha256",
+        "sqlInstanceSha256",
+    }, "EnvironmentFieldsInvalid")
     for name, value in {
         "desktop": "windows-net48-x86-attended",
         "host": "linux-net10-systemd-nginx",
         "sql": "reviewed-isolated-real-sql13",
         "sqlTls": "verified",
-        "oracle": "independent-read-only",
-        "staging": "protected-independent-review",
+        "oracle": "separate-read-only",
+        "staging": "protected-single-owner-exception",
         "cleanup": "confirmed",
     }.items():
         require(env.get(name) == value, "EnvironmentNotAdmitted:" + name)
@@ -261,24 +423,63 @@ def validate_packet(folder: Path, expected_sha: str,
                  "linuxMachineSha256", "sqlInstanceSha256"):
         require(SHA256.fullmatch(str(env.get(name, ""))) is not None,
                 "EnvironmentHashMissing:" + name)
-    people = att.get("people", {})
-    require(all(isinstance(people.get(k), str) and len(people[k].strip()) >= 3
-                for k in ("operator", "reviewer", "owner")), "PeopleMissing")
-    require(people["operator"].casefold() != people["reviewer"].casefold() and
-            people["operator"].casefold() != people["owner"].casefold(),
-            "ReviewMustBeIndependent")
-    decision = att.get("releaseDecision", {})
-    require(decision.get("status") == "APPROVED_FOR_PRODUCTION"
-            and decision.get("owner") == people["owner"]
-            and re.fullmatch(r"20[0-9]{2}-[0-9]{2}-[0-9]{2}", str(decision.get("date", ""))),
-            "ExplicitOwnerReleaseDecisionMissing")
-    from datetime import date
-    try:
-        decision_date = date.fromisoformat(decision["date"])
-    except ValueError as error:
-        raise ValueError("VPS09.ReleaseDecisionDateInvalid") from error
-    require(decision_date <= date.today(), "ReleaseDecisionInFuture")
+    governance = exact_fields(att.get("governance"), {
+        "mode", "decisionId", "assurance", "owner", "firstPassRunnerSha256",
+        "secondPassRunnerSha256", "ownerPublicKeySha256", "finalizedAtUtc",
+    }, "GovernanceFieldsInvalid")
+    require(governance.get("mode") == "single-owner-exception"
+            and governance.get("decisionId") == "OWN-VPS-04"
+            and governance.get("assurance") == ASSURANCE
+            and governance.get("owner") == "chung6a8m",
+            "SingleOwnerGovernanceMissing")
+    owner_key = str(governance.get("ownerPublicKeySha256", ""))
+    require(SHA256.fullmatch(owner_key) is not None
+            and owner_key == trusted_digest, "OwnerKeyFingerprintMismatch")
+    first_runner = str(governance.get("firstPassRunnerSha256", ""))
+    second_runner = str(governance.get("secondPassRunnerSha256", ""))
+    require(SHA256.fullmatch(first_runner) is not None
+            and SHA256.fullmatch(second_runner) is not None
+            and first_runner != second_runner, "RunnerSeparationRequired")
+    require(SHA256.fullmatch(expected_first_pass_runner_sha256) is not None
+            and first_runner == expected_first_pass_runner_sha256,
+            "FirstPassRunnerIdentityMismatch")
+    require(SHA256.fullmatch(expected_second_pass_runner_sha256) is not None
+            and second_runner == expected_second_pass_runner_sha256,
+            "SecondPassRunnerIdentityMismatch")
     artifact_names = validate_artifacts(folder, att)
+    decision = exact_fields(att.get("releaseDecision"), {
+        "status", "owner", "sourceSha", "approvedAtUtc",
+    }, "ReleaseDecisionFieldsInvalid")
+    require(decision.get("status") == "APPROVED_FOR_PRODUCTION"
+            and decision.get("owner") == governance["owner"]
+            and decision.get("sourceSha") == expected_sha,
+            "ExplicitOwnerReleaseDecisionMissing")
+    finalized_at = validate_finalization(folder, att, expected_sha,
+                                         governance["owner"], first_runner)
+    require(str(governance.get("finalizedAtUtc", "")) ==
+            finalized_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "GovernanceFinalizationTimestampMismatch")
+    approved_at = utc_timestamp(decision.get("approvedAtUtc"),
+                                "ReleaseDecisionTimestampInvalid")
+    require(approved_at <= now_utc(), "ReleaseDecisionInFuture")
+    require(approved_at - finalized_at >= timedelta(hours=24),
+            "OwnerCoolingOffIncomplete")
+    preflight_location = att.get("preflightReceipt")
+    require(preflight_location in artifact_names, "PreflightReceiptArtifactMissing")
+    preflight = verified_artifact_document(folder, att, preflight_location)
+    exact_fields(preflight, {
+        "schemaVersion", "sourceSha", "publicHost", "database", "governanceMode",
+        "decisionId", "assurance", "owner", "runnerSha256", "sqlTransport",
+    }, "PreflightReceiptFieldsInvalid")
+    require(preflight.get("schemaVersion") == 2 and preflight.get("sourceSha") == expected_sha
+            and preflight.get("governanceMode") == "single-owner-exception"
+            and preflight.get("decisionId") == "OWN-VPS-04"
+            and preflight.get("assurance") == ASSURANCE
+            and preflight.get("owner") == governance["owner"]
+            and preflight.get("runnerSha256") == first_runner,
+            "FirstPassRunnerReceiptMismatch")
+    validate_linux_receipt(folder, att, expected_sha, governance["owner"])
+    validate_gui_receipt(folder, att, expected_sha, governance["owner"], first_runner)
     required = {item["id"] for item in spec["gates"]}
     gates = att.get("gates")
     require(isinstance(gates, dict) and set(gates) == required, "GateSetIncomplete")
@@ -301,6 +502,10 @@ def validate_packet(folder: Path, expected_sha: str,
         first_evidence.add(evidence[0])
         require(isinstance(gate.get("runner"), str) and bool(gate["runner"].strip()),
                 "GateRunnerMissing:" + gate_id)
+    require(att["linuxReceipt"] in gates["VPS09-11"]["evidence"],
+            "LinuxReceiptNotBoundToGate")
+    require(att["guiReceipt"] in gates["VPS09-12"]["evidence"],
+            "GuiReceiptNotBoundToGate")
     ci = att.get("ciRuns")
     require(isinstance(ci, list), "CiRunsMissing")
     ci_names: set[str] = set()
@@ -318,6 +523,11 @@ def validate_packet(folder: Path, expected_sha: str,
         require(url not in ci_urls, "CiRunUrlReused")
         ci_urls.add(url)
     require(ci_names == set(spec["requiredWorkflowFiles"]), "CiWorkflowMissing")
+    finalization = verified_artifact_document(folder, att, att["finalizationReceipt"])
+    finalization_ci = next(item for item in ci
+                           if item["workflow"] == "vps-09-evidence.yml")
+    require(finalization_ci["url"] == finalization["workflowRunUrl"],
+            "FinalizationWorkflowNotBoundToCiRun")
     validate_observations(folder, att, pairs)
     validate_oracle(folder, att, spec["oracleScenarios"])
 
@@ -331,6 +541,8 @@ def main() -> int:
     verify.add_argument("--expected-sha", required=True)
     verify.add_argument("--trusted-key", type=Path, required=True)
     verify.add_argument("--trusted-key-sha256", required=True)
+    verify.add_argument("--expected-first-pass-runner-sha256", required=True)
+    verify.add_argument("--expected-second-pass-runner-sha256", required=True)
     args = parser.parse_args()
     try:
         spec, routes, observations = inventory()
@@ -340,10 +552,12 @@ def main() -> int:
                   "this is NOT live SQL or release evidence")
         else:
             validate_packet(args.bundle, args.expected_sha,
-                            args.trusted_key, args.trusted_key_sha256)
+                            args.trusted_key, args.trusted_key_sha256,
+                            args.expected_first_pass_runner_sha256,
+                            args.expected_second_pass_runner_sha256)
             print("VPS09_SIGNED_PACKET_STRUCTURE_PASS: signature, SHA, ledger, coverage, "
-                  "gate counters and Owner assertion; physical evidence still requires "
-                  "independent human review")
+                  "gate counters and Owner assertion; governance=OWN-VPS-04; "
+                  "assurance=NO_INDEPENDENT_HUMAN_REVIEW; physical evidence review remains manual")
     except (AttributeError, IndexError, KeyError, TypeError, ValueError, OSError, UnicodeError) as error:
         print(f"VPS09_FAIL_CLOSED: {error}")
         return 1

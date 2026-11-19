@@ -26,7 +26,7 @@ class Vps09LinuxReceiptTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix="vps09-linux-receipt-")
         self.root = Path(self.temp.name)
         self.state = self.root / "state.json"
-        initialize(self.state, SHA, DIGEST, "b" * 64, "operator01")
+        initialize(self.state, SHA, DIGEST, "b" * 64, "chung6a8m")
 
     def tearDown(self):
         self.temp.cleanup()
@@ -40,7 +40,10 @@ class Vps09LinuxReceiptTests(unittest.TestCase):
 
         self.assertEqual(8, len(receipt["events"]))
         self.assertEqual("STRUCTURE_COMPLETE_NOT_REVIEWED", receipt["overall"])
-        self.assertEqual("REQUIRED", receipt["physicalEvidenceReview"])
+        self.assertEqual("OWNER_SECOND_PASS_REQUIRED", receipt["physicalEvidenceReview"])
+        self.assertEqual("OWN-VPS-04", receipt["decisionId"])
+        self.assertEqual("chung6a8m", receipt["owner"])
+        self.assertEqual("NO_INDEPENDENT_HUMAN_REVIEW", receipt["assurance"])
         self.assertNotIn(str(self.root), output.read_text(encoding="utf-8"))
 
     def test_missing_event_is_refused(self):
@@ -75,11 +78,14 @@ class Vps09LinuxReceiptTests(unittest.TestCase):
     def _event_file(self, event, outcome):
         path = self.root / (event + ".json")
         body = {
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "event": event,
             "sourceSha": SHA,
             "machineSha256": DIGEST,
-            "operator": "operator01",
+            "governanceMode": "single-owner-exception",
+            "decisionId": "OWN-VPS-04",
+            "assurance": "NO_INDEPENDENT_HUMAN_REVIEW",
+            "owner": "chung6a8m",
             "observedAtUtc": "2026-11-18T12:00:00Z",
             "outcome": outcome,
             "evidenceDigest": hashlib.sha256(event.encode()).hexdigest(),
