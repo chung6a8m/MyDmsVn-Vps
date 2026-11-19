@@ -50,6 +50,7 @@ class LocalSimulationWslTests(unittest.TestCase):
 
     def test_recovery_requires_a_new_main_pid_and_https(self):
         source = HELPER.read_text(encoding="utf-8")
+        self.assertIn("systemctl kill --kill-who=main --signal=SIGKILL", source)
         self.assertIn('"$current" != "$before"', source)
         self.assertIn('recovery_result "$recovered" "$https"', source)
 

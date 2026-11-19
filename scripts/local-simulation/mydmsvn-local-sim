@@ -181,7 +181,7 @@ recovery_drill() {
   local before current recovered=0 https=0
   before="$(systemctl show mydmsvn-local-sim.service --property=MainPID --value)"
   [[ "$before" =~ ^[1-9][0-9]*$ ]] || fail 'LocalSimulation.RecoveryPidMissing'
-  systemctl kill --kill-whom=main --signal=SIGKILL mydmsvn-local-sim.service
+  systemctl kill --kill-who=main --signal=SIGKILL mydmsvn-local-sim.service
   for _ in $(seq 1 30); do
     current="$(systemctl show mydmsvn-local-sim.service --property=MainPID --value)"
     if systemctl is-active --quiet mydmsvn-local-sim.service && \
