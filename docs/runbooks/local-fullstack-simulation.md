@@ -8,11 +8,13 @@ This runbook operates a disposable MyDmsVn lab on one Windows workstation: SQL S
 
 Run commands from the repository root in PowerShell 7 (`pwsh`). Preflight requires the local Docker Desktop `desktop-linux` named-pipe context with the Linux engine, WSL distribution `Ubuntu` with systemd and noninteractive sudo, .NET SDKs 8.0.428 and 10.0.404, the .NET Framework 4.8 targeting pack, ports 50443/5080/11433 free, and at least 15 GB free.
 
+The default instance state root is `TestResults/local-simulation/active`. When using a custom `-StateRoot`, select a dedicated child directory **inside** `TestResults/local-simulation` (not the parent itself), pass the same `-StateRoot` to every action, and adjust the example artifact/receipt paths below. The commands shown use the default root.
+
 The operator owns only these named resources:
 
 - Docker container `mydmsvn-local-sim-sql` and volume `mydmsvn-local-sim-sql-data`, both labeled with the generated instance ID;
 - WSL service/user/directories named `mydmsvn-local-sim`, Nginx site files of the same name, the owned WSL CA entry, and `/opt/mydmsvn-local-sim`;
-- the Current User Root CA recorded by thumbprint in `TestResults/local-simulation/receipt.json`;
+- the Current User Root CA recorded by thumbprint in `TestResults/local-simulation/active/receipt.json`;
 - ignored state below `TestResults/local-simulation`.
 
 The pinned SQL image is Developer edition. The pinned ASP.NET 10.0.11 Linux runtime is SHA-512 verified before installation. Secrets are randomly generated into ignored files with restrictive WSL copies; commands and JSON outcomes never print their values.
@@ -39,22 +41,22 @@ The final JSON includes `instanceId`, status `READY`, and `desktopPath`. Do not 
 
 `Verify` is non-empty: it checks the receipt-bound Docker/WSL/source identity and database ownership/schema/restricted identities; verifies Nginx HTTPS, wrong-Host denial, and direct-Kestrel rejection; authenticates distinct writer and denied users; requires the denied user to receive HTTP 403; writes one synthetic sales receipt over HTTPS and proves the committed business row/journal with the read-only SQL Oracle; then kills the systemd main process and requires a different PID with healthy HTTPS within 30 seconds. Success reports exactly four passed checks and zero failed/skipped checks.
 
-To launch the Desktop checkpoint after `Start`, use the path returned by `Initialize`:
+To launch the Desktop checkpoint after `Start`, use the `desktopPath` returned by `Initialize`. The example below uses the default state root:
 
 ```powershell
 $env:MYDMSVN_DESKTOP_API_ORIGIN = 'https://localhost:50443'
 $env:MYDMSVN_DESKTOP_OPERATION_MODE = 'web5'
-& .\TestResults\local-simulation\artifacts\desktop\MyDmsVn.Desktop.App.exe
+& .\TestResults\local-simulation\active\artifacts\desktop\MyDmsVn.Desktop.App.exe
 ```
 
-Confirm the login and representative read/write workflow using only the generated local synthetic credentials under `TestResults/local-simulation/secrets`. This is an attended checkpoint: record it separately as PASS/FAIL with the exact HEAD; never infer GUI PASS from publish or automated Verify. Do not copy these credentials to staging or production.
+Confirm the login and representative read/write workflow using only the generated local synthetic credentials under `TestResults/local-simulation/active/secrets`. This is an attended checkpoint: record it separately as PASS/FAIL with the exact HEAD; never infer GUI PASS from publish or automated Verify. Do not copy these credentials to staging or production.
 
 ## Reset
 
 Read the instance ID, review it, and pass the exact value:
 
 ```powershell
-$receipt = Get-Content .\TestResults\local-simulation\receipt.json -Raw | ConvertFrom-Json
+$receipt = Get-Content .\TestResults\local-simulation\active\receipt.json -Raw | ConvertFrom-Json
 $receipt.instanceId
 .\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action Reset -ConfirmInstanceId $receipt.instanceId -OutputFormat Json
 ```
