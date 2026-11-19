@@ -79,6 +79,7 @@ function Publish-LocalSimulationArtifacts {
     $buildSettings = Set-ProcessSettings @{
         MSBUILDDISABLENODEREUSE = '1'
         DOTNET_CLI_USE_MSBUILD_SERVER = '0'
+        UseSharedCompilation = 'false'
     }
     try {
     $artifacts = Join-Path $StateRoot 'artifacts'
