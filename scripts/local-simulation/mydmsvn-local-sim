@@ -161,9 +161,15 @@ stop_lab() {
 
 verify_lab() {
   [[ "$(id -u)" == 0 ]] || fail 'LocalSimulation.RootRequired'
-  systemctl is-active --quiet mydmsvn-local-sim.service || fail 'LocalSimulation.ServiceInactive'
-  curl --fail --silent --show-error --max-time 8 --cacert /etc/mydmsvn-local-sim/tls/ca.crt https://localhost:50443/api/v1/health >/dev/null || fail 'LocalSimulation.HttpsHealthFailed'
-  local direct
+  local direct ready=0
+  for _ in $(seq 1 30); do
+    if systemctl is-active --quiet mydmsvn-local-sim.service && \
+      curl --fail --silent --max-time 3 --cacert /etc/mydmsvn-local-sim/tls/ca.crt https://localhost:50443/api/v1/health >/dev/null 2>&1; then
+      ready=1; break
+    fi
+    sleep 1
+  done
+  [[ "$ready" == 1 ]] || fail 'LocalSimulation.HttpsHealthFailed'
   direct="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 4 -H 'Host: localhost:50443' http://127.0.0.1:5080/api/v1/health || true)"
   [[ "$direct" == 400 ]] || fail 'LocalSimulation.DirectKestrelAdmissionFailed'
   printf '{"schemaVersion":1,"status":"VERIFIED","notice":"LOCAL SIMULATION - NOT VPS-08/09 ACCEPTANCE"}\n'

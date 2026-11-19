@@ -43,6 +43,11 @@ class LocalSimulationWslTests(unittest.TestCase):
         self.assertGreaterEqual(source.count("mydmsvn-local-sim-ca.crt"), 2)
         self.assertIn("update-ca-certificates", source)
 
+    def test_verify_has_a_bounded_service_readiness_wait(self):
+        source = HELPER.read_text(encoding="utf-8")
+        self.assertIn("for _ in $(seq 1 30)", source)
+        self.assertIn("LocalSimulation.HttpsHealthFailed", source)
+
     def setUp(self):
         self.base = pathlib.Path(tempfile.mkdtemp(prefix="mydmsvn-local-sim-test-"))
         self.state = self.base / "state"
