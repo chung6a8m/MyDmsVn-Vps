@@ -122,8 +122,8 @@ jobs:
           if-no-files-found: warn
 
   protected-staging:
-    # Intentionally SKIPPED for PRs/push. Needs an independently reviewed
-    # GitHub Environment and a dedicated NONPRODUCTION self-hosted runner.
+    # Intentionally SKIPPED for PRs/push. OWN-VPS-04 requires exact-main
+    # admission, disabled admin bypass and a dedicated NONPRODUCTION runner.
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/main' &&
@@ -156,7 +156,7 @@ jobs:
           test -n "$STAGING_PROBE" && test -n "$STAGING_HOST_ATTESTATION"
           test -n "$RECEIPT_STATE_PATH" && test "$VPS08_OWNER" = chung6a8m
           test "$STAGING_HOST_ATTESTATION" = reviewed-isolated-sql13-only
-          # Pin to the independently reviewed machine; runner labels alone
+          # Pin to the Owner-reviewed machine; runner labels alone
           # are not sufficient proof that the host is approved staging.
           [[ "$STAGING_MACHINE_SHA256" =~ ^[0-9a-f]{64}$ ]]
           test -r /etc/machine-id

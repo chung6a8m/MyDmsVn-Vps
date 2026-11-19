@@ -4,7 +4,7 @@ These instructions are scoped ONLY to this repository. Do not inherit plans, too
 
 ## Authority and current stage
 
-1. [docs/decisions/README.md](docs/decisions/README.md): the three APPROVED Owner decisions (2026-11-16). A future change requires a separate Owner decision.
+1. [docs/decisions/README.md](docs/decisions/README.md): the four APPROVED Owner decisions (OWN-VPS-01..03 on 2026-11-16; scoped OWN-VPS-04 on 2026-11-19). A future change requires a separate Owner decision.
 2. [docs/roadmap/README.md](docs/roadmap/README.md): **only** live task-status authority; [detailed roadmap](docs/roadmap/vps-00-vps-09.md) holds scope and acceptance.
 3. [docs/architecture/dependency-boundaries.md](docs/architecture/dependency-boundaries.md): distinguish existing dependency debt from the required future target.
 4. [docs/testing/test-policy.md](docs/testing/test-policy.md): test scope, non-empty discovery, and evidence rules.

@@ -45,6 +45,8 @@ The first CI run exposed missing imported WEB2–WEB6 fixture assets. VPS-00B re
 
 VPS-01 freezes HTTP JSON fixtures; VPS-02/03 compare endpoint and Desktop behavior. VPS-05 requires serializer/fingerprint parity; VPS-06 requires permission/pipeline/transaction parity; VPS-07 uses real SQL migration oracle with interrupted/concurrent/unknown-state cases; VPS-09 requires complete Desktop+Linux+SQL scenarios. Always rerun focused tests and final-head CI after changes. Exceptions need dated Owner approval with explicit scope; do not disguise a failure as skipped or a successful job.
 
+OWN-VPS-04 permits one explicitly identified Owner to execute and review the single Issues #11/#12 closeout candidate without independent human review. It changes no technical floor: VPS08-01..08 and VPS09-01..14 still require exact-SHA physical evidence, two distinct hash-bound runners, 24-hour delayed second pass, Ed25519 packet verification, all 11 workflows and zero required skips. Every affected receipt and closeout record must state `NO_INDEPENDENT_HUMAN_REVIEW`; the exception expires with that candidate.
+
 ## VPS-01 — xUnit v3 migration and discovery contract
 
 The **12** VPS-01 net48 xUnit projects and the VPS-03 opt-in acceptance project build as 13 executable net48 test projects using `xunit.v3 3.2.2`, `xunit.runner.visualstudio 3.1.5` and `Microsoft.NET.Test.Sdk 17.14.1` (VSTest; not Microsoft.Testing.Platform). Two isolated net10 suites cover the ASP.NET Core Host and VPS-09 external acceptance orchestrator. The remaining seven test-area projects are explicitly non-xUnit helpers/oracles. Net48 tests continue to use the pinned SDK **8.0.400**; SDK 10.0.404 is selected only by the scoped net10 Host/acceptance entry points.
