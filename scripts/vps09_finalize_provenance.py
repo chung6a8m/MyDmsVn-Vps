@@ -47,7 +47,7 @@ def fetch_github(path: str, token: str) -> dict[str, Any]:
     request = Request("https://api.github.com" + path, headers={
         "Accept": "application/vnd.github+json",
         "Authorization": "Bearer " + token,
-        "X-GitHub-Api-Version": "2022-11-28",
+        "X-GitHub-Api-Version": "2026-03-10",
         "User-Agent": "mydmsvn-vps09-finalize-provenance",
     })
     with urlopen(request, timeout=20) as response:

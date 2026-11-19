@@ -96,7 +96,7 @@ class Vps09FinalizeProvenanceTests(unittest.TestCase):
             self.check()
 
     def test_github_clock_enforces_cooling_even_with_later_signed_approval(self):
-        self.now = datetime(2026, 11, 20, 0, 04, 59, tzinfo=timezone.utc)
+        self.now = datetime(2026, 11, 20, 0, 4, 59, tzinfo=timezone.utc)
         self.attestation["releaseDecision"]["approvedAtUtc"] = "2026-11-20T00:04:50Z"
         with self.assertRaisesRegex(ValueError, "ApprovalPrecedesProtectedCoolingOff"):
             self.check()
