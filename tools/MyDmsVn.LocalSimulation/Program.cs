@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
 
 namespace MyDmsVn.LocalSimulation;
 
@@ -32,6 +33,11 @@ internal static class Program
         {
             WriteFailure(error.Code);
             return 2;
+        }
+        catch (SqlException error)
+        {
+            WriteFailure("LocalSimulation.SqlError." + error.Number);
+            return 1;
         }
         catch (Exception error)
         {
