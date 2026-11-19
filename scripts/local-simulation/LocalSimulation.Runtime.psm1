@@ -81,7 +81,9 @@ function Protect-LocalDirectory {
     param([string] $Path)
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
     Invoke-ExternalSafe 'icacls.exe' @($Path, '/inheritance:r', '/grant:r', ("{0}:(OI)(CI)F" -f $identity)) 'LocalSimulation.StateAclFailed' | Out-Null
-    Invoke-ExternalSafe 'icacls.exe' @((Join-Path $Path '*'), '/inheritance:r', '/grant:r', ("{0}:F" -f $identity), '/t', '/c') 'LocalSimulation.StateAclFailed' | Out-Null
+    if (@(Get-ChildItem -LiteralPath $Path -Force).Count -gt 0) {
+        Invoke-ExternalSafe 'icacls.exe' @((Join-Path $Path '*'), '/inheritance:r', '/grant:r', ("{0}:F" -f $identity), '/t', '/c') 'LocalSimulation.StateAclFailed' | Out-Null
+    }
 }
 
 function Get-FileSha256 {
