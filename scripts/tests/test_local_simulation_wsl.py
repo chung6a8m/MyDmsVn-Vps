@@ -48,6 +48,11 @@ class LocalSimulationWslTests(unittest.TestCase):
         self.assertIn("for _ in $(seq 1 30)", source)
         self.assertIn("LocalSimulation.HttpsHealthFailed", source)
 
+    def test_recovery_requires_a_new_main_pid_and_https(self):
+        source = HELPER.read_text(encoding="utf-8")
+        self.assertIn('"$current" != "$before"', source)
+        self.assertIn('recovery_result "$recovered" "$https"', source)
+
     def setUp(self):
         self.base = pathlib.Path(tempfile.mkdtemp(prefix="mydmsvn-local-sim-test-"))
         self.state = self.base / "state"

@@ -178,10 +178,21 @@ verify_lab() {
 recovery_drill() {
   [[ "$(id -u)" == 0 ]] || fail 'LocalSimulation.RootRequired'
   systemctl restart mydmsvn-local-sim.service
+  local before current recovered=0 https=0
+  before="$(systemctl show mydmsvn-local-sim.service --property=MainPID --value)"
+  [[ "$before" =~ ^[1-9][0-9]*$ ]] || fail 'LocalSimulation.RecoveryPidMissing'
   systemctl kill --kill-whom=main --signal=SIGKILL mydmsvn-local-sim.service
-  local recovered=0 https=0
-  for _ in $(seq 1 30); do systemctl is-active --quiet mydmsvn-local-sim.service && { recovered=1; break; }; sleep 1; done
-  curl --fail --silent --max-time 5 --cacert /etc/mydmsvn-local-sim/tls/ca.crt https://localhost:50443/api/v1/health >/dev/null 2>&1 && https=1 || true
+  for _ in $(seq 1 30); do
+    current="$(systemctl show mydmsvn-local-sim.service --property=MainPID --value)"
+    if systemctl is-active --quiet mydmsvn-local-sim.service && \
+      [[ "$current" =~ ^[1-9][0-9]*$ && "$current" != "$before" ]]; then
+      recovered=1
+      if curl --fail --silent --max-time 3 --cacert /etc/mydmsvn-local-sim/tls/ca.crt https://localhost:50443/api/v1/health >/dev/null 2>&1; then
+        https=1; break
+      fi
+    fi
+    sleep 1
+  done
   recovery_result "$recovered" "$https"
 }
 
