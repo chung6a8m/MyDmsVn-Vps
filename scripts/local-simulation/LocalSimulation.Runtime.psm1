@@ -263,7 +263,10 @@ function Reset-MyDmsVnLocalSimulationExternal {
         }
     }
     if ($Receipt.PSObject.Properties.Name -contains 'certificateThumbprint' -and $Receipt.certificateThumbprint -match '^[0-9A-Fa-f]{40}$') {
-        Remove-Item -LiteralPath ("Cert:\CurrentUser\Root\{0}" -f $Receipt.certificateThumbprint) -Force -ErrorAction SilentlyContinue
+        $certificatePath = "Cert:\CurrentUser\Root\{0}" -f $Receipt.certificateThumbprint
+        if (Test-Path -LiteralPath $certificatePath) {
+            Invoke-ExternalSafe 'certutil.exe' @('-user', '-delstore', 'Root', [string]$Receipt.certificateThumbprint) 'LocalSimulation.CertificateRemoveFailed' | Out-Null
+        }
     }
 }
 
