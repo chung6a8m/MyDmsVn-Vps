@@ -1,4 +1,5 @@
 import json
+import hashlib
 import os
 import pathlib
 import shutil
@@ -40,6 +41,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         elif self.state.is_symlink():
             self.state.unlink(missing_ok=True)
         shutil.rmtree(self.outside, ignore_errors=True)
+        pathlib.Path(str(self.state.resolve()) + ".binding.json").unlink(missing_ok=True)
 
     def run_operator(self, action, *extra):
         return subprocess.run(
@@ -77,6 +79,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
                 "container": "mydmsvn-local-sim-sql",
                 "volume": "mydmsvn-local-sim-sql-data",
                 "engineId": docker_engine_id(),
+                "intent": False,
                 "created": False,
             },
             "wsl": {
@@ -84,10 +87,28 @@ class LocalSimulationOperatorTests(unittest.TestCase):
                 "service": "mydmsvn-local-sim.service",
                 "installed": False,
             },
+            "artifacts": {
+                "bashSha256": None,
+                "sqlHelperSha256": None,
+                "hostSha256": None,
+            },
         }
         receipt.update(changes)
         (self.state / "receipt.json").write_text(json.dumps(receipt), encoding="utf-8")
         return receipt
+
+    def write_binding(self, receipt):
+        receipt_path = self.state / "receipt.json"
+        binding = {
+            "schemaVersion": 1,
+            "instanceId": receipt["instanceId"],
+            "stateRoot": str(self.state.resolve()),
+            "sourceSha": receipt["sourceSha"],
+            "receiptSha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+        }
+        pathlib.Path(str(self.state.resolve()) + ".binding.json").write_text(
+            json.dumps(binding), encoding="utf-8"
+        )
 
     def test_preflight_emits_diagnostics_without_creating_state(self):
         result = self.run_operator("Preflight")
@@ -157,6 +178,34 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertIn("'-user', '-f', '-addstore', 'Root'", source)
         self.assertIn("LocalSimulation.CertificateImportMismatch", source)
         self.assertNotIn("Import-Certificate", source)
+
+    @unittest.skipUnless(os.name == "nt", "native stderr behavior is Windows-specific")
+    def test_native_capture_accepts_successful_stderr_on_windows_powershell(self):
+        command = (
+            f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+            "& (Get-Module LocalSimulation.Runtime) { "
+            "$r=Invoke-NativeCapture 'cmd.exe' @('/d','/c','echo informational 1>&2'); "
+            "if($r.ExitCode -ne 0){throw 'unexpected exit'}; 'NATIVE_CAPTURE_PASS' }"
+        )
+        result = subprocess.run(
+            ["powershell.exe", "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("NATIVE_CAPTURE_PASS", result.stdout)
+
+    def test_runtime_binds_registration_checkout_and_executed_artifacts(self):
+        source = RUNTIME_MODULE.read_text(encoding="utf-8")
+        for token in (
+            "receiptSha256",
+            "LocalSimulation.RegistrationMismatch",
+            "LocalSimulation.SourceIdentityMismatch",
+            "LocalSimulation.SqlHelperIdentityMismatch",
+            "LocalSimulation.ArtifactIdentityMismatch",
+        ):
+            self.assertIn(token, source)
 
     def test_start_waits_for_sql_verification_before_starting_wsl_service(self):
         source = RUNTIME_MODULE.read_text(encoding="utf-8")
@@ -246,6 +295,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
 
     def test_reset_deletes_only_receipt_owned_state(self):
         receipt = self.write_receipt()
+        self.write_binding(receipt)
 
         result = self.run_operator("Reset", "-ConfirmInstanceId", receipt["instanceId"])
 
@@ -253,6 +303,16 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertEqual("RESET", json.loads(result.stdout)["status"])
         self.assertFalse(self.state.exists())
         self.assertEqual("unrelated", (self.outside / "keep.txt").read_text(encoding="utf-8"))
+
+    def test_reset_refuses_fabricated_false_acquisition_receipt_without_binding(self):
+        receipt = self.write_receipt()
+        (self.state / "keep.txt").write_text("must-remain", encoding="utf-8")
+
+        result = self.run_operator("Reset", "-ConfirmInstanceId", receipt["instanceId"])
+
+        self.assertEqual(2, result.returncode)
+        self.assertEqual("LocalSimulation.RegistrationMissing", json.loads(result.stdout)["code"])
+        self.assertEqual("must-remain", (self.state / "keep.txt").read_text(encoding="utf-8"))
 
     @unittest.skipUnless(os.name == "nt", "junction behavior is Windows-specific")
     def test_reset_refuses_reparse_point_state_root(self):

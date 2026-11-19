@@ -67,8 +67,8 @@ certificates() {
   [[ $# == 2 && "$2" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]] || fail 'LocalSimulation.CertificateArgumentsInvalid'
   local state="$1" instance="$2" tls="$1/tls"
   regular_dir "$state"
-  [[ ! -e "$tls" ]] || fail 'LocalSimulation.CertificateOutputExists'
-  mkdir -m 0700 "$tls"
+  regular_dir "$tls"
+  [[ -z "$(find "$tls" -mindepth 1 -maxdepth 1 -print -quit)" ]] || fail 'LocalSimulation.CertificateOutputExists'
   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "$tls/ca.key" >/dev/null 2>&1
   openssl req -x509 -new -sha256 -days 30 -key "$tls/ca.key" -subj "/CN=MyDmsVn Local Sim $instance" -out "$tls/ca.crt" >/dev/null 2>&1
   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$tls/sql.key" >/dev/null 2>&1
@@ -107,13 +107,15 @@ install_lab() {
   admit_lab
   command -v nginx >/dev/null || fail 'LocalSimulation.NginxMissing'
   [[ -x "$state/runtime/dotnet" ]] || fail 'LocalSimulation.AspNetRuntimeMissing'
+  install -d -o root -g root -m 0700 /etc/mydmsvn-local-sim
+  printf '%s\n' "$INSTANCE_ID" >/etc/mydmsvn-local-sim/instance-id
+  printf '%s\n' "$SOURCE_SHA" >/etc/mydmsvn-local-sim/source-sha
+  chmod 0600 /etc/mydmsvn-local-sim/instance-id /etc/mydmsvn-local-sim/source-sha
   useradd --system --no-create-home --shell /usr/sbin/nologin mydmsvn-local-sim
   install -d -o root -g root -m 0755 /opt/mydmsvn-local-sim /opt/mydmsvn-local-sim/releases /usr/local/libexec
   cp -a -- "$state/runtime" /opt/mydmsvn-local-sim/runtime
   chown -R root:root /opt/mydmsvn-local-sim/runtime
-  install -d -o root -g root -m 0700 /etc/mydmsvn-local-sim /etc/mydmsvn-local-sim/credentials /etc/mydmsvn-local-sim/tls
-  printf '%s\n' "$INSTANCE_ID" >/etc/mydmsvn-local-sim/instance-id
-  chmod 0600 /etc/mydmsvn-local-sim/instance-id
+  install -d -o root -g root -m 0700 /etc/mydmsvn-local-sim/credentials /etc/mydmsvn-local-sim/tls
   install -d -o mydmsvn-local-sim -g mydmsvn-local-sim -m 0700 /var/lib/mydmsvn-local-sim /var/lib/mydmsvn-local-sim/audit
   install -o mydmsvn-local-sim -g mydmsvn-local-sim -m 0600 /dev/null /var/lib/mydmsvn-local-sim/audit/security.jsonl
   [[ ! -e "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA" ]] || fail 'LocalSimulation.ReleaseExists'
@@ -168,11 +170,15 @@ install_prerequisites() {
 }
 
 identity_lab() {
-  [[ $# == 2 && "$(id -u)" == 0 ]] || fail 'LocalSimulation.IdentityArgumentsInvalid'
+  [[ $# == 3 && "$(id -u)" == 0 ]] || fail 'LocalSimulation.IdentityArgumentsInvalid'
   regular_file /etc/mydmsvn-local-sim/instance-id
   [[ "$(cat /etc/mydmsvn-local-sim/instance-id)" == "$1" ]] || fail 'LocalSimulation.InstanceMismatch'
   [[ "$2" =~ ^[0-9a-f]{40}$ ]] || fail 'LocalSimulation.SourceShaInvalid'
+  regular_file /etc/mydmsvn-local-sim/source-sha
+  [[ "$(cat /etc/mydmsvn-local-sim/source-sha)" == "$2" ]] || fail 'LocalSimulation.SourceShaInvalid'
   [[ -L /opt/mydmsvn-local-sim/current && "$(readlink /opt/mydmsvn-local-sim/current)" == "releases/$2" ]] || fail 'LocalSimulation.ReleaseIdentityMismatch'
+  [[ "$3" =~ ^[0-9a-f]{64}$ ]] || fail 'LocalSimulation.ArtifactIdentityInvalid'
+  [[ "$(sha256sum "/opt/mydmsvn-local-sim/releases/$2/MyDmsVn.Server.AspNetCoreHost.dll" | awk '{print $1}')" == "$3" ]] || fail 'LocalSimulation.ArtifactIdentityMismatch'
 }
 
 start_lab() {
@@ -252,6 +258,8 @@ reset_admission() {
   fi
   regular_file /etc/mydmsvn-local-sim/instance-id
   [[ "$(cat /etc/mydmsvn-local-sim/instance-id)" == "$requested" ]] || fail 'LocalSimulation.InstanceMismatch'
+  regular_file /etc/mydmsvn-local-sim/source-sha
+  [[ "$(cat /etc/mydmsvn-local-sim/source-sha)" == "$source" ]] || fail 'LocalSimulation.SourceShaInvalid'
   if [[ -e /opt/mydmsvn-local-sim/current || -L /opt/mydmsvn-local-sim/current ]]; then
     [[ -L /opt/mydmsvn-local-sim/current && "$(readlink /opt/mydmsvn-local-sim/current)" == "releases/$source" ]] || fail 'LocalSimulation.ReleaseIdentityMismatch'
   fi
@@ -260,15 +268,29 @@ reset_admission() {
 reset_lab() {
   reset_admission "$@"
   [[ -e /etc/mydmsvn-local-sim/instance-id ]] || return 0
-  systemctl disable --now mydmsvn-local-sim.service >/dev/null 2>&1 || true
+  systemctl disable --now mydmsvn-local-sim.service >/dev/null 2>&1 || {
+    systemctl is-active --quiet mydmsvn-local-sim.service && fail 'LocalSimulation.ServiceStopFailed'
+  }
+  systemctl is-active --quiet mydmsvn-local-sim.service && fail 'LocalSimulation.ServiceStopFailed'
   rm -f -- /etc/systemd/system/mydmsvn-local-sim.service /usr/local/libexec/mydmsvn-local-sim-start
   rm -f -- /etc/nginx/sites-enabled/mydmsvn-local-sim /etc/nginx/sites-available/mydmsvn-local-sim /etc/nginx/mydmsvn-local-sim-proxy-token.conf
   rm -f -- /usr/local/share/ca-certificates/mydmsvn-local-sim-ca.crt
   update-ca-certificates --fresh >/dev/null
-  rm -rf -- /opt/mydmsvn-local-sim /etc/mydmsvn-local-sim /var/lib/mydmsvn-local-sim
-  userdel mydmsvn-local-sim >/dev/null 2>&1 || true
+  rm -rf -- /opt/mydmsvn-local-sim /var/lib/mydmsvn-local-sim
+  if id mydmsvn-local-sim >/dev/null 2>&1; then
+    userdel mydmsvn-local-sim >/dev/null 2>&1 || fail 'LocalSimulation.UserRemoveFailed'
+  fi
+  id mydmsvn-local-sim >/dev/null 2>&1 && fail 'LocalSimulation.UserRemoveFailed'
   systemctl daemon-reload
-  nginx -t >/dev/null && systemctl reload nginx || true
+  nginx -t >/dev/null || fail 'LocalSimulation.NginxValidationFailed'
+  systemctl reload nginx || fail 'LocalSimulation.NginxReloadFailed'
+  [[ ! -e /opt/mydmsvn-local-sim && ! -e /var/lib/mydmsvn-local-sim && \
+     ! -e /etc/systemd/system/mydmsvn-local-sim.service && \
+     ! -e /etc/nginx/sites-enabled/mydmsvn-local-sim && \
+     ! -e /etc/nginx/sites-available/mydmsvn-local-sim && \
+     ! -e /etc/nginx/mydmsvn-local-sim-proxy-token.conf && \
+     ! -e /usr/local/share/ca-certificates/mydmsvn-local-sim-ca.crt ]] || fail 'LocalSimulation.ResetPostconditionFailed'
+  rm -rf -- /etc/mydmsvn-local-sim
 }
 
 reset_sandbox() {

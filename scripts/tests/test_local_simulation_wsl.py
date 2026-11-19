@@ -56,6 +56,21 @@ class LocalSimulationWslTests(unittest.TestCase):
         ):
             self.assertIn(path, source)
 
+    def test_install_claims_identity_before_user_and_runtime_acquisition(self):
+        source = HELPER.read_text(encoding="utf-8")
+        install = source.split("install_lab()", 1)[1].split("install_prerequisites()", 1)[0]
+        marker = install.index("/etc/mydmsvn-local-sim/instance-id")
+        self.assertLess(marker, install.index("useradd --system"))
+        self.assertLess(marker, install.index('cp -a -- "$state/runtime"'))
+        self.assertIn("/etc/mydmsvn-local-sim/source-sha", install)
+
+    def test_reset_keeps_marker_until_cleanup_postconditions(self):
+        source = HELPER.read_text(encoding="utf-8")
+        reset = source.split("reset_lab()", 1)[1].split("reset_sandbox()", 1)[0]
+        self.assertIn("LocalSimulation.ResetPostconditionFailed", reset)
+        self.assertIn("LocalSimulation.UserRemoveFailed", reset)
+        self.assertGreater(reset.rindex("rm -rf -- /etc/mydmsvn-local-sim"), reset.index("systemctl reload nginx"))
+
     def test_verify_has_a_bounded_service_readiness_wait(self):
         source = HELPER.read_text(encoding="utf-8")
         self.assertIn("for _ in $(seq 1 30)", source)

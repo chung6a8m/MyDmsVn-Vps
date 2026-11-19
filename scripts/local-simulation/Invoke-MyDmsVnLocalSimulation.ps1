@@ -95,7 +95,7 @@ function Read-ValidatedReceipt {
     try { $receipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json }
     catch { Refuse 'LocalSimulation.ReceiptInvalid' }
 
-    $required = @('schemaVersion', 'instanceId', 'sourceSha', 'stateRoot', 'phase', 'docker', 'wsl')
+    $required = @('schemaVersion', 'instanceId', 'sourceSha', 'stateRoot', 'phase', 'docker', 'wsl', 'artifacts')
     $properties = @($receipt.PSObject.Properties.Name)
     if (@($required | Where-Object { $_ -notin $properties }).Count -gt 0 -or
         $null -eq $receipt.docker -or $null -eq $receipt.wsl) {
@@ -103,7 +103,7 @@ function Read-ValidatedReceipt {
     }
     $dockerProperties = @($receipt.docker.PSObject.Properties.Name)
     $wslProperties = @($receipt.wsl.PSObject.Properties.Name)
-    if ('container' -notin $dockerProperties -or 'volume' -notin $dockerProperties -or 'engineId' -notin $dockerProperties -or 'created' -notin $dockerProperties -or
+    if ('container' -notin $dockerProperties -or 'volume' -notin $dockerProperties -or 'engineId' -notin $dockerProperties -or 'intent' -notin $dockerProperties -or 'created' -notin $dockerProperties -or
         'distribution' -notin $wslProperties -or 'service' -notin $wslProperties -or 'installed' -notin $wslProperties -or
         $receipt.schemaVersion -ne 1 -or $receipt.sourceSha -notmatch '^[0-9a-f]{40}$' -or
         $receipt.instanceId -notmatch '^[0-9a-fA-F-]{36}$' -or $receipt.docker.engineId -notmatch '^[0-9a-f-]{36}$') {
@@ -126,6 +126,10 @@ function Read-ValidatedReceipt {
     if ($RequireReady -and $receipt.phase -ne 'ready') {
         Refuse 'LocalSimulation.ReceiptPhaseInvalid'
     }
+    if ($RequireReady -and ($receipt.docker.intent -ne $true -or $receipt.docker.created -ne $true -or $receipt.wsl.installed -ne $true -or
+        $null -eq $receipt.artifacts -or $receipt.artifacts.bashSha256 -notmatch '^[0-9a-f]{64}$' -or
+        $receipt.artifacts.sqlHelperSha256 -notmatch '^[0-9a-f]{64}$' -or $receipt.artifacts.hostSha256 -notmatch '^[0-9a-f]{64}$' -or
+        $receipt.certificateThumbprint -notmatch '^[0-9A-Fa-f]{40}$')) { Refuse 'LocalSimulation.ReceiptAcquisitionInvalid' }
     return $receipt
 }
 
@@ -172,6 +176,7 @@ if ($Action -eq 'Preflight') {
     }
 
     Add-Check 'StateRootPolicy' $true 'State root is inside the repository ignored TestResults/local-simulation tree.'
+    Add-Check 'LocalRegistrationAvailable' (-not (Test-Path -LiteralPath ($resolvedStateRoot.TrimEnd('\') + '.binding.json'))) 'No prior local simulation binding may exist.'
 
     try {
         $dockerOutput = @(& docker version --format '{{.Server.Os}}' 2>$null)
@@ -259,6 +264,7 @@ if ($Action -eq 'Reset') {
     $receipt = Read-ValidatedReceipt -RequireConfirmation
 
     Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
+    Invoke-RuntimeAction { Assert-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
     Invoke-RuntimeAction { Reset-MyDmsVnLocalSimulationExternal -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
 
     $deleteTarget = (Get-Item -LiteralPath $resolvedStateRoot -Force).FullName
@@ -267,12 +273,14 @@ if ($Action -eq 'Reset') {
         Refuse 'LocalSimulation.DeleteTargetRefused'
     }
     Remove-Item -LiteralPath $deleteTarget -Recurse -Force
+    Invoke-RuntimeAction { Remove-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
     Write-Outcome -Value @{ action = 'Reset'; status = 'RESET'; instanceId = $ConfirmInstanceId } -ExitCode 0
 }
 
 if ($Action -in @('Start', 'Verify', 'Stop')) {
     $receipt = Read-ValidatedReceipt -RequireReady
     Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
+    Invoke-RuntimeAction { Assert-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
     if ($Action -eq 'Start') {
         $result = Invoke-RuntimeAction { Start-MyDmsVnLocalSimulation -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt }
     }
@@ -280,7 +288,7 @@ if ($Action -in @('Start', 'Verify', 'Stop')) {
         $result = Invoke-RuntimeAction { Verify-MyDmsVnLocalSimulation -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt }
     }
     else {
-        $result = Invoke-RuntimeAction { Stop-MyDmsVnLocalSimulation -RepoRoot $repoRoot -Receipt $receipt }
+        $result = Invoke-RuntimeAction { Stop-MyDmsVnLocalSimulation -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt }
     }
     Write-Outcome -Value $result -ExitCode 0
 }

@@ -79,15 +79,21 @@ WITH CHECKSUM;", master)
     {
         await using var master = new SqlConnection(_settings.AdminConnection.ConnectionString);
         await master.OpenAsync().ConfigureAwait(false);
-        var createdHere = await ScalarIntAsync(master,
-            "SELECT CASE WHEN DB_ID(N'MyDmsVnVps_LocalSimulation') IS NULL THEN 1 ELSE 0 END;").ConfigureAwait(false) == 1;
-        await using (var create = new SqlCommand(@"
-IF DB_ID(N'MyDmsVnVps_LocalSimulation') IS NULL
-    CREATE DATABASE [MyDmsVnVps_LocalSimulation];", master))
+        var lockResult = await ScalarIntAsync(master, @"
+DECLARE @result int;
+EXEC @result=sys.sp_getapplock @Resource=N'MyDmsVn.LocalSimulation.DatabaseCreate',@LockMode=N'Exclusive',@LockOwner=N'Session',@LockTimeout=0;
+SELECT @result;").ConfigureAwait(false);
+        if (lockResult < 0) throw new LocalSimulationBlockedException("LocalSimulation.DatabaseCreateBusy");
+        var createdHere = false;
+        try
         {
-            create.CommandTimeout = 60;
-            await create.ExecuteNonQueryAsync().ConfigureAwait(false);
+            if (await ScalarIntAsync(master, "SELECT CASE WHEN DB_ID(N'MyDmsVnVps_LocalSimulation') IS NULL THEN 1 ELSE 0 END;").ConfigureAwait(false) == 1)
+            {
+                await ExecuteAsync(master, "CREATE DATABASE [MyDmsVnVps_LocalSimulation];").ConfigureAwait(false);
+                createdHere = true;
+            }
         }
+        finally { await ExecuteAsync(master, "EXEC sys.sp_releaseapplock @Resource=N'MyDmsVn.LocalSimulation.DatabaseCreate',@LockOwner=N'Session';").ConfigureAwait(false); }
 
         await using var database = new SqlConnection(DatabaseAdminConnection());
         await database.OpenAsync().ConfigureAwait(false);
@@ -150,9 +156,19 @@ SELECT CASE WHEN
  ISNULL(HAS_PERMS_BY_NAME('dbo.WebOperationJournal','OBJECT','SELECT'),0)<>1 OR
  ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceipts','OBJECT','INSERT'),0)<>0
  OR EXISTS(
+   SELECT 1 FROM sys.database_role_members drm
+   JOIN sys.database_principals member ON member.principal_id=drm.member_principal_id
+   WHERE member.name=USER_NAME()
+ )
+ OR EXISTS(SELECT 1 FROM sys.fn_my_permissions(NULL,N'DATABASE') WHERE permission_name<>N'CONNECT')
+ OR EXISTS(SELECT 1 FROM sys.fn_my_permissions(N'dbo',N'SCHEMA'))
+ OR EXISTS(
    SELECT 1 FROM sys.objects o
    CROSS APPLY sys.fn_my_permissions(QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.'+QUOTENAME(o.name),N'OBJECT') p
-   WHERE o.is_ms_shipped=0 AND p.permission_name IN (N'INSERT',N'UPDATE',N'DELETE',N'ALTER',N'CONTROL',N'TAKE OWNERSHIP')
+   WHERE o.is_ms_shipped=0 AND (
+     p.permission_name<>N'SELECT' OR o.name NOT IN
+       (N'WebAuthSessions',N'WebOperationJournal',N'SalesReceipts',N'SalesReceiptLines',N'GoodsReceipts',N'GoodsReceiptLines',N'StockLedger',N'StockValuationEntries',N'StockBalances')
+   )
  )
 THEN 1 ELSE 0 END;").ConfigureAwait(false);
         if (unsafePermission != 0)
