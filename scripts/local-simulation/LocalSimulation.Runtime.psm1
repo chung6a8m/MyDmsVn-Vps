@@ -93,46 +93,189 @@ function Get-FileSha256 {
     finally { $sha.Dispose() }
 }
 
-function Get-LocalSimulationBindingPath { param([string] $StateRoot); return ([IO.Path]::GetFullPath($StateRoot).TrimEnd('\') + '.binding.json') }
+function New-ArtifactManifest {
+    param([string] $Root)
+    $manifest = Join-Path $Root 'artifact-manifest.txt'
+    $lines = Get-ChildItem -LiteralPath $Root -File -Recurse | Where-Object FullName -ne $manifest | Sort-Object FullName | ForEach-Object {
+        $relative = $_.FullName.Substring($Root.Length).TrimStart('\').Replace('\','/')
+        "{0}  {1}" -f (Get-FileSha256 $_.FullName), $relative
+    }
+    Write-Utf8File $manifest (($lines -join "`n") + "`n")
+    return Get-FileSha256 $manifest
+}
+
+function Assert-ArtifactManifest {
+    param([string] $Root, [string] $ExpectedHash)
+    $manifest = Join-Path $Root 'artifact-manifest.txt'
+    if (-not (Test-Path -LiteralPath $manifest -PathType Leaf) -or [bool]((Get-Item -LiteralPath $manifest -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactManifestMismatch') }
+    if ((Get-FileSha256 $manifest) -ne $ExpectedHash) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactManifestMismatch') }
+    $expectedFiles = [Collections.Generic.List[string]]::new()
+    foreach ($line in Get-Content -LiteralPath $manifest) {
+        if ($line -notmatch '^([0-9a-f]{64})  ([^\\]+)$') { throw [InvalidOperationException]::new('LocalSimulation.ArtifactIdentityMismatch') }
+        $relative = $Matches[2]
+        if ($relative -match '(^|/)\.\.(/|$)|^/|:') { throw [InvalidOperationException]::new('LocalSimulation.ArtifactIdentityMismatch') }
+        $target = Join-Path $Root $relative.Replace('/','\')
+        if (-not (Test-Path -LiteralPath $target -PathType Leaf) -or [bool]((Get-Item -LiteralPath $target -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+            (Get-FileSha256 $target) -ne $Matches[1]) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactIdentityMismatch') }
+        $expectedFiles.Add($relative)
+    }
+    $tree = @(Get-ChildItem -LiteralPath $Root -Force -Recurse)
+    if (@($tree | Where-Object { [bool]($_.Attributes -band [IO.FileAttributes]::ReparsePoint) }).Count -gt 0) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactIdentityMismatch') }
+    $actualFiles = @($tree | Where-Object { -not $_.PSIsContainer -and $_.FullName -ne $manifest } | ForEach-Object { $_.FullName.Substring($Root.Length).TrimStart('\').Replace('\','/') } | Sort-Object)
+    if (($actualFiles -join "`n") -cne (@($expectedFiles | Sort-Object) -join "`n")) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactIdentityMismatch') }
+}
+
+function Get-LocalSimulationBindingPath {
+    $root = Join-Path $env:LOCALAPPDATA 'MyDmsVn\LocalSimulation'
+    return (Join-Path $root 'binding.json')
+}
+
+function Assert-CurrentUserOnlyAcl {
+    param([string] $Path)
+    try {
+        $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+        $acl = Get-Acl -LiteralPath $Path
+        $ownerSid = ([Security.Principal.NTAccount]$acl.Owner).Translate([Security.Principal.SecurityIdentifier])
+        if (-not $acl.AreAccessRulesProtected -or $ownerSid.Value -ne $currentSid.Value) {
+            throw [InvalidOperationException]::new('LocalSimulation.RegistrationAclInvalid')
+        }
+        foreach ($rule in $acl.Access) {
+            if ($rule.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow) { continue }
+            $ruleSid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier])
+            if ($ruleSid.Value -ne $currentSid.Value) {
+                throw [InvalidOperationException]::new('LocalSimulation.RegistrationAclInvalid')
+            }
+        }
+    }
+    catch [InvalidOperationException] { throw }
+    catch { throw [InvalidOperationException]::new('LocalSimulation.RegistrationAclInvalid') }
+}
+
+function Protect-RegistrationFile {
+    param([string] $Path)
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+    Invoke-ExternalSafe 'icacls.exe' @($Path, '/inheritance:r', '/grant:r', ("{0}:F" -f $identity)) 'LocalSimulation.RegistrationAclFailed' | Out-Null
+    Assert-CurrentUserOnlyAcl $Path
+}
+
+function Get-DirectoryIdentity {
+    param([string] $Path)
+    if (-not ('MyDmsVnLocalSimulation.DirectoryIdentity' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+namespace MyDmsVnLocalSimulation {
+  public static class DirectoryIdentity {
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FileInformation {
+      public uint Attributes;
+      public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
+      public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
+      public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+      public uint VolumeSerialNumber;
+      public uint FileSizeHigh;
+      public uint FileSizeLow;
+      public uint NumberOfLinks;
+      public uint FileIndexHigh;
+      public uint FileIndexLow;
+    }
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    private static extern SafeFileHandle CreateFileW(string path, uint access, uint share, IntPtr security, uint creation, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", SetLastError=true)]
+    private static extern bool GetFileInformationByHandle(SafeFileHandle handle, out FileInformation info);
+    public static string Get(string path) {
+      using (var handle = CreateFileW(path, 0, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero)) {
+        if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+        FileInformation info;
+        if (!GetFileInformationByHandle(handle, out info)) throw new Win32Exception(Marshal.GetLastWin32Error());
+        return String.Format("{0:x8}:{1:x8}{2:x8}", info.VolumeSerialNumber, info.FileIndexHigh, info.FileIndexLow);
+      }
+    }
+  }
+}
+'@
+    }
+    try { return [MyDmsVnLocalSimulation.DirectoryIdentity]::Get([IO.Path]::GetFullPath($Path)) }
+    catch { throw [InvalidOperationException]::new('LocalSimulation.StateIdentityUnavailable') }
+}
+
+function Write-AtomicUtf8File {
+    param([string] $Path, [string] $Value, [switch] $NoOverwrite, [switch] $ProtectRegistration)
+    $temporary = $Path + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
+    try {
+        Write-Utf8File $temporary $Value
+        if ($ProtectRegistration) { Protect-RegistrationFile $temporary }
+        if ($NoOverwrite) { [IO.File]::Move($temporary, $Path) }
+        else { [IO.File]::Move($temporary, $Path, $true) }
+    }
+    finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force } }
+}
 
 function New-LocalSimulationRegistration {
-    param([string] $StateRoot, [hashtable] $Receipt, [string] $ReceiptPath)
-    $path = Get-LocalSimulationBindingPath $StateRoot
-    $value = [ordered]@{ schemaVersion = 1; instanceId = $Receipt.instanceId; stateRoot = [IO.Path]::GetFullPath($StateRoot); sourceSha = $Receipt.sourceSha; receiptSha256 = Get-FileSha256 $ReceiptPath }
-    $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($value | ConvertTo-Json -Compress))
+    param([string] $StateRoot, $Receipt, [string] $ReceiptPath)
+    $path = Get-LocalSimulationBindingPath
+    $root = Split-Path -Parent $path
+    if (-not (Test-Path -LiteralPath $root)) { [IO.Directory]::CreateDirectory($root) | Out-Null }
+    Protect-LocalDirectory $root
+    $value = [ordered]@{ schemaVersion = 1; cleanupComplete = $false; instanceId = $Receipt.instanceId; stateRoot = [IO.Path]::GetFullPath($StateRoot); stateIdentity = Get-DirectoryIdentity $StateRoot; sourceSha = $Receipt.sourceSha; receipt = $Receipt }
     try {
-        $stream = [IO.File]::Open($path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-        try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
+        Write-AtomicUtf8File $path ($value | ConvertTo-Json -Depth 10 -Compress) -NoOverwrite -ProtectRegistration
     }
-    catch { throw [InvalidOperationException]::new('LocalSimulation.RegistrationCollision') }
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-    Invoke-ExternalSafe 'icacls.exe' @($path, '/inheritance:r', '/grant:r', ("{0}:F" -f $identity)) 'LocalSimulation.RegistrationAclFailed' | Out-Null
+    catch [IO.IOException] { throw [InvalidOperationException]::new('LocalSimulation.RegistrationCollision') }
+    Assert-CurrentUserOnlyAcl $root
+    Assert-CurrentUserOnlyAcl $path
 }
 
 function Assert-LocalSimulationRegistration {
     param([string] $StateRoot, [pscustomobject] $Receipt)
-    $path = Get-LocalSimulationBindingPath $StateRoot
+    $path = Get-LocalSimulationBindingPath
     if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or [bool]((Get-Item -LiteralPath $path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw [InvalidOperationException]::new('LocalSimulation.RegistrationMissing') }
+    $root = Split-Path -Parent $path
+    if ([bool]((Get-Item -LiteralPath $root -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw [InvalidOperationException]::new('LocalSimulation.RegistrationAclInvalid') }
+    Assert-CurrentUserOnlyAcl $root
+    Assert-CurrentUserOnlyAcl $path
     try { $binding = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json } catch { throw [InvalidOperationException]::new('LocalSimulation.RegistrationInvalid') }
-    $receiptPath = Join-Path $StateRoot 'receipt.json'
     if ($binding.schemaVersion -ne 1 -or $binding.instanceId -ne $Receipt.instanceId -or $binding.sourceSha -ne $Receipt.sourceSha -or
         -not ([IO.Path]::GetFullPath([string]$binding.stateRoot)).Equals([IO.Path]::GetFullPath($StateRoot), [StringComparison]::OrdinalIgnoreCase) -or
-        $binding.receiptSha256 -ne (Get-FileSha256 $receiptPath)) { throw [InvalidOperationException]::new('LocalSimulation.RegistrationMismatch') }
+        $binding.stateIdentity -ne (Get-DirectoryIdentity $StateRoot) -or
+        (($binding.receipt | ConvertTo-Json -Depth 8 -Compress) -ne ($Receipt | ConvertTo-Json -Depth 8 -Compress))) { throw [InvalidOperationException]::new('LocalSimulation.RegistrationMismatch') }
 }
 
 function Update-LocalSimulationRegistration {
-    param([string] $StateRoot, [hashtable] $Receipt, [string] $ReceiptPath)
-    $path = Get-LocalSimulationBindingPath $StateRoot
-    $value = [ordered]@{ schemaVersion = 1; instanceId = $Receipt.instanceId; stateRoot = [IO.Path]::GetFullPath($StateRoot); sourceSha = $Receipt.sourceSha; receiptSha256 = Get-FileSha256 $ReceiptPath }
-    Write-Utf8File $path ($value | ConvertTo-Json -Compress)
+    param([string] $StateRoot, $Receipt, [string] $ReceiptPath, [bool] $CleanupComplete = $false)
+    $path = Get-LocalSimulationBindingPath
+    $root = Split-Path -Parent $path
+    Assert-CurrentUserOnlyAcl $root
+    Assert-CurrentUserOnlyAcl $path
+    try { $binding = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json } catch { throw [InvalidOperationException]::new('LocalSimulation.RegistrationInvalid') }
+    $currentIdentity = Get-DirectoryIdentity $StateRoot
+    if ($binding.schemaVersion -ne 1 -or $binding.instanceId -ne $Receipt.instanceId -or $binding.sourceSha -ne $Receipt.sourceSha -or
+        -not ([IO.Path]::GetFullPath([string]$binding.stateRoot)).Equals([IO.Path]::GetFullPath($StateRoot), [StringComparison]::OrdinalIgnoreCase) -or
+        $binding.stateIdentity -ne $currentIdentity -or ($binding.cleanupComplete -eq $true -and -not $CleanupComplete)) {
+        throw [InvalidOperationException]::new('LocalSimulation.RegistrationMismatch')
+    }
+    $value = [ordered]@{ schemaVersion = 1; cleanupComplete = $CleanupComplete; instanceId = $Receipt.instanceId; stateRoot = [IO.Path]::GetFullPath($StateRoot); stateIdentity = [string]$binding.stateIdentity; sourceSha = $Receipt.sourceSha; receipt = $Receipt }
+    Write-AtomicUtf8File $path ($value | ConvertTo-Json -Depth 10 -Compress) -ProtectRegistration
+    Assert-CurrentUserOnlyAcl $root
+    Assert-CurrentUserOnlyAcl $path
 }
+
+function Complete-LocalSimulationRegistration { param([string] $StateRoot, [pscustomobject] $Receipt); Update-LocalSimulationRegistration $StateRoot $Receipt (Join-Path $StateRoot 'receipt.json') $true }
 
 function Remove-LocalSimulationRegistration {
     param([string] $StateRoot, [pscustomobject] $Receipt)
-    $path = Get-LocalSimulationBindingPath $StateRoot
+    $path = Get-LocalSimulationBindingPath
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw [InvalidOperationException]::new('LocalSimulation.RegistrationMissing') }
+    $root = Split-Path -Parent $path
+    Assert-CurrentUserOnlyAcl $root
+    Assert-CurrentUserOnlyAcl $path
     $binding = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
-    if ($binding.instanceId -ne $Receipt.instanceId -or $binding.sourceSha -ne $Receipt.sourceSha) { throw [InvalidOperationException]::new('LocalSimulation.RegistrationMismatch') }
+    if ($binding.cleanupComplete -ne $true -or $binding.instanceId -ne $Receipt.instanceId -or $binding.sourceSha -ne $Receipt.sourceSha -or
+        -not ([IO.Path]::GetFullPath([string]$binding.stateRoot)).Equals([IO.Path]::GetFullPath($StateRoot), [StringComparison]::OrdinalIgnoreCase) -or
+        ((Test-Path -LiteralPath $StateRoot) -and $binding.stateIdentity -ne (Get-DirectoryIdentity $StateRoot)) -or
+        (($binding.receipt | ConvertTo-Json -Depth 8 -Compress) -ne ($Receipt | ConvertTo-Json -Depth 8 -Compress))) { throw [InvalidOperationException]::new('LocalSimulation.RegistrationMismatch') }
     Remove-Item -LiteralPath $path -Force
 }
 
@@ -182,7 +325,7 @@ function Publish-LocalSimulationArtifacts {
 
 function Invoke-SqlHelper {
     param([string] $StateRoot, [pscustomobject] $Receipt, [string] $Command)
-    if ((Get-FileSha256 (Join-Path $StateRoot 'artifacts\sql-helper\MyDmsVn.LocalSimulation.dll')) -ne [string]$Receipt.artifacts.sqlHelperSha256) { throw [InvalidOperationException]::new('LocalSimulation.SqlHelperIdentityMismatch') }
+    Assert-ArtifactManifest (Join-Path $StateRoot 'artifacts\sql-helper') ([string]$Receipt.artifacts.sqlHelperSha256)
     $secrets = Join-Path $StateRoot 'secrets'
     $sa = Get-Content -LiteralPath (Join-Path $secrets 'sa_password') -Raw
     $settings = @{
@@ -274,8 +417,16 @@ function Write-Receipt {
 
 function Write-BoundReceipt {
     param([string] $StateRoot, [string] $Path, [hashtable] $Receipt)
-    Write-Receipt $Path $Receipt
     Update-LocalSimulationRegistration $StateRoot $Receipt $Path
+    Write-AtomicUtf8File $Path ($Receipt | ConvertTo-Json -Depth 8)
+}
+
+function Get-DockerInspectObject {
+    param([ValidateSet('container','volume')] [string] $Kind, [string] $Name, [string] $FailureCode)
+    $arguments = if ($Kind -eq 'volume') { @('volume', 'inspect', $Name) } else { @('inspect', $Name) }
+    $output = @(Invoke-ExternalSafe 'docker' $arguments $FailureCode)
+    try { return @(($output -join "`n") | ConvertFrom-Json)[0] }
+    catch { throw [InvalidOperationException]::new($FailureCode) }
 }
 
 function Assert-LocalSimulationIdentity {
@@ -284,17 +435,17 @@ function Assert-LocalSimulationIdentity {
     $head = ([string](@(Invoke-ExternalSafe 'git' @('-C', $RepoRoot, 'rev-parse', 'HEAD') 'LocalSimulation.GitStateUnavailable')[0])).Trim()
     $dirty = @(Invoke-ExternalSafe 'git' @('-C', $RepoRoot, 'status', '--porcelain') 'LocalSimulation.GitStateUnavailable')
     if ($head -ne [string]$Receipt.sourceSha -or $dirty.Count -ne 0) { throw [InvalidOperationException]::new('LocalSimulation.SourceIdentityMismatch') }
-    if ((Get-FileSha256 (Join-Path $RepoRoot 'scripts\local-simulation\mydmsvn-local-sim')) -ne [string]$Receipt.artifacts.bashSha256 -or
-        (Get-FileSha256 (Join-Path $StateRoot 'artifacts\sql-helper\MyDmsVn.LocalSimulation.dll')) -ne [string]$Receipt.artifacts.sqlHelperSha256 -or
-        (Get-FileSha256 (Join-Path $StateRoot 'artifacts\host\MyDmsVn.Server.AspNetCoreHost.dll')) -ne [string]$Receipt.artifacts.hostSha256) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactIdentityMismatch') }
+    if ((Get-FileSha256 (Join-Path $RepoRoot 'scripts\local-simulation\mydmsvn-local-sim')) -ne [string]$Receipt.artifacts.bashSha256) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactIdentityMismatch') }
+    Assert-ArtifactManifest (Join-Path $StateRoot 'artifacts\sql-helper') ([string]$Receipt.artifacts.sqlHelperSha256)
+    Assert-ArtifactManifest (Join-Path $StateRoot 'artifacts\host') ([string]$Receipt.artifacts.hostSha256)
     $engineId = @(Invoke-ExternalSafe 'docker' @('info', '--format', '{{.ID}}') 'LocalSimulation.DockerBackendUnavailable')
     if (([string]$engineId[0]).Trim() -ne [string]$Receipt.docker.engineId) { throw [InvalidOperationException]::new('LocalSimulation.DockerEngineMismatch') }
-    $containerLabel = @(Invoke-ExternalSafe 'docker' @('inspect', '-f', '{{ index .Config.Labels "mydmsvn.local-sim.instance" }}', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlContainerMissing')
-    $volumeLabel = @(Invoke-ExternalSafe 'docker' @('volume', 'inspect', '-f', '{{ index .Labels "mydmsvn.local-sim.instance" }}', 'mydmsvn-local-sim-sql-data') 'LocalSimulation.SqlVolumeMissing')
-    $mount = @(Invoke-ExternalSafe 'docker' @('inspect', '-f', '{{range .Mounts}}{{if eq .Destination "/var/opt/mssql"}}{{.Name}}{{end}}{{end}}', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlMountMissing')
-    if (([string]$containerLabel[0]).Trim() -ne [string]$Receipt.instanceId -or
-        ([string]$volumeLabel[0]).Trim() -ne [string]$Receipt.instanceId -or
-        ([string]$mount[0]).Trim() -ne 'mydmsvn-local-sim-sql-data') {
+    $container = Get-DockerInspectObject container 'mydmsvn-local-sim-sql' 'LocalSimulation.SqlContainerMissing'
+    $volume = Get-DockerInspectObject volume 'mydmsvn-local-sim-sql-data' 'LocalSimulation.SqlVolumeMissing'
+    $mount = @($container.Mounts | Where-Object Destination -eq '/var/opt/mssql')
+    if ([string]$container.Config.Labels.'mydmsvn.local-sim.instance' -ne [string]$Receipt.instanceId -or
+        [string]$volume.Labels.'mydmsvn.local-sim.instance' -ne [string]$Receipt.instanceId -or
+        $mount.Count -ne 1 -or [string]$mount[0].Name -ne 'mydmsvn-local-sim-sql-data') {
         throw [InvalidOperationException]::new('LocalSimulation.ResourceIdentityMismatch')
     }
     Invoke-WslHelper $RepoRoot 'identity' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256) -Sudo | Out-Null
@@ -354,8 +505,8 @@ function Initialize-MyDmsVnLocalSimulation {
     foreach ($name in $secretValues.Keys) { Write-Utf8File (Join-Path $StateRoot "secrets\$name") $secretValues[$name] }
 
     Publish-LocalSimulationArtifacts $RepoRoot $StateRoot
-    $receipt.artifacts.sqlHelperSha256 = Get-FileSha256 (Join-Path $StateRoot 'artifacts\sql-helper\MyDmsVn.LocalSimulation.dll')
-    $receipt.artifacts.hostSha256 = Get-FileSha256 (Join-Path $StateRoot 'artifacts\host\MyDmsVn.Server.AspNetCoreHost.dll')
+    $receipt.artifacts.sqlHelperSha256 = New-ArtifactManifest (Join-Path $StateRoot 'artifacts\sql-helper')
+    $receipt.artifacts.hostSha256 = New-ArtifactManifest (Join-Path $StateRoot 'artifacts\host')
     Write-BoundReceipt $StateRoot $receiptPath $receipt
     $stateWsl = Convert-ToWslPath $StateRoot
     Invoke-WslHelper $RepoRoot 'certificates' @($stateWsl, $instanceId) | Out-Null
@@ -380,8 +531,8 @@ function Initialize-MyDmsVnLocalSimulation {
     Write-BoundReceipt $StateRoot $receiptPath $receipt
     $labels = @('--label', "mydmsvn.local-sim.instance=$instanceId")
     Invoke-ExternalSafe 'docker' (@('volume', 'create') + $labels + @('mydmsvn-local-sim-sql-data')) 'LocalSimulation.SqlVolumeCreateFailed' | Out-Null
-    $createdLabel = Invoke-ExternalSafe 'docker' @('volume', 'inspect', '-f', '{{ index .Labels "mydmsvn.local-sim.instance" }}', 'mydmsvn-local-sim-sql-data') 'LocalSimulation.SqlVolumeIdentityUnreadable'
-    if (([string]$createdLabel).Trim() -ne $instanceId) { throw [InvalidOperationException]::new('LocalSimulation.SqlVolumeIdentityMismatch') }
+    $createdVolume = Get-DockerInspectObject volume 'mydmsvn-local-sim-sql-data' 'LocalSimulation.SqlVolumeIdentityUnreadable'
+    if ([string]$createdVolume.Labels.'mydmsvn.local-sim.instance' -ne $instanceId) { throw [InvalidOperationException]::new('LocalSimulation.SqlVolumeIdentityMismatch') }
     $receipt.docker.created = $true
     Write-BoundReceipt $StateRoot $receiptPath $receipt
     $tls = Join-Path $StateRoot 'tls'
@@ -426,8 +577,8 @@ function Initialize-MyDmsVnLocalSimulation {
 function Start-MyDmsVnLocalSimulation {
     param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Receipt)
     Assert-LocalSimulationIdentity $RepoRoot $StateRoot $Receipt
-    $running = @(Invoke-ExternalSafe 'docker' @('inspect', '-f', '{{.State.Running}}', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlContainerMissing')
-    if ([string]$running[0] -ne 'true') { Invoke-ExternalSafe 'docker' @('start', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlStartFailed' | Out-Null }
+    $container = Get-DockerInspectObject container 'mydmsvn-local-sim-sql' 'LocalSimulation.SqlContainerMissing'
+    if ($container.State.Running -ne $true) { Invoke-ExternalSafe 'docker' @('start', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlStartFailed' | Out-Null }
     Wait-LocalSimulationSqlReady $StateRoot $Receipt
     Invoke-WslHelper $RepoRoot 'start' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256) -Sudo | Out-Null
     return [ordered]@{ action = 'Start'; status = 'STARTED'; instanceId = $Receipt.instanceId }
@@ -454,12 +605,17 @@ function Stop-MyDmsVnLocalSimulation {
 function Get-ResetDockerLabel {
     param([ValidateSet('container','volume')] [string] $Kind, [string] $Name)
     if ($Kind -eq 'container') {
-        $probe = Invoke-NativeCapture 'docker' @('inspect', '-f', '{{ index .Config.Labels "mydmsvn.local-sim.instance" }}', $Name)
+        $probe = Invoke-NativeCapture 'docker' @('inspect', $Name)
     }
     else {
-        $probe = Invoke-NativeCapture 'docker' @('volume', 'inspect', '-f', '{{ index .Labels "mydmsvn.local-sim.instance" }}', $Name)
+        $probe = Invoke-NativeCapture 'docker' @('volume', 'inspect', $Name)
     }
-    if ($probe.ExitCode -eq 0) { return ([string]$probe.Output[0]).Trim() }
+    if ($probe.ExitCode -eq 0) {
+        try { $item = @(($probe.Output -join "`n") | ConvertFrom-Json)[0] }
+        catch { throw [InvalidOperationException]::new('LocalSimulation.DockerIdentityUnreadable') }
+        if ($Kind -eq 'container') { return [string]$item.Config.Labels.'mydmsvn.local-sim.instance' }
+        return [string]$item.Labels.'mydmsvn.local-sim.instance'
+    }
     if ((Invoke-NativeCapture 'docker' @('info')).ExitCode -ne 0) { throw [InvalidOperationException]::new('LocalSimulation.DockerBackendUnavailable') }
     if ($Kind -eq 'container') {
         $inventory = Invoke-NativeCapture 'docker' @('container', 'ls', '-a', '--filter', "name=^/$Name`$", '--format', '{{.Names}}')
@@ -525,4 +681,4 @@ function Reset-MyDmsVnLocalSimulationExternal {
     }
 }
 
-Export-ModuleMember -Function Initialize-MyDmsVnLocalSimulation,Start-MyDmsVnLocalSimulation,Verify-MyDmsVnLocalSimulation,Stop-MyDmsVnLocalSimulation,Reset-MyDmsVnLocalSimulationExternal,Assert-LocalSimulationRegistration,Remove-LocalSimulationRegistration
+Export-ModuleMember -Function Initialize-MyDmsVnLocalSimulation,Start-MyDmsVnLocalSimulation,Verify-MyDmsVnLocalSimulation,Stop-MyDmsVnLocalSimulation,Reset-MyDmsVnLocalSimulationExternal,Assert-LocalSimulationRegistration,Complete-LocalSimulationRegistration,Remove-LocalSimulationRegistration

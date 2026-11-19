@@ -49,6 +49,8 @@ function Refuse {
     Write-Outcome -Value @{ action = $Action; status = 'REFUSED'; code = $Code } -ExitCode 2
 }
 
+if ($PSVersionTable.PSVersion.Major -lt 7) { Refuse 'LocalSimulation.PowerShell7Required' }
+
 function Test-PathWithinAllowedStateParent {
     $prefix = $allowedStateParent.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
     return $resolvedStateRoot.Equals($allowedStateParent, [StringComparison]::OrdinalIgnoreCase) -or
@@ -77,7 +79,7 @@ function Test-ReparsePointInStatePath {
 }
 
 function Read-ValidatedReceipt {
-    param([switch] $RequireConfirmation, [switch] $RequireReady)
+    param([switch] $RequireConfirmation, [switch] $RequireReady, [switch] $AllowStaleMirror)
 
     if (-not (Test-Path -LiteralPath $resolvedStateRoot -PathType Container)) {
         Refuse 'LocalSimulation.ReceiptMissing'
@@ -92,8 +94,15 @@ function Read-ValidatedReceipt {
     if (Test-ReparsePoint $receiptPath) {
         Refuse 'LocalSimulation.ReparsePointRefused'
     }
-    try { $receipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json }
+    $bindingPath = Join-Path (Join-Path $env:LOCALAPPDATA 'MyDmsVn\LocalSimulation') 'binding.json'
+    if (-not (Test-Path -LiteralPath $bindingPath -PathType Leaf) -or (Test-ReparsePoint $bindingPath)) { Refuse 'LocalSimulation.RegistrationMissing' }
+    try {
+        $binding = Get-Content -LiteralPath $bindingPath -Raw | ConvertFrom-Json
+        $localReceipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json
+    }
     catch { Refuse 'LocalSimulation.ReceiptInvalid' }
+    if (-not $AllowStaleMirror -and ($binding.receipt | ConvertTo-Json -Depth 8 -Compress) -cne ($localReceipt | ConvertTo-Json -Depth 8 -Compress)) { Refuse 'LocalSimulation.RegistrationMismatch' }
+    $receipt = $binding.receipt
 
     $required = @('schemaVersion', 'instanceId', 'sourceSha', 'stateRoot', 'phase', 'docker', 'wsl', 'artifacts')
     $properties = @($receipt.PSObject.Properties.Name)
@@ -176,7 +185,8 @@ if ($Action -eq 'Preflight') {
     }
 
     Add-Check 'StateRootPolicy' $true 'State root is inside the repository ignored TestResults/local-simulation tree.'
-    Add-Check 'LocalRegistrationAvailable' (-not (Test-Path -LiteralPath ($resolvedStateRoot.TrimEnd('\') + '.binding.json'))) 'No prior local simulation binding may exist.'
+    $bindingPath = Join-Path (Join-Path $env:LOCALAPPDATA 'MyDmsVn\LocalSimulation') 'binding.json'
+    Add-Check 'LocalRegistrationAvailable' (-not (Test-Path -LiteralPath $bindingPath)) 'No prior local simulation binding may exist.'
 
     try {
         $dockerOutput = @(& docker version --format '{{.Server.Os}}' 2>$null)
@@ -261,17 +271,37 @@ if ($Action -eq 'Initialize') {
 }
 
 if ($Action -eq 'Reset') {
-    $receipt = Read-ValidatedReceipt -RequireConfirmation
+    $bindingPath = Join-Path (Join-Path $env:LOCALAPPDATA 'MyDmsVn\LocalSimulation') 'binding.json'
+    if (Test-Path -LiteralPath $bindingPath -PathType Leaf) {
+        try { $completed = Get-Content -LiteralPath $bindingPath -Raw | ConvertFrom-Json } catch { Refuse 'LocalSimulation.RegistrationInvalid' }
+        if ($completed.cleanupComplete -eq $true) {
+            if ($completed.receipt.instanceId -ne $ConfirmInstanceId) { Refuse 'LocalSimulation.RegistrationMismatch' }
+            Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
+            if (Test-Path -LiteralPath $resolvedStateRoot) {
+                if (-not (Test-Path -LiteralPath $resolvedStateRoot -PathType Container) -or (Test-ReparsePoint $resolvedStateRoot)) { Refuse 'LocalSimulation.ReparsePointRefused' }
+                Invoke-RuntimeAction { Assert-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $completed.receipt } | Out-Null
+                $retryDeleteTarget = (Get-Item -LiteralPath $resolvedStateRoot -Force).FullName
+                if (-not $retryDeleteTarget.Equals($resolvedStateRoot, [StringComparison]::OrdinalIgnoreCase) -or -not (Test-PathWithinAllowedStateParent)) { Refuse 'LocalSimulation.DeleteTargetRefused' }
+                Invoke-RuntimeAction { Assert-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $completed.receipt } | Out-Null
+                Remove-Item -LiteralPath $retryDeleteTarget -Recurse -Force
+            }
+            Invoke-RuntimeAction { Remove-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $completed.receipt } | Out-Null
+            Write-Outcome -Value @{ action = 'Reset'; status = 'RESET'; instanceId = $ConfirmInstanceId } -ExitCode 0
+        }
+    }
+    $receipt = Read-ValidatedReceipt -RequireConfirmation -AllowStaleMirror
 
     Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
     Invoke-RuntimeAction { Assert-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
     Invoke-RuntimeAction { Reset-MyDmsVnLocalSimulationExternal -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
+    Invoke-RuntimeAction { Complete-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
 
     $deleteTarget = (Get-Item -LiteralPath $resolvedStateRoot -Force).FullName
     if (-not $deleteTarget.Equals($resolvedStateRoot, [StringComparison]::OrdinalIgnoreCase) -or
         -not (Test-PathWithinAllowedStateParent)) {
         Refuse 'LocalSimulation.DeleteTargetRefused'
     }
+    Invoke-RuntimeAction { Assert-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
     Remove-Item -LiteralPath $deleteTarget -Recurse -Force
     Invoke-RuntimeAction { Remove-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
     Write-Outcome -Value @{ action = 'Reset'; status = 'RESET'; instanceId = $ConfirmInstanceId } -ExitCode 0

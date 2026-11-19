@@ -178,7 +178,15 @@ identity_lab() {
   [[ "$(cat /etc/mydmsvn-local-sim/source-sha)" == "$2" ]] || fail 'LocalSimulation.SourceShaInvalid'
   [[ -L /opt/mydmsvn-local-sim/current && "$(readlink /opt/mydmsvn-local-sim/current)" == "releases/$2" ]] || fail 'LocalSimulation.ReleaseIdentityMismatch'
   [[ "$3" =~ ^[0-9a-f]{64}$ ]] || fail 'LocalSimulation.ArtifactIdentityInvalid'
-  [[ "$(sha256sum "/opt/mydmsvn-local-sim/releases/$2/MyDmsVn.Server.AspNetCoreHost.dll" | awk '{print $1}')" == "$3" ]] || fail 'LocalSimulation.ArtifactIdentityMismatch'
+  local release="/opt/mydmsvn-local-sim/releases/$2"
+  regular_file "$release/artifact-manifest.txt"
+  [[ "$(sha256sum "$release/artifact-manifest.txt" | awk '{print $1}')" == "$3" ]] || fail 'LocalSimulation.ArtifactIdentityMismatch'
+  [[ -z "$(find "$release" -type l -print -quit)" ]] || fail 'LocalSimulation.ArtifactIdentityMismatch'
+  diff -u \
+    <(sed -n 's/^[0-9a-f]\{64\}  //p' "$release/artifact-manifest.txt" | LC_ALL=C sort) \
+    <(find "$release" -type f ! -name artifact-manifest.txt -printf '%P\n' | LC_ALL=C sort) \
+    >/dev/null || fail 'LocalSimulation.ArtifactIdentityMismatch'
+  (cd "$release" && sha256sum --check --status artifact-manifest.txt) || fail 'LocalSimulation.ArtifactIdentityMismatch'
 }
 
 start_lab() {

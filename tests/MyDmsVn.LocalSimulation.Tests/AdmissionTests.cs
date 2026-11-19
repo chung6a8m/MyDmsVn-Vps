@@ -87,6 +87,14 @@ public sealed class AdmissionTests
         Assert.False(runtime.TrustServerCertificate);
     }
 
+    [Fact]
+    public void OraclePermissionOracleCoversTargetedPrincipalImpersonation()
+    {
+        Assert.Contains("candidate.name<>USER_NAME()", SqlLifecycle.OracleUnsafePermissionSql, StringComparison.Ordinal);
+        Assert.Contains("candidate.name<>ORIGINAL_LOGIN()", SqlLifecycle.OracleUnsafePermissionSql, StringComparison.Ordinal);
+        Assert.Contains("N'IMPERSONATE'", SqlLifecycle.OracleUnsafePermissionSql, StringComparison.Ordinal);
+    }
+
     private static Dictionary<string, string> Valid() => new(StringComparer.Ordinal)
     {
         ["MYDMSVN_LOCAL_SIM_ADMISSION"] = "approved-synthetic-local-only",

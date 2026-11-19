@@ -14,6 +14,44 @@ internal sealed class SqlLifecycle
 {
     private const string InstanceMarker = "MyDmsVn.LocalSimulationInstance";
     private const string SeedMarker = "MyDmsVn.LocalSimulationSeeded";
+    internal const string OracleUnsafePermissionSql = @"
+SELECT CASE WHEN
+ ISNULL(HAS_PERMS_BY_NAME(DB_NAME(),'DATABASE','CONTROL'),0)<>0 OR
+ ISNULL(IS_ROLEMEMBER('db_owner'),0)<>0 OR
+ ISNULL(IS_ROLEMEMBER('db_datawriter'),0)<>0 OR
+ ISNULL(HAS_PERMS_BY_NAME('dbo.WebOperationJournal','OBJECT','SELECT'),0)<>1 OR
+ ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceipts','OBJECT','INSERT'),0)<>0
+ OR EXISTS(
+   SELECT 1 FROM sys.database_role_members drm
+   JOIN sys.database_principals member ON member.principal_id=drm.member_principal_id
+   WHERE member.name=USER_NAME()
+ )
+ OR EXISTS(
+   SELECT 1 FROM sys.fn_my_permissions(NULL,N'DATABASE')
+   WHERE permission_name NOT IN (N'CONNECT',N'VIEW ANY COLUMN ENCRYPTION KEY DEFINITION',N'VIEW ANY COLUMN MASTER KEY DEFINITION')
+ )
+ OR EXISTS(SELECT 1 FROM sys.fn_my_permissions(USER_NAME(),N'USER') WHERE permission_name IN (N'ALTER',N'CONTROL',N'IMPERSONATE',N'TAKE OWNERSHIP'))
+ OR EXISTS(SELECT 1 FROM sys.database_principals candidate WHERE candidate.name<>USER_NAME() AND candidate.type<>N'R' AND
+   (ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'USER',N'IMPERSONATE'),0)<>0 OR ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'USER',N'CONTROL'),0)<>0 OR ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'USER',N'ALTER'),0)<>0 OR ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'USER',N'TAKE OWNERSHIP'),0)<>0))
+ OR EXISTS(SELECT 1 FROM sys.database_principals candidate WHERE candidate.name<>USER_NAME() AND candidate.type=N'R' AND
+   (ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'ROLE',N'CONTROL'),0)<>0 OR ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'ROLE',N'ALTER'),0)<>0 OR ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'ROLE',N'TAKE OWNERSHIP'),0)<>0))
+ OR EXISTS(SELECT 1 FROM sys.server_principals candidate WHERE candidate.name<>ORIGINAL_LOGIN() AND candidate.type<>N'R' AND
+   (ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'LOGIN',N'IMPERSONATE'),0)<>0 OR ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'LOGIN',N'CONTROL'),0)<>0 OR ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'LOGIN',N'ALTER'),0)<>0 OR ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'LOGIN',N'TAKE OWNERSHIP'),0)<>0))
+ OR EXISTS(SELECT 1 FROM sys.server_principals candidate WHERE candidate.name<>ORIGINAL_LOGIN() AND candidate.type=N'R' AND
+   (ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'SERVER ROLE',N'CONTROL'),0)<>0 OR ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'SERVER ROLE',N'ALTER'),0)<>0 OR ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'SERVER ROLE',N'TAKE OWNERSHIP'),0)<>0))
+ OR ISNULL(HAS_PERMS_BY_NAME(NULL,N'SERVER',N'CONTROL SERVER'),0)<>0
+ OR ISNULL(HAS_PERMS_BY_NAME(NULL,N'SERVER',N'IMPERSONATE ANY LOGIN'),0)<>0
+ OR ISNULL(HAS_PERMS_BY_NAME(NULL,N'SERVER',N'ALTER ANY LOGIN'),0)<>0
+ OR EXISTS(SELECT 1 FROM sys.fn_my_permissions(N'dbo',N'SCHEMA'))
+ OR EXISTS(
+   SELECT 1 FROM sys.objects o
+   CROSS APPLY sys.fn_my_permissions(QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.'+QUOTENAME(o.name),N'OBJECT') p
+   WHERE o.is_ms_shipped=0 AND o.type IN (N'U',N'V',N'P',N'FN',N'IF',N'TF') AND (
+     p.permission_name<>N'SELECT' OR o.name NOT IN
+       (N'WebAuthSessions',N'WebOperationJournal',N'SalesReceipts',N'SalesReceiptLines',N'GoodsReceipts',N'GoodsReceiptLines',N'StockLedger',N'StockValuationEntries',N'StockBalances')
+   )
+ )
+THEN 1 ELSE 0 END;";
     private readonly LocalSimulationSettings _settings;
 
     public SqlLifecycle(LocalSimulationSettings settings) => _settings = settings;
@@ -133,6 +171,7 @@ GRANT CONTROL TO [{LocalSimulationSqlNames.MigrationLogin}];").ConfigureAwait(fa
         if (await ReadMarkerAsync(database, SeedMarker).ConfigureAwait(false) is null)
             await SeedAsync(database).ConfigureAwait(false);
         await VerifyAsync().ConfigureAwait(false);
+        await VerifyTargetedImpersonationIsDetectedAsync().ConfigureAwait(false);
     }
 
     private async Task VerifyAsync()
@@ -148,35 +187,33 @@ GRANT CONTROL TO [{LocalSimulationSqlNames.MigrationLogin}];").ConfigureAwait(fa
         await using var oracle = new SqlConnection(
             _settings.BuildOracleConnectionString("127.0.0.1,11433").ConnectionString);
         await oracle.OpenAsync().ConfigureAwait(false);
-        var unsafePermission = await ScalarIntAsync(oracle, @"
-SELECT CASE WHEN
- ISNULL(HAS_PERMS_BY_NAME(DB_NAME(),'DATABASE','CONTROL'),0)<>0 OR
- ISNULL(IS_ROLEMEMBER('db_owner'),0)<>0 OR
- ISNULL(IS_ROLEMEMBER('db_datawriter'),0)<>0 OR
- ISNULL(HAS_PERMS_BY_NAME('dbo.WebOperationJournal','OBJECT','SELECT'),0)<>1 OR
- ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceipts','OBJECT','INSERT'),0)<>0
- OR EXISTS(
-   SELECT 1 FROM sys.database_role_members drm
-   JOIN sys.database_principals member ON member.principal_id=drm.member_principal_id
-   WHERE member.name=USER_NAME()
- )
- OR EXISTS(
-   SELECT 1 FROM sys.fn_my_permissions(NULL,N'DATABASE')
-   WHERE permission_name IN (N'CONTROL',N'ALTER',N'CREATE TABLE',N'CREATE PROCEDURE',N'CREATE FUNCTION',N'DELETE',N'EXECUTE',N'INSERT',N'SELECT',N'TAKE OWNERSHIP',N'UPDATE')
-      OR permission_name LIKE N'ALTER ANY %'
- )
- OR EXISTS(SELECT 1 FROM sys.fn_my_permissions(N'dbo',N'SCHEMA'))
- OR EXISTS(
-   SELECT 1 FROM sys.objects o
-   CROSS APPLY sys.fn_my_permissions(QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.'+QUOTENAME(o.name),N'OBJECT') p
-   WHERE o.is_ms_shipped=0 AND o.type IN (N'U',N'V',N'P',N'FN',N'IF',N'TF') AND (
-     p.permission_name<>N'SELECT' OR o.name NOT IN
-       (N'WebAuthSessions',N'WebOperationJournal',N'SalesReceipts',N'SalesReceiptLines',N'GoodsReceipts',N'GoodsReceiptLines',N'StockLedger',N'StockValuationEntries',N'StockBalances')
-   )
- )
-THEN 1 ELSE 0 END;").ConfigureAwait(false);
+        var unsafePermission = await ScalarIntAsync(oracle, OracleUnsafePermissionSql).ConfigureAwait(false);
         if (unsafePermission != 0)
             throw new LocalSimulationBlockedException("LocalSimulation.OraclePermissionRefused");
+    }
+
+    private async Task VerifyTargetedImpersonationIsDetectedAsync()
+    {
+        await using var admin = new SqlConnection(DatabaseAdminConnection());
+        await admin.OpenAsync().ConfigureAwait(false);
+        await using var transaction = (SqlTransaction)await admin.BeginTransactionAsync().ConfigureAwait(false);
+        try
+        {
+            await using (var grant = new SqlCommand(@"
+CREATE USER [mydmsvn_local_sim_oracle_probe_target] WITHOUT LOGIN;
+GRANT IMPERSONATE ON USER::[mydmsvn_local_sim_oracle_probe_target] TO [mydmsvn_local_sim_oracle];", admin, transaction))
+                await grant.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await using var probe = new SqlCommand($@"
+EXECUTE AS USER=N'mydmsvn_local_sim_oracle';
+{OracleUnsafePermissionSql}
+REVERT;", admin, transaction);
+            if (Convert.ToInt32(await probe.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture) != 1)
+                throw new LocalSimulationBlockedException("LocalSimulation.OracleImpersonationProbeFailed");
+        }
+        finally
+        {
+            await transaction.RollbackAsync().ConfigureAwait(false);
+        }
     }
 
     private async Task VerifyMarkerAsync()

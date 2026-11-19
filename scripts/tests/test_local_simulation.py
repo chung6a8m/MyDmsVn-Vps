@@ -1,5 +1,4 @@
 import json
-import hashlib
 import os
 import pathlib
 import shutil
@@ -33,6 +32,10 @@ class LocalSimulationOperatorTests(unittest.TestCase):
     def setUp(self):
         self.state = STATE_PARENT / ("test-" + uuid.uuid4().hex)
         self.outside = pathlib.Path(tempfile.mkdtemp(prefix="mydmsvn-unrelated-"))
+        self.local_app_data = self.outside / "localappdata"
+        self.binding = self.local_app_data / "MyDmsVn" / "LocalSimulation" / "binding.json"
+        self.process_env = os.environ.copy()
+        self.process_env["LOCALAPPDATA"] = str(self.local_app_data)
         (self.outside / "keep.txt").write_text("unrelated", encoding="utf-8")
 
     def tearDown(self):
@@ -62,6 +65,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
                 *extra,
             ],
             cwd=ROOT,
+            env=self.process_env,
             text=True,
             capture_output=True,
         )
@@ -98,17 +102,20 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         return receipt
 
     def write_binding(self, receipt):
-        receipt_path = self.state / "receipt.json"
-        binding = {
-            "schemaVersion": 1,
-            "instanceId": receipt["instanceId"],
-            "stateRoot": str(self.state.resolve()),
-            "sourceSha": receipt["sourceSha"],
-            "receiptSha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
-        }
-        pathlib.Path(str(self.state.resolve()) + ".binding.json").write_text(
-            json.dumps(binding), encoding="utf-8"
+        command = (
+            f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+            f"& (Get-Module LocalSimulation.Runtime) {{ param($s) $p=Join-Path $s 'receipt.json'; "
+            " $r=Get-Content $p -Raw|ConvertFrom-Json; New-LocalSimulationRegistration $s $r $p } "
+            f"'{self.state}'"
         )
+        result = subprocess.run(
+            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT,
+            env=self.process_env,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
     def test_preflight_emits_diagnostics_without_creating_state(self):
         result = self.run_operator("Preflight")
@@ -154,7 +161,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         result = self.run_operator("Start")
 
         self.assertNotEqual(0, result.returncode)
-        self.assertEqual("LocalSimulation.ReceiptPhaseInvalid", json.loads(result.stdout)["code"])
+        self.assertEqual("LocalSimulation.RegistrationMissing", json.loads(result.stdout)["code"])
 
     @unittest.skipUnless(os.name == "nt", "Windows-to-WSL conversion is Windows-specific")
     def test_runtime_module_converts_windows_path_without_truncation(self):
@@ -166,6 +173,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         result = subprocess.run(
             [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
             cwd=ROOT,
+            env=self.process_env,
             text=True,
             capture_output=True,
         )
@@ -190,6 +198,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         result = subprocess.run(
             ["powershell.exe", "-NoLogo", "-NoProfile", "-Command", command],
             cwd=ROOT,
+            env=self.process_env,
             text=True,
             capture_output=True,
         )
@@ -199,13 +208,86 @@ class LocalSimulationOperatorTests(unittest.TestCase):
     def test_runtime_binds_registration_checkout_and_executed_artifacts(self):
         source = RUNTIME_MODULE.read_text(encoding="utf-8")
         for token in (
-            "receiptSha256",
+            "cleanupComplete",
             "LocalSimulation.RegistrationMismatch",
             "LocalSimulation.SourceIdentityMismatch",
-            "LocalSimulation.SqlHelperIdentityMismatch",
+            "LocalSimulation.ArtifactManifestMismatch",
             "LocalSimulation.ArtifactIdentityMismatch",
         ):
             self.assertIn(token, source)
+        self.assertNotIn("{{ index", source)
+        self.assertNotIn("{{range .Mounts}}", source)
+
+    def test_artifact_manifest_detects_dependent_assembly_drift(self):
+        artifact = self.outside / "artifact"
+        artifact.mkdir()
+        (artifact / "entry.dll").write_text("entry", encoding="utf-8")
+        (artifact / "dependency.dll").write_text("dependency", encoding="utf-8")
+        command = (
+            f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+            f"& (Get-Module LocalSimulation.Runtime) {{ param($p) "
+            "$expected=New-ArtifactManifest $p; "
+            "Set-Content -LiteralPath (Join-Path $p 'dependency.dll') -Value 'tampered'; "
+            "try { Assert-ArtifactManifest $p $expected; 'DRIFT_NOT_DETECTED' } "
+            "catch { $_.Exception.Message } } "
+            f"'{artifact}'"
+        )
+
+        result = subprocess.run(
+            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT,
+            env=self.process_env,
+            text=True,
+            capture_output=True,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("LocalSimulation.ArtifactIdentityMismatch", result.stdout)
+        self.assertNotIn("DRIFT_NOT_DETECTED", result.stdout)
+
+    def test_artifact_manifest_rejects_unexpected_configuration_file(self):
+        artifact = self.outside / "artifact-extra"
+        artifact.mkdir()
+        (artifact / "entry.dll").write_text("entry", encoding="utf-8")
+        command = (
+            f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+            f"& (Get-Module LocalSimulation.Runtime) {{ param($p) "
+            "$expected=New-ArtifactManifest $p; "
+            "Set-Content -LiteralPath (Join-Path $p 'appsettings.Production.json') -Value '{}'; "
+            "try { Assert-ArtifactManifest $p $expected; 'EXTRA_NOT_DETECTED' } "
+            "catch { $_.Exception.Message } } "
+            f"'{artifact}'"
+        )
+
+        result = subprocess.run(
+            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT,
+            env=self.process_env,
+            text=True,
+            capture_output=True,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("LocalSimulation.ArtifactIdentityMismatch", result.stdout)
+        self.assertNotIn("EXTRA_NOT_DETECTED", result.stdout)
+
+    @unittest.skipUnless(os.name == "nt", "Windows ACL behavior is Windows-specific")
+    def test_registration_refuses_acl_granted_to_another_principal(self):
+        receipt = self.write_receipt()
+        self.write_binding(receipt)
+        changed = subprocess.run(
+            ["icacls.exe", str(self.binding), "/grant", "*S-1-1-0:R"],
+            env=self.process_env,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(0, changed.returncode, changed.stdout + changed.stderr)
+
+        result = self.run_operator("Reset", "-ConfirmInstanceId", receipt["instanceId"])
+
+        self.assertEqual(2, result.returncode)
+        self.assertEqual("LocalSimulation.RegistrationAclInvalid", json.loads(result.stdout)["code"])
+        self.assertTrue(self.state.exists())
 
     def test_start_waits_for_sql_verification_before_starting_wsl_service(self):
         source = RUNTIME_MODULE.read_text(encoding="utf-8")
@@ -228,6 +310,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         result = subprocess.run(
             [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
             cwd=ROOT,
+            env=self.process_env,
             text=True,
             capture_output=True,
         )
@@ -252,6 +335,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         result = subprocess.run(
             [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
             cwd=ROOT,
+            env=self.process_env,
             text=True,
             capture_output=True,
         )
@@ -273,7 +357,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         result = self.run_operator("Reset", "-ConfirmInstanceId", receipt["instanceId"])
 
         self.assertNotEqual(0, result.returncode)
-        self.assertEqual("LocalSimulation.ReceiptStateMismatch", json.loads(result.stdout)["code"])
+        self.assertEqual("LocalSimulation.RegistrationMissing", json.loads(result.stdout)["code"])
         self.assertTrue(self.state.exists())
         self.assertTrue((self.outside / "keep.txt").exists())
 
@@ -289,7 +373,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         )
 
         self.assertNotEqual(0, result.returncode)
-        self.assertEqual("LocalSimulation.ReceiptInvalid", json.loads(result.stdout)["code"])
+        self.assertEqual("LocalSimulation.RegistrationMissing", json.loads(result.stdout)["code"])
         self.assertNotIn(secret, result.stdout + result.stderr)
         self.assertTrue(self.state.exists())
 
@@ -299,10 +383,77 @@ class LocalSimulationOperatorTests(unittest.TestCase):
 
         result = self.run_operator("Reset", "-ConfirmInstanceId", receipt["instanceId"])
 
-        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertEqual("RESET", json.loads(result.stdout)["status"])
         self.assertFalse(self.state.exists())
         self.assertEqual("unrelated", (self.outside / "keep.txt").read_text(encoding="utf-8"))
+
+    def test_reset_resumes_local_cleanup_after_receipt_was_partially_deleted(self):
+        receipt = self.write_receipt()
+        self.write_binding(receipt)
+        command = (
+            f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+            f"$r=Get-Content '{self.state / 'receipt.json'}' -Raw|ConvertFrom-Json; "
+            f"Complete-LocalSimulationRegistration -StateRoot '{self.state}' -Receipt $r"
+        )
+        completed = subprocess.run(
+            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT,
+            env=self.process_env,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+        (self.state / "receipt.json").unlink()
+
+        result = self.run_operator("Reset", "-ConfirmInstanceId", receipt["instanceId"])
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertFalse(self.state.exists())
+        self.assertFalse(self.binding.exists())
+
+    def test_reset_recovers_when_authoritative_journal_precedes_receipt_mirror(self):
+        receipt = self.write_receipt()
+        self.write_binding(receipt)
+        command = (
+            f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+            f"& (Get-Module LocalSimulation.Runtime) {{ param($s) "
+            "$p=Join-Path $s 'receipt.json'; $r=Get-Content $p -Raw|ConvertFrom-Json; "
+            "$r.phase='journal-ahead'; Update-LocalSimulationRegistration $s $r $p } "
+            f"'{self.state}'"
+        )
+        updated = subprocess.run(
+            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT,
+            env=self.process_env,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(0, updated.returncode, updated.stdout + updated.stderr)
+
+        result = self.run_operator("Reset", "-ConfirmInstanceId", receipt["instanceId"])
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertFalse(self.state.exists())
+        self.assertFalse(self.binding.exists())
+
+    def test_reset_refuses_replacement_directory_even_with_copied_receipt(self):
+        receipt = self.write_receipt()
+        original_receipt = (self.state / "receipt.json").read_bytes()
+        self.write_binding(receipt)
+        displaced = STATE_PARENT / ("displaced-" + uuid.uuid4().hex)
+        self.state.rename(displaced)
+        self.state.mkdir(parents=True)
+        (self.state / "receipt.json").write_bytes(original_receipt)
+        try:
+            result = self.run_operator("Reset", "-ConfirmInstanceId", receipt["instanceId"])
+
+            self.assertEqual(2, result.returncode)
+            self.assertEqual("LocalSimulation.RegistrationMismatch", json.loads(result.stdout)["code"])
+            self.assertTrue(self.state.exists())
+            self.assertTrue(displaced.exists())
+        finally:
+            shutil.rmtree(displaced, ignore_errors=True)
 
     def test_reset_refuses_fabricated_false_acquisition_receipt_without_binding(self):
         receipt = self.write_receipt()
