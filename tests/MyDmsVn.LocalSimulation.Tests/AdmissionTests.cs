@@ -25,7 +25,7 @@ public sealed class AdmissionTests
         var settings = LocalSimulationSettings.Parse(Valid());
 
         Assert.Equal("MyDmsVnVps_LocalSimulation", settings.Database);
-        Assert.Equal("localhost,11433", settings.AdminConnection.DataSource);
+        Assert.Equal("127.0.0.1,11433", settings.AdminConnection.DataSource);
         Assert.Equal("mydmsvn_local_sim_runtime", LocalSimulationSqlNames.RuntimeLogin);
         Assert.Equal("mydmsvn_local_sim_oracle", LocalSimulationSqlNames.OracleLogin);
         Assert.NotEqual(LocalSimulationSqlNames.RuntimeLogin, LocalSimulationSqlNames.OracleLogin);
@@ -47,10 +47,10 @@ public sealed class AdmissionTests
     }
 
     [Theory]
-    [InlineData("Server=localhost,11433;Initial Catalog=master;User ID=sa;Password=Secret_1234567890!;Encrypt=False;TrustServerCertificate=False", "LocalSimulation.SqlTlsRequired")]
-    [InlineData("Server=localhost,11433;Initial Catalog=master;User ID=sa;Password=Secret_1234567890!;Encrypt=True;TrustServerCertificate=True", "LocalSimulation.SqlTlsRequired")]
+    [InlineData("Server=127.0.0.1,11433;Initial Catalog=master;User ID=sa;Password=Secret_1234567890!;Encrypt=False;TrustServerCertificate=False", "LocalSimulation.SqlTlsRequired")]
+    [InlineData("Server=127.0.0.1,11433;Initial Catalog=master;User ID=sa;Password=Secret_1234567890!;Encrypt=True;TrustServerCertificate=True", "LocalSimulation.SqlTlsRequired")]
     [InlineData("Server=localhost,1433;Initial Catalog=master;User ID=sa;Password=Secret_1234567890!;Encrypt=True;TrustServerCertificate=False", "LocalSimulation.SqlEndpointRefused")]
-    [InlineData("Server=localhost,11433;Initial Catalog=Production;User ID=sa;Password=Secret_1234567890!;Encrypt=True;TrustServerCertificate=False", "LocalSimulation.AdminDatabaseRefused")]
+    [InlineData("Server=127.0.0.1,11433;Initial Catalog=Production;User ID=sa;Password=Secret_1234567890!;Encrypt=True;TrustServerCertificate=False", "LocalSimulation.AdminDatabaseRefused")]
     public void UnsafeAdminConnectionIsRefused(string connection, string expectedCode)
     {
         var input = Valid();
@@ -81,7 +81,7 @@ public sealed class AdmissionTests
     {
         ["MYDMSVN_LOCAL_SIM_ADMISSION"] = "approved-synthetic-local-only",
         ["MYDMSVN_LOCAL_SIM_INSTANCE_ID"] = "11111111-2222-4333-8444-555555555555",
-        ["MYDMSVN_LOCAL_SIM_SQL_ADMIN_CONNECTION_STRING"] = "Server=localhost,11433;Initial Catalog=master;User ID=sa;Password=Secret_1234567890!;Encrypt=True;TrustServerCertificate=False;Pooling=False",
+        ["MYDMSVN_LOCAL_SIM_SQL_ADMIN_CONNECTION_STRING"] = "Server=127.0.0.1,11433;Initial Catalog=master;User ID=sa;Password=Secret_1234567890!;Encrypt=True;TrustServerCertificate=False;Pooling=False",
         ["MYDMSVN_LOCAL_SIM_RUNTIME_PASSWORD"] = "Runtime_1234567890!Aa",
         ["MYDMSVN_LOCAL_SIM_ORACLE_PASSWORD"] = "Oracle_1234567890!Aa",
         ["MYDMSVN_LOCAL_SIM_WRITER_PASSWORD"] = "Writer_1234567890!Aa",

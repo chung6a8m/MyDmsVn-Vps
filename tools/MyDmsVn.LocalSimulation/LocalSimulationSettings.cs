@@ -62,7 +62,7 @@ public sealed class LocalSimulationSettings
         try { admin = new SqlConnectionStringBuilder(connection); }
         catch (ArgumentException) { throw new LocalSimulationBlockedException("LocalSimulation.AdminConnectionInvalid"); }
 
-        if (!string.Equals(admin.DataSource, "localhost,11433", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(admin.DataSource, "127.0.0.1,11433", StringComparison.OrdinalIgnoreCase))
             throw new LocalSimulationBlockedException("LocalSimulation.SqlEndpointRefused");
         if (!string.Equals(admin.InitialCatalog, "master", StringComparison.OrdinalIgnoreCase))
             throw new LocalSimulationBlockedException("LocalSimulation.AdminDatabaseRefused");
@@ -106,7 +106,7 @@ public sealed class LocalSimulationSettings
     };
 
     public override string ToString() =>
-        $"LocalSimulationSettings {{ InstanceId = {InstanceId:D}, Database = {Database}, Endpoint = localhost,11433 }}";
+        $"LocalSimulationSettings {{ InstanceId = {InstanceId:D}, Database = {Database}, Endpoint = 127.0.0.1,11433 }}";
 
     private static string Require(IReadOnlyDictionary<string, string> values, string name) =>
         values.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value)
