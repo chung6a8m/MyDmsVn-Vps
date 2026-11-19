@@ -28,6 +28,14 @@ def run_helper(*args):
 
 
 class LocalSimulationWslTests(unittest.TestCase):
+    def test_prerequisites_use_the_pinned_ubuntu_microsoft_feed(self):
+        source = HELPER.read_text(encoding="utf-8")
+        self.assertIn(
+            "https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb",
+            source,
+        )
+        self.assertNotIn("curl |", source)
+
     def setUp(self):
         self.base = pathlib.Path(tempfile.mkdtemp(prefix="mydmsvn-local-sim-test-"))
         self.state = self.base / "state"
