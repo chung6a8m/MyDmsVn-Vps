@@ -150,6 +150,7 @@ install_prerequisites() {
 
 start_lab() {
   [[ "$(id -u)" == 0 ]] || fail 'LocalSimulation.RootRequired'
+  systemctl reset-failed mydmsvn-local-sim.service
   systemctl restart mydmsvn-local-sim.service
   systemctl reload nginx
 }
