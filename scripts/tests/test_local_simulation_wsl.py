@@ -38,6 +38,11 @@ class LocalSimulationWslTests(unittest.TestCase):
         self.assertIn("sha512sum --check --status", source)
         self.assertNotIn("curl |", source)
 
+    def test_install_and_reset_own_the_wsl_ca_trust_entry(self):
+        source = HELPER.read_text(encoding="utf-8")
+        self.assertGreaterEqual(source.count("mydmsvn-local-sim-ca.crt"), 2)
+        self.assertIn("update-ca-certificates", source)
+
     def setUp(self):
         self.base = pathlib.Path(tempfile.mkdtemp(prefix="mydmsvn-local-sim-test-"))
         self.state = self.base / "state"

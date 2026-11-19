@@ -112,6 +112,8 @@ install_lab() {
   install -o root -g root -m 0644 "$state/tls/ca.crt" /etc/mydmsvn-local-sim/tls/ca.crt
   install -o root -g root -m 0644 "$state/tls/nginx.crt" /etc/mydmsvn-local-sim/tls/nginx.crt
   install -o root -g root -m 0600 "$state/tls/nginx.key" /etc/mydmsvn-local-sim/tls/nginx.key
+  install -o root -g root -m 0644 "$state/tls/ca.crt" /usr/local/share/ca-certificates/mydmsvn-local-sim-ca.crt
+  update-ca-certificates >/dev/null
   install -o root -g root -m 0644 "$rendered/mydmsvn-local-sim.nginx.conf" /etc/nginx/sites-available/mydmsvn-local-sim
   ln -sfn /etc/nginx/sites-available/mydmsvn-local-sim /etc/nginx/sites-enabled/mydmsvn-local-sim
   printf 'proxy_set_header X-MyDmsVn-Proxy-Token "%s";\n' "$(cat "$state/secrets/proxy_token")" >/etc/nginx/mydmsvn-local-sim-proxy-token.conf
@@ -194,6 +196,8 @@ reset_lab() {
   systemctl disable --now mydmsvn-local-sim.service >/dev/null 2>&1 || true
   rm -f -- /etc/systemd/system/mydmsvn-local-sim.service /usr/local/libexec/mydmsvn-local-sim-start
   rm -f -- /etc/nginx/sites-enabled/mydmsvn-local-sim /etc/nginx/sites-available/mydmsvn-local-sim /etc/nginx/mydmsvn-local-sim-proxy-token.conf
+  rm -f -- /usr/local/share/ca-certificates/mydmsvn-local-sim-ca.crt
+  update-ca-certificates --fresh >/dev/null
   rm -rf -- /opt/mydmsvn-local-sim /etc/mydmsvn-local-sim /var/lib/mydmsvn-local-sim
   userdel mydmsvn-local-sim >/dev/null 2>&1 || true
   systemctl daemon-reload
