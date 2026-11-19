@@ -30,7 +30,6 @@ SELECT CASE WHEN
    SELECT 1 FROM sys.fn_my_permissions(NULL,N'DATABASE')
    WHERE permission_name NOT IN (N'CONNECT',N'VIEW ANY COLUMN ENCRYPTION KEY DEFINITION',N'VIEW ANY COLUMN MASTER KEY DEFINITION')
  )
- OR EXISTS(SELECT 1 FROM sys.fn_my_permissions(USER_NAME(),N'USER') WHERE permission_name IN (N'ALTER',N'CONTROL',N'IMPERSONATE',N'TAKE OWNERSHIP'))
  OR EXISTS(SELECT 1 FROM sys.database_principals candidate WHERE candidate.name<>USER_NAME() AND candidate.type<>N'R' AND
    (ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'USER',N'IMPERSONATE'),0)<>0 OR ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'USER',N'CONTROL'),0)<>0 OR ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'USER',N'ALTER'),0)<>0 OR ISNULL(HAS_PERMS_BY_NAME(candidate.name,N'USER',N'TAKE OWNERSHIP'),0)<>0))
  OR EXISTS(SELECT 1 FROM sys.database_principals candidate WHERE candidate.name<>USER_NAME() AND candidate.type=N'R' AND
