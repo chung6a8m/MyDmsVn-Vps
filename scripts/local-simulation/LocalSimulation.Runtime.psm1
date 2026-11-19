@@ -76,6 +76,11 @@ function Invoke-DotNet10 {
 
 function Publish-LocalSimulationArtifacts {
     param([string] $RepoRoot, [string] $StateRoot)
+    $buildSettings = Set-ProcessSettings @{
+        MSBUILDDISABLENODEREUSE = '1'
+        DOTNET_CLI_USE_MSBUILD_SERVER = '0'
+    }
+    try {
     $artifacts = Join-Path $StateRoot 'artifacts'
     [IO.Directory]::CreateDirectory($artifacts) | Out-Null
     $helper = Join-Path $RepoRoot 'tools\MyDmsVn.LocalSimulation\MyDmsVn.LocalSimulation.csproj'
@@ -96,6 +101,8 @@ function Publish-LocalSimulationArtifacts {
         Invoke-ExternalSafe 'dotnet' @('publish', 'src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj', '-c', 'Release', '-f', 'net48', '--no-restore', '-p:PlatformTarget=x86', '-o', (Join-Path $artifacts 'desktop')) 'LocalSimulation.DesktopPublishFailed' | Out-Null
     }
     finally { Pop-Location }
+    }
+    finally { Restore-ProcessSettings $buildSettings }
 }
 
 function Invoke-SqlHelper {
