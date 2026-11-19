@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+export LC_ALL=C
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+TEMPLATES="$SCRIPT_DIR/templates"
+
+fail() { printf '%s\n' "$1" >&2; exit 2; }
+regular_dir() { [[ -d "$1" && ! -L "$1" ]] || fail 'LocalSimulation.DirectoryInvalid'; }
+regular_file() { [[ -f "$1" && ! -L "$1" ]] || fail 'LocalSimulation.FileInvalid'; }
+
+read_setting() {
+  local file="$1" key="$2" count value
+  count="$(awk -F= -v key="$key" '$1==key { count++ } END { print count+0 }' "$file")"
+  [[ "$count" == 1 ]] || fail "LocalSimulation.SettingInvalid.${key}"
+  value="$(awk -F= -v key="$key" '$1==key { sub(/\r$/,""); sub(/^[^=]*=/,""); print }' "$file")"
+  [[ "$value" =~ ^[^[:space:]]+$ ]] || fail "LocalSimulation.SettingInvalid.${key}"
+  printf '%s' "$value"
+}
+
+load_instance() {
+  local state="$1" file
+  regular_dir "$state"
+  file="$state/instance.env"
+  regular_file "$file"
+  INSTANCE_ID="$(read_setting "$file" INSTANCE_ID)"
+  SOURCE_SHA="$(read_setting "$file" SOURCE_SHA)"
+  PUBLIC_ORIGIN="$(read_setting "$file" PUBLIC_ORIGIN)"
+  SQL_SERVER="$(read_setting "$file" SQL_SERVER)"
+  [[ "$INSTANCE_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]] || fail 'LocalSimulation.InstanceInvalid'
+  [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'LocalSimulation.SourceShaInvalid'
+  [[ "$PUBLIC_ORIGIN" == 'https://localhost:50443' ]] || fail 'LocalSimulation.OriginInvalid'
+  [[ "$SQL_SERVER" == 'host.docker.internal,11433' ]] || fail 'LocalSimulation.SqlServerInvalid'
+}
+
+render() {
+  [[ $# == 3 ]] || fail 'LocalSimulation.RenderArgumentsInvalid'
+  local state="$1" output="$2" publish="$3" secret
+  load_instance "$state"
+  regular_dir "$publish"
+  regular_file "$publish/MyDmsVn.Server.AspNetCoreHost.dll"
+  [[ ! -e "$output" ]] || fail 'LocalSimulation.RenderOutputExists'
+  for secret in proxy_token jwt_keys sql_connection_string; do regular_file "$state/secrets/$secret"; done
+  for secret in ca.crt nginx.crt nginx.key; do regular_file "$state/tls/$secret"; done
+  mkdir -m 0700 -- "$output"
+  install -m 0644 "$TEMPLATES/mydmsvn-local-sim.service.tpl" "$output/mydmsvn-local-sim.service"
+  install -m 0755 "$TEMPLATES/mydmsvn-local-sim-start.tpl" "$output/mydmsvn-local-sim-start"
+  install -m 0644 "$TEMPLATES/mydmsvn-local-sim.nginx.conf.tpl" "$output/mydmsvn-local-sim.nginx.conf"
+  cat >"$output/runtime.env" <<EOF
+MYDMSVN_WEB_ORIGIN=https://localhost:50443
+MYDMSVN_WEB_JWT_ISSUER=https://localhost:50443
+MYDMSVN_WEB_JWT_AUDIENCE=mydmsvn-local-simulation
+MYDMSVN_WEB_JWT_ACTIVE_KID=local-key
+MYDMSVN_WEB_OPERATION_MODE=web5
+MYDMSVN_WEB_DESKTOP_API=enabled
+MYDMSVN_WEB_SUPERUSER_USERNAME=local_sim_writer
+MYDMSVN_WEB6_RESEND_ELIGIBILITY=receipt-v1
+MYDMSVN_WEB6_CANDIDATE_ID=local-simulation
+MYDMSVN_WEB6_CANDIDATE_ROOT=/var/lib/mydmsvn-local-sim/audit
+MYDMSVN_WEB_SECURITY_AUDIT_PATH=/var/lib/mydmsvn-local-sim/audit/security.jsonl
+EOF
+  chmod 0640 "$output/runtime.env"
+  printf '{"schemaVersion":1,"status":"RENDERED","instanceId":"%s","notice":"LOCAL SIMULATION - NOT VPS-08/09 ACCEPTANCE"}\n' "$INSTANCE_ID"
+}
+
+certificates() {
+  [[ $# == 1 ]] || fail 'LocalSimulation.CertificateArgumentsInvalid'
+  local state="$1" tls="$1/tls"
+  regular_dir "$state"
+  [[ ! -e "$tls" ]] || fail 'LocalSimulation.CertificateOutputExists'
+  mkdir -m 0700 "$tls"
+  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "$tls/ca.key" >/dev/null 2>&1
+  openssl req -x509 -new -sha256 -days 30 -key "$tls/ca.key" -subj '/CN=MyDmsVn Local Simulation CA' -out "$tls/ca.crt" >/dev/null 2>&1
+  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$tls/sql.key" >/dev/null 2>&1
+  openssl req -new -key "$tls/sql.key" -subj '/CN=localhost' -out "$tls/sql.csr" >/dev/null 2>&1
+  printf 'subjectAltName=DNS:localhost,DNS:host.docker.internal\nextendedKeyUsage=serverAuth\n' >"$tls/sql.ext"
+  openssl x509 -req -sha256 -days 30 -in "$tls/sql.csr" -CA "$tls/ca.crt" -CAkey "$tls/ca.key" -CAcreateserial -extfile "$tls/sql.ext" -out "$tls/sql.crt" >/dev/null 2>&1
+  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$tls/nginx.key" >/dev/null 2>&1
+  openssl req -new -key "$tls/nginx.key" -subj '/CN=localhost' -out "$tls/nginx.csr" >/dev/null 2>&1
+  printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\nextendedKeyUsage=serverAuth\n' >"$tls/nginx.ext"
+  openssl x509 -req -sha256 -days 30 -in "$tls/nginx.csr" -CA "$tls/ca.crt" -CAkey "$tls/ca.key" -CAcreateserial -extfile "$tls/nginx.ext" -out "$tls/nginx.crt" >/dev/null 2>&1
+  chmod 0600 "$tls"/*.key
+  chmod 0644 "$tls"/*.crt
+  printf '{"schemaVersion":1,"status":"CERTIFICATES_CREATED","notice":"LOCAL SIMULATION - NOT VPS-08/09 ACCEPTANCE"}\n'
+}
+
+install_lab() {
+  [[ $# == 4 ]] || fail 'LocalSimulation.InstallArgumentsInvalid'
+  [[ "$(id -u)" == 0 ]] || fail 'LocalSimulation.RootRequired'
+  local state="$1" rendered="$2" publish="$3" requested="$4" secret
+  load_instance "$state"
+  [[ "$requested" == "$INSTANCE_ID" ]] || fail 'LocalSimulation.InstanceMismatch'
+  regular_dir "$rendered"; regular_dir "$publish"
+  command -v nginx >/dev/null || fail 'LocalSimulation.NginxMissing'
+  [[ -x /usr/bin/dotnet ]] || fail 'LocalSimulation.AspNetRuntimeMissing'
+  if ! id mydmsvn-local-sim >/dev/null 2>&1; then useradd --system --no-create-home --shell /usr/sbin/nologin mydmsvn-local-sim; fi
+  install -d -o root -g root -m 0755 /opt/mydmsvn-local-sim /opt/mydmsvn-local-sim/releases /usr/local/libexec
+  install -d -o root -g root -m 0700 /etc/mydmsvn-local-sim /etc/mydmsvn-local-sim/credentials /etc/mydmsvn-local-sim/tls
+  printf '%s\n' "$INSTANCE_ID" >/etc/mydmsvn-local-sim/instance-id
+  chmod 0600 /etc/mydmsvn-local-sim/instance-id
+  install -d -o mydmsvn-local-sim -g mydmsvn-local-sim -m 0700 /var/lib/mydmsvn-local-sim /var/lib/mydmsvn-local-sim/audit
+  install -o mydmsvn-local-sim -g mydmsvn-local-sim -m 0600 /dev/null /var/lib/mydmsvn-local-sim/audit/security.jsonl
+  [[ ! -e "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA" ]] || fail 'LocalSimulation.ReleaseExists'
+  install -d -o root -g root -m 0755 "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA"
+  cp -a -- "$publish/." "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA/"
+  chown -R root:root "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA"
+  ln -sfn "releases/$SOURCE_SHA" /opt/mydmsvn-local-sim/current
+  install -o root -g root -m 0644 "$rendered/mydmsvn-local-sim.service" /etc/systemd/system/mydmsvn-local-sim.service
+  install -o root -g root -m 0755 "$rendered/mydmsvn-local-sim-start" /usr/local/libexec/mydmsvn-local-sim-start
+  install -o root -g mydmsvn-local-sim -m 0640 "$rendered/runtime.env" /etc/mydmsvn-local-sim/runtime.env
+  for secret in proxy_token jwt_keys sql_connection_string; do install -o root -g root -m 0600 "$state/secrets/$secret" "/etc/mydmsvn-local-sim/credentials/$secret"; done
+  install -o root -g root -m 0644 "$state/tls/ca.crt" /etc/mydmsvn-local-sim/tls/ca.crt
+  install -o root -g root -m 0644 "$state/tls/nginx.crt" /etc/mydmsvn-local-sim/tls/nginx.crt
+  install -o root -g root -m 0600 "$state/tls/nginx.key" /etc/mydmsvn-local-sim/tls/nginx.key
+  install -o root -g root -m 0644 "$rendered/mydmsvn-local-sim.nginx.conf" /etc/nginx/sites-available/mydmsvn-local-sim
+  ln -sfn /etc/nginx/sites-available/mydmsvn-local-sim /etc/nginx/sites-enabled/mydmsvn-local-sim
+  printf 'proxy_set_header X-MyDmsVn-Proxy-Token "%s";\n' "$(cat "$state/secrets/proxy_token")" >/etc/nginx/mydmsvn-local-sim-proxy-token.conf
+  chmod 0600 /etc/nginx/mydmsvn-local-sim-proxy-token.conf
+  nginx -t >/dev/null
+  systemctl daemon-reload
+  systemctl enable mydmsvn-local-sim.service >/dev/null
+  printf '{"schemaVersion":1,"status":"INSTALLED","instanceId":"%s","notice":"LOCAL SIMULATION - NOT VPS-08/09 ACCEPTANCE"}\n' "$INSTANCE_ID"
+}
+
+install_prerequisites() {
+  [[ "$(id -u)" == 0 ]] || fail 'LocalSimulation.RootRequired'
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq nginx aspnetcore-runtime-10.0
+  command -v nginx >/dev/null || fail 'LocalSimulation.NginxMissing'
+  [[ -x /usr/bin/dotnet ]] || fail 'LocalSimulation.AspNetRuntimeMissing'
+  printf '{"schemaVersion":1,"status":"PREREQUISITES_READY","notice":"LOCAL SIMULATION - NOT VPS-08/09 ACCEPTANCE"}\n'
+}
+
+start_lab() {
+  [[ "$(id -u)" == 0 ]] || fail 'LocalSimulation.RootRequired'
+  systemctl restart mydmsvn-local-sim.service
+  systemctl reload nginx
+}
+
+stop_lab() {
+  [[ "$(id -u)" == 0 ]] || fail 'LocalSimulation.RootRequired'
+  systemctl stop mydmsvn-local-sim.service
+}
+
+verify_lab() {
+  [[ "$(id -u)" == 0 ]] || fail 'LocalSimulation.RootRequired'
+  systemctl is-active --quiet mydmsvn-local-sim.service || fail 'LocalSimulation.ServiceInactive'
+  curl --fail --silent --show-error --max-time 8 --cacert /etc/mydmsvn-local-sim/tls/ca.crt https://localhost:50443/api/v1/health >/dev/null || fail 'LocalSimulation.HttpsHealthFailed'
+  local direct
+  direct="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 4 -H 'Host: localhost:50443' http://127.0.0.1:5080/api/v1/health || true)"
+  [[ "$direct" == 400 ]] || fail 'LocalSimulation.DirectKestrelAdmissionFailed'
+  printf '{"schemaVersion":1,"status":"VERIFIED","notice":"LOCAL SIMULATION - NOT VPS-08/09 ACCEPTANCE"}\n'
+}
+
+recovery_drill() {
+  [[ "$(id -u)" == 0 ]] || fail 'LocalSimulation.RootRequired'
+  systemctl restart mydmsvn-local-sim.service
+  systemctl kill --kill-whom=main --signal=SIGKILL mydmsvn-local-sim.service
+  local recovered=0 https=0
+  for _ in $(seq 1 30); do systemctl is-active --quiet mydmsvn-local-sim.service && { recovered=1; break; }; sleep 1; done
+  curl --fail --silent --max-time 5 --cacert /etc/mydmsvn-local-sim/tls/ca.crt https://localhost:50443/api/v1/health >/dev/null 2>&1 && https=1 || true
+  recovery_result "$recovered" "$https"
+}
+
+recovery_result() {
+  [[ $# == 2 && "$1" =~ ^[01]$ && "$2" =~ ^[01]$ ]] || fail 'LocalSimulation.RecoveryArgumentsInvalid'
+  if [[ "$1" == 1 && "$2" == 1 ]]; then
+    printf '{"schemaVersion":1,"status":"RECOVERED","notice":"LOCAL SIMULATION - NOT VPS-08/09 ACCEPTANCE"}\n'; return 0
+  fi
+  printf '{"schemaVersion":1,"status":"FAILED","notice":"LOCAL SIMULATION - NOT VPS-08/09 ACCEPTANCE"}\n'; return 1
+}
+
+reset_lab() {
+  [[ $# == 1 && "$(id -u)" == 0 ]] || fail 'LocalSimulation.ResetArgumentsInvalid'
+  local requested="$1" marker
+  regular_file /etc/mydmsvn-local-sim/instance-id
+  marker="$(cat /etc/mydmsvn-local-sim/instance-id)"
+  [[ "$requested" == "$marker" ]] || fail 'LocalSimulation.InstanceMismatch'
+  systemctl disable --now mydmsvn-local-sim.service >/dev/null 2>&1 || true
+  rm -f -- /etc/systemd/system/mydmsvn-local-sim.service /usr/local/libexec/mydmsvn-local-sim-start
+  rm -f -- /etc/nginx/sites-enabled/mydmsvn-local-sim /etc/nginx/sites-available/mydmsvn-local-sim /etc/nginx/mydmsvn-local-sim-proxy-token.conf
+  rm -rf -- /opt/mydmsvn-local-sim /etc/mydmsvn-local-sim /var/lib/mydmsvn-local-sim
+  userdel mydmsvn-local-sim >/dev/null 2>&1 || true
+  systemctl daemon-reload
+  nginx -t >/dev/null && systemctl reload nginx || true
+}
+
+reset_sandbox() {
+  [[ $# == 2 ]] || fail 'LocalSimulation.SandboxResetArgumentsInvalid'
+  local target="$1" requested="$2" resolved parent marker
+  regular_dir "$target"; regular_file "$target/instance-id"
+  resolved="$(realpath -- "$target")"; parent="$(basename -- "$resolved")"
+  [[ "$parent" == mydmsvn-local-sim-* ]] || fail 'LocalSimulation.SandboxTargetRefused'
+  marker="$(cat "$target/instance-id")"; [[ "$marker" == "$requested" ]] || fail 'LocalSimulation.InstanceMismatch'
+  rm -rf --one-file-system -- "$resolved"
+  printf '{"schemaVersion":1,"status":"RESET","notice":"LOCAL SIMULATION - NOT VPS-08/09 ACCEPTANCE"}\n'
+}
+
+command="${1:-}"; shift || true
+case "$command" in
+  render) render "$@" ;;
+  certificates) certificates "$@" ;;
+  prerequisites) install_prerequisites "$@" ;;
+  install) install_lab "$@" ;;
+  start) start_lab "$@" ;;
+  stop) stop_lab "$@" ;;
+  verify) verify_lab "$@" ;;
+  recovery) recovery_drill "$@" ;;
+  recovery-result) recovery_result "$@" ;;
+  reset) reset_lab "$@" ;;
+  reset-sandbox) reset_sandbox "$@" ;;
+  *) fail 'LocalSimulation.CommandInvalid' ;;
+esac

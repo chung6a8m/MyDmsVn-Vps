@@ -23,11 +23,30 @@ internal sealed class SqlLifecycle
         switch (command)
         {
             case "create": await CreateAsync().ConfigureAwait(false); return;
+            case "backup-verify": await BackupVerifyAsync().ConfigureAwait(false); return;
             case "provision": await ProvisionAsync().ConfigureAwait(false); return;
             case "verify": await VerifyAsync().ConfigureAwait(false); return;
             case "reset-admission": await VerifyMarkerAsync().ConfigureAwait(false); return;
             default: throw new LocalSimulationBlockedException("LocalSimulation.CommandInvalid");
         }
+    }
+
+    private async Task BackupVerifyAsync()
+    {
+        await VerifyMarkerAsync().ConfigureAwait(false);
+        await using var master = new SqlConnection(_settings.AdminConnection.ConnectionString);
+        await master.OpenAsync().ConfigureAwait(false);
+        await using var command = new SqlCommand(@"
+BACKUP DATABASE [MyDmsVnVps_LocalSimulation]
+TO DISK=N'/var/opt/mssql/backup/local-sim-empty.bak'
+WITH INIT,CHECKSUM;
+RESTORE VERIFYONLY
+FROM DISK=N'/var/opt/mssql/backup/local-sim-empty.bak'
+WITH CHECKSUM;", master)
+        {
+            CommandTimeout = 180,
+        };
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
     private async Task CreateAsync()

@@ -1,0 +1,121 @@
+import json
+import os
+import pathlib
+import shutil
+import subprocess
+import tempfile
+import unittest
+import uuid
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+HELPER = ROOT / "scripts" / "local-simulation" / "mydmsvn-local-sim"
+
+
+def linux_path(path):
+    path = pathlib.Path(path).resolve()
+    if os.name != "nt":
+        return str(path)
+    drive = path.drive[0].lower()
+    return "/mnt/" + drive + str(path)[2:].replace("\\", "/")
+
+
+def run_helper(*args):
+    command = ["bash", linux_path(HELPER), *[linux_path(v) if isinstance(v, pathlib.Path) else str(v) for v in args]]
+    if os.name == "nt":
+        command = ["wsl", "-d", "Ubuntu", "--", *command]
+    return subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
+
+
+class LocalSimulationWslTests(unittest.TestCase):
+    def setUp(self):
+        self.base = pathlib.Path(tempfile.mkdtemp(prefix="mydmsvn-local-sim-test-"))
+        self.state = self.base / "state"
+        self.output = self.base / "rendered"
+        self.publish = self.base / "publish"
+        for path in (self.state / "secrets", self.state / "tls", self.publish):
+            path.mkdir(parents=True, exist_ok=True)
+        self.instance_id = "11111111-2222-4333-8444-555555555555"
+        (self.state / "instance.env").write_text(
+            "\n".join(
+                [
+                    f"INSTANCE_ID={self.instance_id}",
+                    "SOURCE_SHA=" + "a" * 40,
+                    "PUBLIC_ORIGIN=https://localhost:50443",
+                    "SQL_SERVER=host.docker.internal,11433",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        for name, value in {
+            "proxy_token": "ProxyToken_1234567890_abcdef",
+            "jwt_keys": "local-key:JwtKey_1234567890_abcdef",
+            "sql_connection_string": "Server=host.docker.internal,11433;Password=PrivateSql_123!",
+        }.items():
+            (self.state / "secrets" / name).write_text(value, encoding="utf-8")
+        for name in ("ca.crt", "nginx.crt", "nginx.key"):
+            (self.state / "tls" / name).write_text("fixture-" + name, encoding="utf-8")
+        (self.publish / "MyDmsVn.Server.AspNetCoreHost.dll").write_text("fixture", encoding="utf-8")
+
+    def tearDown(self):
+        shutil.rmtree(self.base, ignore_errors=True)
+
+    def test_render_produces_hardened_local_service_and_proxy_without_secrets(self):
+        result = run_helper("render", self.state, self.output, self.publish)
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual("RENDERED", report["status"])
+        service = (self.output / "mydmsvn-local-sim.service").read_text(encoding="utf-8")
+        nginx = (self.output / "mydmsvn-local-sim.nginx.conf").read_text(encoding="utf-8")
+        wrapper = (self.output / "mydmsvn-local-sim-start").read_text(encoding="utf-8")
+        combined = service + nginx + wrapper
+        self.assertIn("ProtectSystem=strict", service)
+        self.assertIn("127.0.0.1:5080", service)
+        self.assertIn("listen 127.0.0.1:50443 ssl", nginx)
+        self.assertIn("proxy_set_header X-Forwarded-Proto https", nginx)
+        self.assertIn("include /etc/nginx/mydmsvn-local-sim-proxy-token.conf", nginx)
+        self.assertNotIn("PrivateSql_123!", combined)
+        self.assertNotIn("ProxyToken_1234567890_abcdef", combined)
+
+    def test_render_refuses_invalid_instance_identity(self):
+        instance_file = self.state / "instance.env"
+        instance_file.write_text(
+            instance_file.read_text(encoding="utf-8").replace(self.instance_id, "not-a-guid"),
+            encoding="utf-8",
+        )
+
+        result = run_helper("render", self.state, self.output, self.publish)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("LocalSimulation.InstanceInvalid", result.stderr)
+        self.assertFalse(self.output.exists())
+
+    def test_sandbox_reset_requires_matching_marker_and_preserves_sibling(self):
+        sandbox = self.base / "sandbox"
+        owned = sandbox / "mydmsvn-local-sim-owned"
+        sibling = sandbox / "unrelated"
+        owned.mkdir(parents=True)
+        sibling.mkdir(parents=True)
+        (owned / "instance-id").write_text(self.instance_id, encoding="utf-8")
+        (sibling / "keep").write_text("keep", encoding="utf-8")
+
+        result = run_helper("reset-sandbox", owned, self.instance_id)
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertFalse(owned.exists())
+        self.assertEqual("keep", (sibling / "keep").read_text(encoding="utf-8"))
+
+    def test_recovery_result_fails_when_service_or_https_did_not_recover(self):
+        passed = run_helper("recovery-result", "1", "1")
+        failed = run_helper("recovery-result", "1", "0")
+
+        self.assertEqual(0, passed.returncode)
+        self.assertEqual("RECOVERED", json.loads(passed.stdout)["status"])
+        self.assertNotEqual(0, failed.returncode)
+        self.assertEqual("FAILED", json.loads(failed.stdout)["status"])
+
+
+if __name__ == "__main__":
+    unittest.main()

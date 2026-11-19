@@ -9,7 +9,9 @@ param(
     [ValidateSet('Text', 'Json')]
     [string] $OutputFormat = 'Text',
 
-    [string] $ConfirmInstanceId
+    [string] $ConfirmInstanceId,
+
+    [switch] $DryRun
 )
 
 Set-StrictMode -Version Latest
@@ -24,7 +26,7 @@ $resolvedStateRoot = [IO.Path]::GetFullPath($StateRoot)
 
 function Write-Outcome {
     param(
-        [Parameter(Mandatory = $true)] [hashtable] $Value,
+        [Parameter(Mandatory = $true)] [Collections.IDictionary] $Value,
         [Parameter(Mandatory = $true)] [int] $ExitCode
     )
 
@@ -34,7 +36,7 @@ function Write-Outcome {
     }
     else {
         [Console]::Out.WriteLine(('{0}: {1}' -f $Value.action, $Value.status))
-        if ($Value.ContainsKey('code')) {
+        if ($Value.Contains('code')) {
             [Console]::Out.WriteLine($Value.code)
         }
         [Console]::Out.WriteLine($Value.notice)
@@ -60,8 +62,86 @@ function Test-ReparsePoint {
     return [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
 }
 
+function Read-ValidatedReceipt {
+    param([switch] $RequireConfirmation, [switch] $RequireReady)
+
+    if (-not (Test-Path -LiteralPath $resolvedStateRoot -PathType Container)) {
+        Refuse 'LocalSimulation.ReceiptMissing'
+    }
+    if (Test-ReparsePoint $resolvedStateRoot) {
+        Refuse 'LocalSimulation.ReparsePointRefused'
+    }
+    $receiptPath = Join-Path $resolvedStateRoot 'receipt.json'
+    if (-not (Test-Path -LiteralPath $receiptPath -PathType Leaf)) {
+        Refuse 'LocalSimulation.ReceiptMissing'
+    }
+    if (Test-ReparsePoint $receiptPath) {
+        Refuse 'LocalSimulation.ReparsePointRefused'
+    }
+    try { $receipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json }
+    catch { Refuse 'LocalSimulation.ReceiptInvalid' }
+
+    $required = @('schemaVersion', 'instanceId', 'sourceSha', 'stateRoot', 'phase', 'docker', 'wsl')
+    $properties = @($receipt.PSObject.Properties.Name)
+    if (@($required | Where-Object { $_ -notin $properties }).Count -gt 0 -or
+        $null -eq $receipt.docker -or $null -eq $receipt.wsl) {
+        Refuse 'LocalSimulation.ReceiptInvalid'
+    }
+    $dockerProperties = @($receipt.docker.PSObject.Properties.Name)
+    $wslProperties = @($receipt.wsl.PSObject.Properties.Name)
+    if ('container' -notin $dockerProperties -or 'volume' -notin $dockerProperties -or 'created' -notin $dockerProperties -or
+        'distribution' -notin $wslProperties -or 'service' -notin $wslProperties -or 'installed' -notin $wslProperties -or
+        $receipt.schemaVersion -ne 1 -or $receipt.sourceSha -notmatch '^[0-9a-f]{40}$' -or
+        $receipt.instanceId -notmatch '^[0-9a-fA-F-]{36}$') {
+        Refuse 'LocalSimulation.ReceiptInvalid'
+    }
+    $receiptStateRoot = [IO.Path]::GetFullPath([string]$receipt.stateRoot)
+    if (-not $receiptStateRoot.Equals($resolvedStateRoot, [StringComparison]::OrdinalIgnoreCase)) {
+        Refuse 'LocalSimulation.ReceiptStateMismatch'
+    }
+    if ($receipt.docker.container -ne 'mydmsvn-local-sim-sql' -or
+        $receipt.docker.volume -ne 'mydmsvn-local-sim-sql-data' -or
+        $receipt.wsl.distribution -ne 'Ubuntu' -or
+        $receipt.wsl.service -ne 'mydmsvn-local-sim.service') {
+        Refuse 'LocalSimulation.ResourceIdentityMismatch'
+    }
+    if ($RequireConfirmation -and
+        ([string]::IsNullOrWhiteSpace($ConfirmInstanceId) -or $ConfirmInstanceId -ne $receipt.instanceId)) {
+        Refuse 'LocalSimulation.InstanceConfirmationMismatch'
+    }
+    if ($RequireReady -and $receipt.phase -ne 'ready') {
+        Refuse 'LocalSimulation.ReceiptPhaseInvalid'
+    }
+    return $receipt
+}
+
 if (-not (Test-PathWithinAllowedStateParent)) {
     Refuse 'LocalSimulation.StateRootOutsideAllowedParent'
+}
+
+if ($Action -eq 'Initialize' -and $DryRun) {
+    Write-Outcome -Value @{
+        action = 'Initialize'
+        status = 'PLANNED'
+        resources = [ordered]@{
+            container = 'mydmsvn-local-sim-sql'
+            volume = 'mydmsvn-local-sim-sql-data'
+            service = 'mydmsvn-local-sim.service'
+            origin = 'https://localhost:50443'
+            kestrel = 'http://127.0.0.1:5080'
+            sql = 'localhost,11433'
+        }
+    } -ExitCode 0
+}
+
+function Invoke-RuntimeAction {
+    param([scriptblock] $Operation)
+    try { return & $Operation }
+    catch {
+        $code = [string]$_.Exception.Message
+        if ($code -notmatch '^LocalSimulation\.[A-Za-z0-9.]+$') { $code = 'LocalSimulation.UnexpectedFailure' }
+        Refuse $code
+    }
 }
 
 if ($Action -eq 'Preflight') {
@@ -74,14 +154,27 @@ if ($Action -eq 'Preflight') {
     Add-Check 'StateRootPolicy' $true 'State root is inside the repository ignored TestResults/local-simulation tree.'
 
     try {
-        $dockerOs = (& docker version --format '{{.Server.Os}}' 2>$null | Select-Object -First 1)
-        Add-Check 'DockerLinuxEngine' ($LASTEXITCODE -eq 0 -and $dockerOs -eq 'linux') 'Docker Server must be reachable and report linux.'
+        $dockerOutput = @(& docker version --format '{{.Server.Os}}' 2>$null)
+        $dockerCode = $LASTEXITCODE
+        $dockerOs = $(if ($dockerOutput.Count -gt 0) { [string]$dockerOutput[0] } else { '' })
+        Add-Check 'DockerLinuxEngine' ($dockerCode -eq 0 -and $dockerOs -eq 'linux') 'Docker Server must be reachable and report linux.'
+        $containerNames = @(& docker container ls -a --format '{{.Names}}' 2>$null)
+        $containerAvailable = $LASTEXITCODE -eq 0 -and 'mydmsvn-local-sim-sql' -notin $containerNames
+        $volumeNames = @(& docker volume ls --format '{{.Name}}' 2>$null)
+        $volumeAvailable = $LASTEXITCODE -eq 0 -and 'mydmsvn-local-sim-sql-data' -notin $volumeNames
+        Add-Check 'DockerResourceNamesAvailable' ($containerAvailable -and $volumeAvailable) 'Local simulation container and volume names must be unused.'
     }
-    catch { Add-Check 'DockerLinuxEngine' $false 'Docker Server is unavailable.' }
+    catch {
+        Add-Check 'DockerLinuxEngine' $false 'Docker Server is unavailable.'
+        Add-Check 'DockerResourceNamesAvailable' $false 'Docker resource identity cannot be verified.'
+    }
 
     try {
-        $wslResult = (& wsl -d Ubuntu -- bash -lc 'test "$(ps -p 1 -o comm= | tr -d " ")" = systemd && sudo -n true' 2>$null)
-        Add-Check 'WslUbuntuSystemdSudo' ($LASTEXITCODE -eq 0) 'Ubuntu must run systemd and allow noninteractive sudo.'
+        & wsl -d Ubuntu -- systemctl is-system-running --quiet 2>$null
+        $systemdReady = $LASTEXITCODE -eq 0
+        & wsl -d Ubuntu -- sudo -n true 2>$null
+        $sudoReady = $LASTEXITCODE -eq 0
+        Add-Check 'WslUbuntuSystemdSudo' ($systemdReady -and $sudoReady) 'Ubuntu must run systemd and allow noninteractive sudo.'
     }
     catch { Add-Check 'WslUbuntuSystemdSudo' $false 'Ubuntu/systemd/passwordless sudo is unavailable.' }
 
@@ -117,58 +210,23 @@ if ($Action -eq 'Preflight') {
     } -ExitCode $(if ($blocked) { 2 } else { 0 })
 }
 
+if ($Action -eq 'Initialize') {
+    $engine = (Get-Process -Id $PID).Path
+    $preflightText = & $engine -NoLogo -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Action Preflight -StateRoot $resolvedStateRoot -OutputFormat Json
+    $preflightCode = $LASTEXITCODE
+    try { $preflight = $preflightText | ConvertFrom-Json }
+    catch { Refuse 'LocalSimulation.PreflightInvalid' }
+    if ($preflightCode -ne 0 -or $preflight.status -ne 'READY') { Refuse 'LocalSimulation.PreflightBlocked' }
+    Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
+    $result = Invoke-RuntimeAction { Initialize-MyDmsVnLocalSimulation -RepoRoot $repoRoot -StateRoot $resolvedStateRoot }
+    Write-Outcome -Value $result -ExitCode 0
+}
+
 if ($Action -eq 'Reset') {
-    if (-not (Test-Path -LiteralPath $resolvedStateRoot -PathType Container)) {
-        Refuse 'LocalSimulation.ReceiptMissing'
-    }
-    if (Test-ReparsePoint $resolvedStateRoot) {
-        Refuse 'LocalSimulation.ReparsePointRefused'
-    }
+    $receipt = Read-ValidatedReceipt -RequireConfirmation
 
-    $receiptPath = Join-Path $resolvedStateRoot 'receipt.json'
-    if (-not (Test-Path -LiteralPath $receiptPath -PathType Leaf)) {
-        Refuse 'LocalSimulation.ReceiptMissing'
-    }
-    if (Test-ReparsePoint $receiptPath) {
-        Refuse 'LocalSimulation.ReparsePointRefused'
-    }
-
-    try { $receipt = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json }
-    catch { Refuse 'LocalSimulation.ReceiptInvalid' }
-
-    $requiredReceiptProperties = @('schemaVersion', 'instanceId', 'sourceSha', 'stateRoot', 'docker', 'wsl')
-    $receiptProperties = @($receipt.PSObject.Properties.Name)
-    if (@($requiredReceiptProperties | Where-Object { $_ -notin $receiptProperties }).Count -gt 0) {
-        Refuse 'LocalSimulation.ReceiptInvalid'
-    }
-    if ($null -eq $receipt.docker -or $null -eq $receipt.wsl) {
-        Refuse 'LocalSimulation.ReceiptInvalid'
-    }
-    $dockerProperties = @($receipt.docker.PSObject.Properties.Name)
-    $wslProperties = @($receipt.wsl.PSObject.Properties.Name)
-    if ('container' -notin $dockerProperties -or 'volume' -notin $dockerProperties -or
-        'distribution' -notin $wslProperties -or 'service' -notin $wslProperties) {
-        Refuse 'LocalSimulation.ReceiptInvalid'
-    }
-
-    if ($receipt.schemaVersion -ne 1 -or
-        $receipt.sourceSha -notmatch '^[0-9a-f]{40}$' -or
-        $receipt.instanceId -notmatch '^[0-9a-fA-F-]{36}$') {
-        Refuse 'LocalSimulation.ReceiptInvalid'
-    }
-    $receiptStateRoot = [IO.Path]::GetFullPath([string]$receipt.stateRoot)
-    if (-not $receiptStateRoot.Equals($resolvedStateRoot, [StringComparison]::OrdinalIgnoreCase)) {
-        Refuse 'LocalSimulation.ReceiptStateMismatch'
-    }
-    if ([string]::IsNullOrWhiteSpace($ConfirmInstanceId) -or $ConfirmInstanceId -ne $receipt.instanceId) {
-        Refuse 'LocalSimulation.InstanceConfirmationMismatch'
-    }
-    if ($receipt.docker.container -ne 'mydmsvn-local-sim-sql' -or
-        $receipt.docker.volume -ne 'mydmsvn-local-sim-sql-data' -or
-        $receipt.wsl.distribution -ne 'Ubuntu' -or
-        $receipt.wsl.service -ne 'mydmsvn-local-sim.service') {
-        Refuse 'LocalSimulation.ResourceIdentityMismatch'
-    }
+    Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
+    Invoke-RuntimeAction { Reset-MyDmsVnLocalSimulationExternal -RepoRoot $repoRoot -Receipt $receipt } | Out-Null
 
     $deleteTarget = (Get-Item -LiteralPath $resolvedStateRoot -Force).FullName
     if (-not $deleteTarget.Equals($resolvedStateRoot, [StringComparison]::OrdinalIgnoreCase) -or
@@ -177,6 +235,21 @@ if ($Action -eq 'Reset') {
     }
     Remove-Item -LiteralPath $deleteTarget -Recurse -Force
     Write-Outcome -Value @{ action = 'Reset'; status = 'RESET'; instanceId = $ConfirmInstanceId } -ExitCode 0
+}
+
+if ($Action -in @('Start', 'Verify', 'Stop')) {
+    $receipt = Read-ValidatedReceipt -RequireReady
+    Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
+    if ($Action -eq 'Start') {
+        $result = Invoke-RuntimeAction { Start-MyDmsVnLocalSimulation -RepoRoot $repoRoot -Receipt $receipt }
+    }
+    elseif ($Action -eq 'Verify') {
+        $result = Invoke-RuntimeAction { Verify-MyDmsVnLocalSimulation -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt }
+    }
+    else {
+        $result = Invoke-RuntimeAction { Stop-MyDmsVnLocalSimulation -RepoRoot $repoRoot -Receipt $receipt }
+    }
+    Write-Outcome -Value $result -ExitCode 0
 }
 
 Write-Outcome -Value @{

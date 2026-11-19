@@ -11,9 +11,7 @@ internal static class Program
     {
         try
         {
-            if (args.Length != 1 ||
-                (args[0] != "create" && args[0] != "provision" &&
-                 args[0] != "verify" && args[0] != "reset-admission"))
+            if (args.Length != 1 || !LocalSimulationCommands.IsAllowed(args[0]))
                 throw new LocalSimulationBlockedException("LocalSimulation.CommandInvalid");
 
             var settings = LocalSimulationSettings.Parse(ReadEnvironment());

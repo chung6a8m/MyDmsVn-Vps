@@ -48,6 +48,8 @@
 *.css text eol=lf
 *.scss text eol=lf
 *.html text eol=lf
+scripts/local-simulation/mydmsvn-local-sim text eol=lf
+scripts/local-simulation/templates/* text eol=lf
 
 # Binary files must never be line-ending normalized.
 *.png binary

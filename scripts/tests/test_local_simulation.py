@@ -10,6 +10,7 @@ import uuid
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "local-simulation" / "Invoke-MyDmsVnLocalSimulation.ps1"
+RUNTIME_MODULE = ROOT / "scripts" / "local-simulation" / "LocalSimulation.Runtime.psm1"
 STATE_PARENT = ROOT / "TestResults" / "local-simulation"
 
 
@@ -61,11 +62,17 @@ class LocalSimulationOperatorTests(unittest.TestCase):
             "sourceSha": "a" * 40,
             "stateRoot": str(self.state.resolve()),
             "createdAtUtc": "2026-11-19T00:00:00Z",
+            "phase": "ready",
             "docker": {
                 "container": "mydmsvn-local-sim-sql",
                 "volume": "mydmsvn-local-sim-sql-data",
+                "created": False,
             },
-            "wsl": {"distribution": "Ubuntu", "service": "mydmsvn-local-sim.service"},
+            "wsl": {
+                "distribution": "Ubuntu",
+                "service": "mydmsvn-local-sim.service",
+                "installed": False,
+            },
         }
         receipt.update(changes)
         (self.state / "receipt.json").write_text(json.dumps(receipt), encoding="utf-8")
@@ -79,7 +86,53 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertEqual("Preflight", report["action"])
         self.assertIn(report["status"], ("READY", "BLOCKED"))
         self.assertGreaterEqual(len(report["checks"]), 6)
+        self.assertIn("DockerResourceNamesAvailable", {item["name"] for item in report["checks"]})
         self.assertFalse(self.state.exists())
+
+    def test_initialize_dry_run_reports_exact_resources_without_mutation(self):
+        result = self.run_operator("Initialize", "-DryRun")
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual("PLANNED", report["status"])
+        self.assertEqual("mydmsvn-local-sim-sql", report["resources"]["container"])
+        self.assertEqual("mydmsvn-local-sim.service", report["resources"]["service"])
+        self.assertEqual("https://localhost:50443", report["resources"]["origin"])
+        self.assertFalse(self.state.exists())
+
+    def test_lifecycle_actions_require_receipt(self):
+        for action in ("Start", "Verify", "Stop"):
+            with self.subTest(action=action):
+                result = self.run_operator(action)
+                self.assertNotEqual(0, result.returncode)
+                self.assertEqual(
+                    "LocalSimulation.ReceiptMissing", json.loads(result.stdout)["code"]
+                )
+
+    def test_start_refuses_partial_initialization_receipt(self):
+        self.write_receipt(phase="initializing")
+
+        result = self.run_operator("Start")
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual("LocalSimulation.ReceiptPhaseInvalid", json.loads(result.stdout)["code"])
+
+    @unittest.skipUnless(os.name == "nt", "Windows-to-WSL conversion is Windows-specific")
+    def test_runtime_module_converts_windows_path_without_truncation(self):
+        command = (
+            f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+            f"& (Get-Module LocalSimulation.Runtime) {{ param($p) Convert-ToWslPath $p }} '{ROOT}'"
+        )
+
+        result = subprocess.run(
+            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(result.stdout.strip().startswith("/mnt/c/"), result.stdout)
 
     def test_reset_refuses_missing_receipt_and_preserves_unrelated_file(self):
         result = self.run_operator(

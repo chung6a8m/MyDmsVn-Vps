@@ -7,6 +7,18 @@ namespace MyDmsVn.LocalSimulation.Tests;
 
 public sealed class AdmissionTests
 {
+    [Theory]
+    [InlineData("create")]
+    [InlineData("backup-verify")]
+    [InlineData("provision")]
+    [InlineData("verify")]
+    [InlineData("reset-admission")]
+    public void OnlyBoundedLifecycleCommandsAreAdmitted(string command)
+    {
+        Assert.True(LocalSimulationCommands.IsAllowed(command));
+        Assert.False(LocalSimulationCommands.IsAllowed("drop-database"));
+    }
+
     [Fact]
     public void ExactSyntheticLocalSettingsAreAdmitted()
     {
