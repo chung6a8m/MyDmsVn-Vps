@@ -43,6 +43,7 @@ class Vps09LinuxReceiptTests(unittest.TestCase):
         self.assertEqual("OWNER_SECOND_PASS_REQUIRED", receipt["physicalEvidenceReview"])
         self.assertEqual("OWN-VPS-04", receipt["decisionId"])
         self.assertEqual("chung6a8m", receipt["owner"])
+        self.assertEqual("NO_INDEPENDENT_HUMAN_REVIEW", receipt["assurance"])
         self.assertNotIn(str(self.root), output.read_text(encoding="utf-8"))
 
     def test_missing_event_is_refused(self):
@@ -83,6 +84,7 @@ class Vps09LinuxReceiptTests(unittest.TestCase):
             "machineSha256": DIGEST,
             "governanceMode": "single-owner-exception",
             "decisionId": "OWN-VPS-04",
+            "assurance": "NO_INDEPENDENT_HUMAN_REVIEW",
             "owner": "chung6a8m",
             "observedAtUtc": "2026-11-18T12:00:00Z",
             "outcome": outcome,

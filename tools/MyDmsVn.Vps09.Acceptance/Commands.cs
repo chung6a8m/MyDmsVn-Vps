@@ -20,6 +20,7 @@ public sealed record PreflightCommandInput(
     string Admission,
     string GovernanceMode,
     string DecisionId,
+    string Assurance,
     string Owner,
     string RunnerSha256,
     string DatabaseClassification);
@@ -148,7 +149,7 @@ public static class CommandLine
         var state = git.Read();
         var receipt = PreflightValidator.Validate(new PreflightInput(
             input.ReviewedSha, state.Sha, state.Clean, input.Origin, connection,
-            input.Admission, input.GovernanceMode, input.DecisionId, input.Owner,
+            input.Admission, input.GovernanceMode, input.DecisionId, input.Assurance, input.Owner,
             input.RunnerSha256,
             input.DatabaseClassification));
         WriteNew(outputPath, receipt);
@@ -237,7 +238,7 @@ public static class CommandLine
             new string('a', 40), new string('a', 40), true,
             "https://sql-admission.invalid", connectionString,
             "reviewed-isolated-sql13-only", "single-owner-exception", "OWN-VPS-04",
-            "chung6a8m", new string('a', 64),
+            "NO_INDEPENDENT_HUMAN_REVIEW", "chung6a8m", new string('a', 64),
             "isolated-nonproduction"));
     }
 

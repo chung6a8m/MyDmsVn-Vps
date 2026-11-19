@@ -26,6 +26,8 @@ class Vps09GuiChecklistTests(unittest.TestCase):
         self.assertEqual(9, receipt["passed"])
         self.assertEqual("STRUCTURE_COMPLETE_NOT_REVIEWED", receipt["overall"])
         self.assertEqual("OWNER_SECOND_PASS_REQUIRED", receipt["attendedEvidenceReview"])
+        self.assertEqual("NO_INDEPENDENT_HUMAN_REVIEW", receipt["assurance"])
+        self.assertEqual(9, len(receipt["checkpoints"]))
 
     def test_missing_checkpoint_is_refused(self):
         document = self._document()
@@ -42,7 +44,7 @@ class Vps09GuiChecklistTests(unittest.TestCase):
         document["reviewer"] = "reviewer02"
         self._write(document)
 
-        with self.assertRaisesRegex(ChecklistBlocked, "ChecklistSchemaInvalid"):
+        with self.assertRaisesRegex(ChecklistBlocked, "ChecklistFieldsInvalid"):
             validate(self.path)
 
     def test_reused_checkpoint_evidence_is_refused(self):
@@ -58,8 +60,10 @@ class Vps09GuiChecklistTests(unittest.TestCase):
             "schemaVersion": 2,
             "sourceSha": SHA,
             "desktopExecutableSha256": "f" * 64,
+            "firstPassRunnerSha256": "e" * 64,
             "governanceMode": "single-owner-exception",
             "decisionId": "OWN-VPS-04",
+            "assurance": "NO_INDEPENDENT_HUMAN_REVIEW",
             "owner": "chung6a8m",
             "sessionType": "interactive",
             "checkpoints": [

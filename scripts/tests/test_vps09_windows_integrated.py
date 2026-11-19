@@ -13,11 +13,13 @@ SHA = "0123456789abcdef0123456789abcdef01234567"
 
 @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 is required")
 class Vps09WindowsIntegratedScriptTests(unittest.TestCase):
-    def test_finalize_copies_hashable_linux_receipt_into_candidate_evidence(self):
+    def test_finalize_retains_the_exact_linux_receipt_bytes_it_validates(self):
         source = SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn("linux-receipt.json", source)
-        self.assertIn("[IO.File]::Copy", source)
+        self.assertIn("ReadAllBytes", source)
+        self.assertIn("WriteAllBytes($retainedLinuxReceipt, $linuxReceiptBytes)", source)
+        self.assertIn("vps09_linux_receipt.py validate --input $retainedLinuxReceipt", source)
 
     def test_script_has_no_powershell_parser_errors(self):
         command = (

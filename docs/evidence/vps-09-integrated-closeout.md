@@ -25,7 +25,7 @@ Issue [#12](https://github.com/chung6a8m/MyDmsVn-Vps/issues/12). Independent sou
 - `.github/workflows/vps-09-evidence.yml`: mandatory Linux/Python/.NET and Windows PowerShell source-only gates on PR/main; protected `bounded`, `prepare`, `finalize`, and Owner second-pass `review` phases. No protected job runs on ordinary PR/push and no automatic production rollout exists.
 - `scripts/configure_vps09_gates.py`: exact-main/self-review/admin-bypass/setting-name/dedicated-runner policy for the three environments. It cannot verify secret values or physical infrastructure.
 
-Source test results generated locally while implementing are development evidence only: Linux/WSL VPS-09 Python discovery **63** with **59 executed/passed and 4 Windows-only skipped**, those Windows coordinator cases separately **4/4 PASS**, and .NET acceptance **41/41 PASS**. They must be rerun by mandatory CI on the final PR HEAD. No protected acceptance phase was run.
+Source test results generated locally while implementing are development evidence only: Linux/WSL VPS-09 Python discovery **70** with **66 executed/passed and 4 Windows-only skipped**, those Windows coordinator cases separately **4/4 PASS**, and .NET acceptance **42/42 PASS**. They must be rerun by mandatory CI on the final PR HEAD. No protected acceptance phase was run.
 
 ## Real acceptance ledger (must remain NOT VERIFIED until actual proof)
 

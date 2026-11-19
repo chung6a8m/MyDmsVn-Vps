@@ -35,9 +35,9 @@ The nonproduction Environment `vps09-fullstack-nonproduction` has zero required 
 
 - Secret `VPS09_ISOLATED_SQL_ADMISSION` = `reviewed-isolated-sql13-only`; secret `VPS09_READONLY_SQL_ORACLE` with `Encrypt=True;TrustServerCertificate=False` and server certificate CA/hostname verification; secret `VPS09_JWT_AUDIENCE`.
 - Dedicated seeded nonproduction writer/denied/operator credentials `VPS09_WRITER_USERNAME`, `VPS09_WRITER_PASSWORD`, `VPS09_DENIED_USERNAME`, `VPS09_DENIED_PASSWORD`, `VPS09_OPERATOR_USERNAME`, `VPS09_OPERATOR_PASSWORD`; never reuse an admin, production or Oracle identity. `VPS09_CLEANUP_ATTESTATION=confirmed-owned-nonproduction-cleanup` is provided only after cleanup has actually completed.
-- Variable `VPS09_PUBLIC_ORIGIN` (canonical public HTTPS, no path/query); seed IDs `VPS09_CUSTOMER_ID`, `VPS09_WAREHOUSE_ID`, `VPS09_EMPLOYEE_ID`, `VPS09_PRODUCT_ID`; protected paths `VPS09_ROUTE_PLAN_PATH`, `VPS09_ORACLE_PLAN_PATH`, reviewed lowercase SHA-256 pins `VPS09_ROUTE_PLAN_SHA256`, `VPS09_ORACLE_PLAN_SHA256`, `VPS09_EVIDENCE_ROOT`, `VPS09_GUI_CHECKLIST_PATH`, `VPS09_LINUX_RECEIPT_PATH`; `VPS09_OWNER=chung6a8m`; and `VPS09_FIRST_PASS_RUNNER_SHA256`, the lowercase SHA-256 of the Windows MachineGuid UTF-8 bytes. The three protected application actors remain distinct from the human governance role.
+- Variable `VPS09_PUBLIC_ORIGIN` (canonical public HTTPS, no path/query); seed IDs `VPS09_CUSTOMER_ID`, `VPS09_WAREHOUSE_ID`, `VPS09_EMPLOYEE_ID`, `VPS09_PRODUCT_ID`; protected paths `VPS09_ROUTE_PLAN_PATH`, `VPS09_ORACLE_PLAN_PATH`, reviewed lowercase SHA-256 pins `VPS09_ROUTE_PLAN_SHA256`, `VPS09_ORACLE_PLAN_SHA256`, `VPS09_EVIDENCE_ROOT`, `VPS09_GUI_CHECKLIST_PATH`, `VPS09_LINUX_RECEIPT_PATH`; `VPS09_OWNER=chung6a8m`; frozen `VPS09_CLOSEOUT_CANDIDATE_SHA`; and `VPS09_FIRST_PASS_RUNNER_SHA256`, the lowercase SHA-256 of the Windows MachineGuid UTF-8 bytes. The three protected application actors remain distinct from the human governance role.
 
-The second Environment `vps09-release-review` has zero required reviewers and uses a separate Linux self-hosted runner labeled `vps09-reviewer`, exact main and disabled admin bypass. Its read-only variables are `VPS09_REVIEW_PACKET_PATH`, `VPS09_OWNER_PUBKEY_PATH`, `VPS09_OWNER_PUBKEY_SHA256` (lowercase SHA-256 of literal PEM bytes, pinned outside the packet before acceptance), `VPS09_SECOND_PASS_RUNNER_SHA256` (SHA-256 of that runner's `/etc/machine-id`) and `VPS09_OWNER=chung6a8m`. No private signing key or SQL credential may be stored in the repository. The runner verifies structural integrity and approved assertions, not the truth of a physical event.
+The second Environment `vps09-release-review` has zero required reviewers and uses a separate Linux self-hosted runner labeled `vps09-reviewer`, exact main and disabled admin bypass. Its read-only variables are `VPS09_REVIEW_PACKET_PATH`, `VPS09_OWNER_PUBKEY_PATH`, `VPS09_OWNER_PUBKEY_SHA256` (lowercase SHA-256 of literal PEM bytes, pinned outside the packet before acceptance), both `VPS09_FIRST_PASS_RUNNER_SHA256` and `VPS09_SECOND_PASS_RUNNER_SHA256`, frozen `VPS09_CLOSEOUT_CANDIDATE_SHA` and `VPS09_OWNER=chung6a8m`. No private signing key or SQL credential may be stored in the repository. The runner verifies structural integrity and approved assertions, not the truth of a physical event.
 
 The Owner configures zero-reviewer exact-main admission, then disables admin bypass and provisions the settings. Verification requires exact main, all setting names and exactly one online dedicated runner, but cannot inspect secret values or physical isolation:
 
@@ -45,8 +45,11 @@ The Owner configures zero-reviewer exact-main admission, then disables admin byp
 python3 scripts/configure_vps09_gates.py configure \
   --environment vps09-fullstack-nonproduction
 python3 scripts/configure_vps09_gates.py verify \
-  --environment vps09-fullstack-nonproduction --expected-sha EXACT_40_HEX_MAIN_SHA
+  --environment vps09-fullstack-nonproduction --expected-sha EXACT_40_HEX_MAIN_SHA \
+  --admin-bypass-attestation confirmed-disabled:OWN-VPS-04:vps09-fullstack-nonproduction:EXACT_40_HEX_MAIN_SHA
 ```
+
+The attestation is logged because the documented GitHub Environment API does not expose admin-bypass state; the Owner must inspect Settings directly. Missing protection-rule data blocks verification. Once the candidate is approved or rejected, remove `VPS09_CLOSEOUT_CANDIDATE_SHA` or disable every affected Environment; changing the pin does not authorize another candidate.
 
 The protected route plan contains exactly 293 concrete cases. Each case must match the tracked manifest and contains `caseId`, `variant`, `method`, concrete `/api/...` path, JSON body or null, actor, non-secret headers, expected status and a 64-hex expected body digest derived independently from real-SQL source/oracle rules. It maps actors to protected process environment names, for example `writer -> VPS09_WRITER_BEARER_TOKEN`; never place a bearer token in the file. The Oracle plan contains exactly twelve unique scenarios, read-only single-statement `SELECT`/`WITH` queries and independently prepared canonical expected rows. Mutating or multi-statement Oracle SQL is refused.
 
@@ -117,7 +120,8 @@ The signed JSON fields are defined by the code and [gate registry](../testing/vp
 
 - `repository` = `chung6a8m/MyDmsVn-Vps`, `schemaVersion` = 2; `headSha`, `desktopSourceSha` and `linuxDeployedSourceSha` all equal the Owner-pinned exact main SHA. Distinct SHA-256 digests bind Desktop executable, Linux package, machine identity and approved isolated SQL instance.
 - `governance` contains mode `single-owner-exception`, decision `OWN-VPS-04`, assurance `NO_INDEPENDENT_HUMAN_REVIEW`, Owner `chung6a8m`, the pre-pinned Owner public-key hash, distinct first/second-pass runner hashes and strict `finalizedAtUtc`.
-- `preflightReceipt` references a hash-bound schema-v2 receipt whose source SHA, governance, Owner and first-pass runner hash match the signed governance block. The review CLI also requires the actual second-pass runner hash.
+- `preflightReceipt`, `linuxReceipt` and `guiReceipt` reference hash-bound schema-v2 typed receipts with the exact assurance string. Linux covers all eight named events and binds the deployed machine/artifact; GUI carries all nine checkpoints and binds the Desktop executable and externally pinned first runner.
+- `finalizationIndex` hashes the complete finalized core evidence, and `finalizationReceipt` binds that index to the protected finalize workflow URL and its UTC timestamp. `governance.finalizedAtUtc` must equal that receipt, occur no earlier than OWN-VPS-04, and precede approval by at least 24 hours.
 - `environment` contains exact Windows net48-x86 attended / Linux net10 systemd+Nginx / approved isolated SQL13 / verified TLS / separate read-only SQL / protected single-Owner staging / cleanup values. These are signed Owner assertions checked against original machine logs during the delayed second pass, not automatically detected physical facts.
 - Every mandatory `VPS09-01..14` gate must be `PASS`, with positive discovered/executed/passed counts, zero failed/skipped, nonempty runner identity and a distinct primary evidence artifact per gate. No missing or unknown gates.
 - `routeObservations` references a hash-bound file with exactly the 293 frozen `(CaseId, Variant)` pairs, no duplicates, each marked protected-real-sql13 with HTTP status matching the applicable frozen per-variant status and an independently derived expected payload digest, actual status/payload digest and empty diff. It does not reuse the SQL-free corpus bytes as proof.
@@ -136,6 +140,7 @@ python3 scripts/vps09_verify.py verify \
   --bundle /secure/vps09-packet --expected-sha EXACT_40_HEX_MAIN_SHA \
   --trusted-key /secure/owner-ed25519-public.pem \
   --trusted-key-sha256 PREPINNED_64_HEX_SHA256 \
+  --expected-first-pass-runner-sha256 FIRST_PASS_MACHINE_GUID_SHA256 \
   --expected-second-pass-runner-sha256 SECOND_PASS_MACHINE_ID_SHA256
 ```
 

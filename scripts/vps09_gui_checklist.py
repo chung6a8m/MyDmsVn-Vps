@@ -52,14 +52,21 @@ def load(path: Path) -> dict[str, Any]:
 
 def validate(path: Path) -> dict[str, Any]:
     document = load(path)
+    require(set(document) == {
+        "schemaVersion", "sourceSha", "desktopExecutableSha256", "firstPassRunnerSha256",
+        "governanceMode", "decisionId", "assurance", "owner", "sessionType", "checkpoints",
+    }, "ChecklistFieldsInvalid")
     require(document.get("schemaVersion") == 2, "ChecklistSchemaInvalid")
     require(document.get("governanceMode") == "single-owner-exception"
-            and document.get("decisionId") == "OWN-VPS-04",
+            and document.get("decisionId") == "OWN-VPS-04"
+            and document.get("assurance") == "NO_INDEPENDENT_HUMAN_REVIEW",
             "ChecklistGovernanceInvalid")
     require(SHA.fullmatch(str(document.get("sourceSha", ""))) is not None,
             "ChecklistSourceShaInvalid")
     require(DIGEST.fullmatch(str(document.get("desktopExecutableSha256", ""))) is not None,
             "DesktopDigestInvalid")
+    require(DIGEST.fullmatch(str(document.get("firstPassRunnerSha256", ""))) is not None,
+            "FirstPassRunnerDigestInvalid")
     owner = str(document.get("owner", "")).strip()
     require(owner == "chung6a8m", "ChecklistOwnerInvalid")
     require(document.get("sessionType") == "interactive", "InteractiveSessionRequired")
@@ -85,9 +92,12 @@ def validate(path: Path) -> dict[str, Any]:
         "schemaVersion": 2,
         "sourceSha": document["sourceSha"],
         "desktopExecutableSha256": document["desktopExecutableSha256"],
+        "firstPassRunnerSha256": document["firstPassRunnerSha256"],
         "governanceMode": "single-owner-exception",
         "decisionId": "OWN-VPS-04",
+        "assurance": "NO_INDEPENDENT_HUMAN_REVIEW",
         "owner": owner,
+        "checkpoints": document["checkpoints"],
         "executed": 9,
         "passed": 9,
         "failed": 0,
@@ -97,16 +107,20 @@ def validate(path: Path) -> dict[str, Any]:
     }
 
 
-def template(source_sha: str, desktop_sha256: str, owner: str) -> dict[str, Any]:
+def template(source_sha: str, desktop_sha256: str, first_runner_sha256: str,
+             owner: str) -> dict[str, Any]:
     require(SHA.fullmatch(source_sha) is not None, "ChecklistSourceShaInvalid")
     require(DIGEST.fullmatch(desktop_sha256) is not None, "DesktopDigestInvalid")
+    require(DIGEST.fullmatch(first_runner_sha256) is not None, "FirstPassRunnerDigestInvalid")
     require(owner == "chung6a8m", "ChecklistOwnerInvalid")
     return {
         "schemaVersion": 2,
         "sourceSha": source_sha,
         "desktopExecutableSha256": desktop_sha256,
+        "firstPassRunnerSha256": first_runner_sha256,
         "governanceMode": "single-owner-exception",
         "decisionId": "OWN-VPS-04",
+        "assurance": "NO_INDEPENDENT_HUMAN_REVIEW",
         "owner": owner,
         "sessionType": "interactive",
         "checkpoints": [
@@ -131,6 +145,7 @@ def main() -> int:
     create = commands.add_parser("template")
     create.add_argument("--source-sha", required=True)
     create.add_argument("--desktop-sha256", required=True)
+    create.add_argument("--first-pass-runner-sha256", required=True)
     create.add_argument("--owner", required=True)
     create.add_argument("--output", required=True, type=Path)
     check = commands.add_parser("validate")
@@ -140,7 +155,7 @@ def main() -> int:
     try:
         if args.command == "template":
             write_exclusive(args.output, template(args.source_sha, args.desktop_sha256,
-                                                  args.owner))
+                                                  args.first_pass_runner_sha256, args.owner))
             print("VPS09_GUI_TEMPLATE_CREATED: all nine checkpoints remain NOT_RECORDED")
         else:
             write_exclusive(args.output, validate(args.input))

@@ -22,16 +22,19 @@ public sealed record PreflightInput(
     string Admission,
     string GovernanceMode,
     string DecisionId,
+    string Assurance,
     string Owner,
     string RunnerSha256,
     string DatabaseClassification);
 
 public sealed record PreflightReceipt(
+    int SchemaVersion,
     string SourceSha,
     string PublicHost,
     string Database,
     string GovernanceMode,
     string DecisionId,
+    string Assurance,
     string Owner,
     string RunnerSha256,
     string SqlTransport);
@@ -74,12 +77,13 @@ public static class PreflightValidator
 
         Block(input.GovernanceMode == "single-owner-exception"
               && input.DecisionId == "OWN-VPS-04"
+              && input.Assurance == "NO_INDEPENDENT_HUMAN_REVIEW"
               && input.Owner == "chung6a8m", "VPS09.SingleOwnerGovernanceMissing");
         Block(RouteEvidenceValidator.Digest(input.RunnerSha256),
             "VPS09.FirstPassRunnerIdentityMissing");
 
-        return new PreflightReceipt(input.ReviewedSha, admittedOrigin.Host, database!,
-            input.GovernanceMode, input.DecisionId, input.Owner,
+        return new PreflightReceipt(2, input.ReviewedSha, admittedOrigin.Host, database!,
+            input.GovernanceMode, input.DecisionId, input.Assurance, input.Owner,
             input.RunnerSha256,
             "encrypt-config-admitted; handshake-required-by-oracles");
     }

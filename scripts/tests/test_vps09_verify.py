@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -36,6 +37,10 @@ class Vps09EvidenceGateTests(unittest.TestCase):
         subprocess.run(["openssl", "pkey", "-in", str(self.key), "-pubout",
                         "-out", str(self.public)], check=True, capture_output=True)
         self.pub_hash = hashlib.sha256(self.public.read_bytes()).hexdigest()
+        self.clock = patch.object(verifier, "now_utc", return_value=datetime(
+            2026, 11, 21, tzinfo=timezone.utc))
+        self.clock.start()
+        self.addCleanup(self.clock.stop)
         spec, _, pairs = verifier.inventory()
         self.spec = spec
         frozen_status = {
@@ -69,11 +74,42 @@ class Vps09EvidenceGateTests(unittest.TestCase):
             } for scenario in spec["oracleScenarios"]]
         }
         self.preflight = {
+            "schemaVersion": 2,
             "sourceSha": SHA,
+            "publicHost": "staging.invalid",
+            "database": "isolated_vps09",
             "governanceMode": "single-owner-exception",
             "decisionId": "OWN-VPS-04",
+            "assurance": "NO_INDEPENDENT_HUMAN_REVIEW",
             "owner": "chung6a8m",
             "runnerSha256": HEX,
+            "sqlTransport": "encrypt-config-admitted; handshake-required-by-oracles",
+        }
+        self.linux_receipt = {
+            "schemaVersion": 2, "sourceSha": SHA, "machineSha256": HEX,
+            "artifactSha256": HEX, "governanceMode": "single-owner-exception",
+            "decisionId": "OWN-VPS-04", "assurance": "NO_INDEPENDENT_HUMAN_REVIEW",
+            "owner": "chung6a8m", "physicalEvidenceReview": "OWNER_SECOND_PASS_REQUIRED",
+            "overall": "STRUCTURE_COMPLETE_NOT_REVIEWED",
+            "events": [{
+                "event": event, "observedAtUtc": "2026-11-19T00:00:00Z",
+                "outcome": "EXPECTED_FAILURE_RECOVERED" if event == "failed-deploy-rollback" else "PASS",
+                "evidenceDigest": format(index + 20, "064x"),
+                "evidenceFileSha256": format(index + 40, "064x"), "evidenceFileBytes": 100 + index,
+            } for index, event in enumerate(sorted(verifier.LINUX_EVENTS))],
+        }
+        self.gui_receipt = {
+            "schemaVersion": 2, "sourceSha": SHA, "desktopExecutableSha256": HEX,
+            "firstPassRunnerSha256": HEX, "governanceMode": "single-owner-exception",
+            "decisionId": "OWN-VPS-04", "assurance": "NO_INDEPENDENT_HUMAN_REVIEW",
+            "owner": "chung6a8m", "executed": 9, "passed": 9, "failed": 0, "skipped": 0,
+            "attendedEvidenceReview": "OWNER_SECOND_PASS_REQUIRED",
+            "overall": "STRUCTURE_COMPLETE_NOT_REVIEWED",
+            "checkpoints": [{
+                "id": checkpoint[0], "scalePercent": checkpoint[1], "outcome": "PASS",
+                "observedAtUtc": "2026-11-19T00:00:00Z",
+                "evidenceSha256": format(index + 1, "064x"),
+            } for index, checkpoint in enumerate(sorted(verifier.GUI_CHECKPOINTS))],
         }
         self.attestation = {
             "schemaVersion": 2,
@@ -102,16 +138,20 @@ class Vps09EvidenceGateTests(unittest.TestCase):
                 "firstPassRunnerSha256": HEX,
                 "secondPassRunnerSha256": "c" * 64,
                 "ownerPublicKeySha256": self.pub_hash,
-                "finalizedAtUtc": "2026-11-16T00:00:00Z",
+                "finalizedAtUtc": "2026-11-19T00:00:00Z",
             },
             "releaseDecision": {
                 "status": "APPROVED_FOR_PRODUCTION", "owner": "chung6a8m",
                 "sourceSha": SHA,
-                "approvedAtUtc": "2026-11-17T00:00:00Z",
+                "approvedAtUtc": "2026-11-20T00:00:00Z",
             },
             "routeObservations": "route-observations.json",
             "sqlOracle": "sql-oracle.json",
             "preflightReceipt": "preflight-receipt.json",
+            "linuxReceipt": "linux-receipt.json",
+            "guiReceipt": "gui-receipt.json",
+            "finalizationIndex": "finalization-index.json",
+            "finalizationReceipt": "finalization-receipt.json",
             "gates": {row["id"]: {
                 "status": "PASS", "discovered": row["minimumExecuted"],
                 "executed": row["minimumExecuted"], "passed": row["minimumExecuted"],
@@ -131,15 +171,47 @@ class Vps09EvidenceGateTests(unittest.TestCase):
         write_json(self.packet / "route-observations.json", self.observations)
         write_json(self.packet / "sql-oracle.json", self.oracle)
         write_json(self.packet / "preflight-receipt.json", self.preflight)
+        write_json(self.packet / "linux-receipt.json", self.linux_receipt)
+        write_json(self.packet / "gui-receipt.json", self.gui_receipt)
         (self.packet / "other-evidence.txt").write_text(
             "SYNTHETIC FIXTURE: NOT LIVE ACCEPTANCE\n", encoding="utf-8")
         names = ["route-observations.json", "sql-oracle.json", "preflight-receipt.json",
-                 "other-evidence.txt"]
+                 "linux-receipt.json", "gui-receipt.json", "other-evidence.txt"]
         for row in self.spec["gates"]:
             name = "gates/" + row["id"] + ".json"
             write_json(self.packet / name, {"gate": row["id"], "synthetic": True})
             names.append(name)
+        self.attestation["gates"]["VPS09-11"]["evidence"][0] = "linux-receipt.json"
+        self.attestation["gates"]["VPS09-12"]["evidence"][0] = "gui-receipt.json"
+        self.attestation["artifacts"] = {}
         for name in names:
+            blob = (self.packet / name).read_bytes()
+            self.attestation["artifacts"][name] = {
+                "bytes": len(blob), "sha256": hashlib.sha256(blob).hexdigest(),
+            }
+        core_names = ["route-observations.json", "sql-oracle.json", "preflight-receipt.json",
+                      "linux-receipt.json", "gui-receipt.json"]
+        finalization_index = {
+            "schemaVersion": 1, "sourceSha": SHA,
+            "artifacts": {name: self.attestation["artifacts"][name] for name in core_names},
+            "signingStatus": "UNSIGNED", "ownerReleaseDecision": "NOT_ATTACHED",
+            "nextStep": "synthetic test only",
+        }
+        write_json(self.packet / "finalization-index.json", finalization_index)
+        index_blob = (self.packet / "finalization-index.json").read_bytes()
+        finalization_receipt = {
+            "schemaVersion": 2, "sourceSha": SHA, "candidateSha": SHA,
+            "governanceMode": "single-owner-exception", "decisionId": "OWN-VPS-04",
+            "assurance": "NO_INDEPENDENT_HUMAN_REVIEW", "owner": "chung6a8m",
+            "firstPassRunnerSha256": HEX, "finalizedAtUtc": "2026-11-19T00:00:00Z",
+            "workflowRunUrl": next(row["url"] for row in self.attestation["ciRuns"]
+                                   if row["workflow"] == "vps-09-evidence.yml"),
+            "finalizationIndex": "finalization-index.json",
+            "finalizationIndexSha256": hashlib.sha256(index_blob).hexdigest(),
+            "finalizationIndexBytes": len(index_blob),
+        }
+        write_json(self.packet / "finalization-receipt.json", finalization_receipt)
+        for name in ("finalization-index.json", "finalization-receipt.json"):
             blob = (self.packet / name).read_bytes()
             self.attestation["artifacts"][name] = {
                 "bytes": len(blob), "sha256": hashlib.sha256(blob).hexdigest(),
@@ -152,11 +224,31 @@ class Vps09EvidenceGateTests(unittest.TestCase):
                         "-out", str(self.packet / "attestation.sig")],
                        check=True, capture_output=True)
 
+    def refresh_finalization_binding(self):
+        index_path = self.packet / "finalization-index.json"
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        for name in list(index["artifacts"]):
+            index["artifacts"][name] = self.attestation["artifacts"][name]
+        write_json(index_path, index)
+        index_blob = index_path.read_bytes()
+        self.attestation["artifacts"]["finalization-index.json"] = {
+            "bytes": len(index_blob), "sha256": hashlib.sha256(index_blob).hexdigest(),
+        }
+        receipt_path = self.packet / "finalization-receipt.json"
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt["finalizationIndexSha256"] = hashlib.sha256(index_blob).hexdigest()
+        receipt["finalizationIndexBytes"] = len(index_blob)
+        write_json(receipt_path, receipt)
+        receipt_blob = receipt_path.read_bytes()
+        self.attestation["artifacts"]["finalization-receipt.json"] = {
+            "bytes": len(receipt_blob), "sha256": hashlib.sha256(receipt_blob).hexdigest(),
+        }
+
     def sign(self):
         self.sign_raw(json.dumps(self.attestation, indent=2) + "\n")
 
     def verify(self):
-        verifier.validate_packet(self.packet, SHA, self.public, self.pub_hash)
+        verifier.validate_packet(self.packet, SHA, self.public, self.pub_hash, HEX, "c" * 64)
 
     def rejects(self, match):
         self.sign()
@@ -185,6 +277,7 @@ class Vps09EvidenceGateTests(unittest.TestCase):
         self.attestation["artifacts"]["sql-oracle.json"] = {
             "bytes": len(blob), "sha256": hashlib.sha256(blob).hexdigest(),
         }
+        self.refresh_finalization_binding()
         self.rejects("DuplicateJsonMember:sourceSha")
 
     def test_attestation_swap_after_openssl_verification_cannot_change_parsed_bytes(self):
@@ -225,7 +318,7 @@ class Vps09EvidenceGateTests(unittest.TestCase):
     def test_wrong_trusted_public_key_fingerprint(self):
         self.sign()
         with self.assertRaisesRegex(ValueError, "TrustedKeyFingerprintMismatch"):
-            verifier.validate_packet(self.packet, SHA, self.public, "c" * 64)
+            verifier.validate_packet(self.packet, SHA, self.public, "c" * 64, HEX, "c" * 64)
 
     def test_signature_tamper_refused(self):
         self.sign()
@@ -275,6 +368,12 @@ class Vps09EvidenceGateTests(unittest.TestCase):
         self.attestation["governance"]["mode"] = "self-approved"
         self.rejects("SingleOwnerGovernanceMissing")
 
+    def test_legacy_people_governance_is_refused_in_schema_v2(self):
+        self.attestation["people"] = {
+            "operator": "operator01", "reviewer": "reviewer02", "owner": "chung6a8m",
+        }
+        self.rejects("LegacyGovernanceFieldRefused")
+
     def test_wrong_owner_decision_refused(self):
         self.attestation["governance"]["decisionId"] = "OWN-VPS-03"
         self.rejects("SingleOwnerGovernanceMissing")
@@ -292,14 +391,45 @@ class Vps09EvidenceGateTests(unittest.TestCase):
         self.refresh_evidence()
         self.rejects("FirstPassRunnerReceiptMismatch")
 
+    def test_first_pass_runner_must_match_external_environment_pin(self):
+        self.sign()
+        with self.assertRaisesRegex(ValueError, "FirstPassRunnerIdentityMismatch"):
+            verifier.validate_packet(self.packet, SHA, self.public, self.pub_hash,
+                                     "d" * 64, "c" * 64)
+
     def test_second_pass_runner_must_match_verifying_machine(self):
         self.sign()
         with self.assertRaisesRegex(ValueError, "SecondPassRunnerIdentityMismatch"):
-            verifier.validate_packet(self.packet, SHA, self.public, self.pub_hash, "d" * 64)
+            verifier.validate_packet(self.packet, SHA, self.public, self.pub_hash, HEX, "d" * 64)
 
     def test_cooling_off_shorter_than_24_hours_refused(self):
-        self.attestation["releaseDecision"]["approvedAtUtc"] = "2026-11-16T23:59:59Z"
+        self.attestation["releaseDecision"]["approvedAtUtc"] = "2026-11-19T23:59:59Z"
         self.rejects("OwnerCoolingOffIncomplete")
+
+    def test_governance_timestamp_must_match_protected_finalization_receipt(self):
+        self.attestation["governance"]["finalizedAtUtc"] = "2026-11-19T00:00:01Z"
+        self.rejects("GovernanceFinalizationTimestampMismatch")
+
+    def test_finalization_before_decision_is_refused(self):
+        receipt_path = self.packet / "finalization-receipt.json"
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt["finalizedAtUtc"] = "2026-11-18T00:00:00Z"
+        write_json(receipt_path, receipt)
+        blob = receipt_path.read_bytes()
+        self.attestation["artifacts"]["finalization-receipt.json"] = {
+            "bytes": len(blob), "sha256": hashlib.sha256(blob).hexdigest(),
+        }
+        self.rejects("FinalizationTimestampOutsideDecision")
+
+    def test_generic_linux_gate_marker_cannot_replace_typed_receipt(self):
+        self.attestation["linuxReceipt"] = "gates/VPS09-11.json"
+        self.attestation["gates"]["VPS09-11"]["evidence"] = ["gates/VPS09-11.json"]
+        self.rejects("FinalizationIndexCoverageGap|LinuxReceiptFieldsInvalid")
+
+    def test_gui_receipt_must_match_first_runner(self):
+        self.gui_receipt["firstPassRunnerSha256"] = "d" * 64
+        self.refresh_evidence()
+        self.rejects("GuiReceiptIdentityMismatch")
 
     def test_owner_release_not_approved_refused(self):
         self.attestation["releaseDecision"]["status"] = "SOURCE_ONLY"

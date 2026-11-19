@@ -40,6 +40,7 @@ def environment_specs() -> dict[str, dict[str, Any]]:
             "requiredVariables": {
                 "VPS08_STAGING_PROBE_URL", "VPS08_STAGING_MACHINE_SHA256",
                 "VPS08_RECEIPT_STATE_PATH", "VPS08_OWNER",
+                "VPS09_CLOSEOUT_CANDIDATE_SHA",
             },
         },
         "vps09-fullstack-nonproduction": {
@@ -62,6 +63,7 @@ def environment_specs() -> dict[str, dict[str, Any]]:
                 "VPS09_ORACLE_PLAN_SHA256", "VPS09_EVIDENCE_ROOT",
                 "VPS09_GUI_CHECKLIST_PATH", "VPS09_LINUX_RECEIPT_PATH",
                 "VPS09_FIRST_PASS_RUNNER_SHA256", "VPS09_OWNER",
+                "VPS09_CLOSEOUT_CANDIDATE_SHA",
             },
         },
         "vps09-release-review": {
@@ -74,6 +76,7 @@ def environment_specs() -> dict[str, dict[str, Any]]:
             "requiredVariables": {
                 "VPS09_REVIEW_PACKET_PATH", "VPS09_OWNER_PUBKEY_PATH",
                 "VPS09_OWNER_PUBKEY_SHA256", "VPS09_SECOND_PASS_RUNNER_SHA256",
+                "VPS09_FIRST_PASS_RUNNER_SHA256", "VPS09_CLOSEOUT_CANDIDATE_SHA",
                 "VPS09_OWNER",
             },
         },
@@ -122,16 +125,20 @@ def configure(environment: str) -> None:
           "NO_INDEPENDENT_HUMAN_REVIEW; disable admin bypass manually before verify")
 
 
-def verify(environment: str, expected_sha: str) -> None:
+def verify(environment: str, expected_sha: str, admin_bypass_attestation: str) -> None:
     spec = environment_specs().get(environment)
     require(spec is not None, "EnvironmentUnknown")
     require(re.fullmatch(r"[0-9a-f]{40}", expected_sha) is not None, "ExpectedShaInvalid")
     value = get(f"{API}/{environment}")
-    require(value.get("can_admins_bypass") is False, "AdminBypassMustBeDisabled")
+    expected_attestation = f"confirmed-disabled:OWN-VPS-04:{environment}:{expected_sha}"
+    require(admin_bypass_attestation == expected_attestation,
+            "AdminBypassAttestationMissing")
     policy = value.get("deployment_branch_policy") or {}
     require(policy == {"protected_branches": False, "custom_branch_policies": True},
             "DeploymentPolicyInvalid")
-    rules = [item for item in value.get("protection_rules", [])
+    require(isinstance(value.get("protection_rules"), list),
+            "ProtectionRulesUnavailable")
+    rules = [item for item in value["protection_rules"]
              if item.get("type") == "required_reviewers"]
     require(not rules, "UnexpectedHumanReviewerRule")
     policies = get(f"{API}/{environment}/deployment-branch-policies?per_page=100")
@@ -144,6 +151,11 @@ def verify(environment: str, expected_sha: str) -> None:
     variable_names = {item.get("name") for item in variables.get("variables", [])}
     require(spec["requiredSecrets"] <= secret_names, "RequiredSecretNameMissing")
     require(spec["requiredVariables"] <= variable_names, "RequiredVariableNameMissing")
+    variable_values = {item.get("name"): item.get("value")
+                       for item in variables.get("variables", [])}
+    require(variable_values.get("VPS09_CLOSEOUT_CANDIDATE_SHA") == expected_sha,
+            "CandidateShaNotPinned")
+    require(variable_values.get("VPS09_OWNER") == "chung6a8m", "OwnerNotPinned")
     branch = get(f"repos/{REPO}/branches/main")
     require(branch["commit"]["sha"] == expected_sha, "ReviewedMainChanged")
     runners = get(f"repos/{REPO}/actions/runners?per_page=100")
@@ -153,7 +165,8 @@ def verify(environment: str, expected_sha: str) -> None:
                 and required_labels <= {label.get("name") for label in runner.get("labels", [])}]
     require(len(admitted) == 1, "ExactlyOneDedicatedOnlineRunnerRequired")
     print(f"VPS09_ENV_VERIFY_PASS: {environment}; main_sha={expected_sha}; "
-          "governance=OWN-VPS-04; names and runner admitted")
+          "governance=OWN-VPS-04; candidate, names and runner admitted; "
+          "admin-bypass attestation recorded")
     print("NO_INDEPENDENT_HUMAN_REVIEW; NOT VERIFIED: secret values, SQL/VPS isolation, "
           "GUI/reboot evidence, Owner release")
 
@@ -168,12 +181,14 @@ def main() -> int:
     verify_command.add_argument("--environment", required=True,
                                 choices=tuple(environment_specs()))
     verify_command.add_argument("--expected-sha", required=True)
+    verify_command.add_argument("--admin-bypass-attestation", required=True,
+                                help="Exact confirmed-disabled:OWN-VPS-04:ENVIRONMENT:SHA value recorded after checking GitHub Settings")
     args = parser.parse_args()
     try:
         if args.command == "configure":
             configure(args.environment)
         else:
-            verify(args.environment, args.expected_sha)
+            verify(args.environment, args.expected_sha, args.admin_bypass_attestation)
         return 0
     except (GateBlocked, OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
         print("VPS09_ENV_BLOCKED: " + str(error))

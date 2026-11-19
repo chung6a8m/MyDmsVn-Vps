@@ -13,7 +13,7 @@
 
 ## VPS-09 acceptance-tooling extension (pending PR review)
 
-The current tooling branch adds an exclusive, SHA/machine/artifact-bound Linux receipt state machine and initializes it from the protected VPS-08 workflow. It requires all eight VPS08-01..08 event families; an injected failed deployment is recorded as `EXPECTED_FAILURE_RECOVERED`, never silently converted to PASS by a successful rollback. The receipt hashes protected external evidence and deliberately ends as `STRUCTURE_COMPLETE_NOT_REVIEWED` with physical review `REQUIRED`.
+The current tooling branch adds an exclusive, SHA/machine/artifact-bound Linux receipt state machine and initializes it from the protected VPS-08 workflow. It requires all eight VPS08-01..08 event families; an injected failed deployment is recorded as `EXPECTED_FAILURE_RECOVERED`, never silently converted to PASS by a successful rollback. The receipt hashes protected external evidence and deliberately ends as `STRUCTURE_COMPLETE_NOT_REVIEWED` with physical review `OWNER_SECOND_PASS_REQUIRED`.
 
 This source change does not alter the disposition below. No protected runner, SQL13 instance, reboot, rollback or delayed Owner second pass was executed in this implementation session. GitHub closed Issue #11 after the source-only merge despite the recorded operational boundary; the approved closeout plan requires reopening it, and every real staging row remains NOT VERIFIED until an exact-main candidate is run and reviewed under OWN-VPS-04.
 

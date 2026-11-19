@@ -17,10 +17,12 @@ public sealed class AcceptancePolicyTests
         var receipt = PreflightValidator.Validate(ValidPreflight());
 
         Assert.Equal(Sha, receipt.SourceSha);
+        Assert.Equal(2, receipt.SchemaVersion);
         Assert.Equal("staging.example", receipt.PublicHost);
         Assert.Equal("Vps09_Isolated", receipt.Database);
         Assert.Equal("chung6a8m", receipt.Owner);
         Assert.Equal("OWN-VPS-04", receipt.DecisionId);
+        Assert.Equal("NO_INDEPENDENT_HUMAN_REVIEW", receipt.Assurance);
         Assert.Equal(Digest, receipt.RunnerSha256);
         Assert.DoesNotContain("Password", receipt.ToString(), StringComparison.OrdinalIgnoreCase);
     }
@@ -43,6 +45,15 @@ public sealed class AcceptancePolicyTests
         var error = Assert.Throws<AcceptanceBlockedException>(() => PreflightValidator.Validate(input));
 
         Assert.Equal("VPS09.SourceTreeMustBeClean", error.Code);
+    }
+
+    [Fact]
+    public void MissingAssuranceLimitationIsRefused()
+    {
+        var error = Assert.Throws<AcceptanceBlockedException>(() =>
+            PreflightValidator.Validate(ValidPreflight() with { Assurance = "INDEPENDENT_REVIEW" }));
+
+        Assert.Equal("VPS09.SingleOwnerGovernanceMissing", error.Code);
     }
 
     [Theory]
@@ -200,6 +211,7 @@ public sealed class AcceptancePolicyTests
         Admission: "reviewed-isolated-sql13-only",
         GovernanceMode: "single-owner-exception",
         DecisionId: "OWN-VPS-04",
+        Assurance: "NO_INDEPENDENT_HUMAN_REVIEW",
         Owner: "chung6a8m",
         RunnerSha256: Digest,
         DatabaseClassification: "isolated-nonproduction");

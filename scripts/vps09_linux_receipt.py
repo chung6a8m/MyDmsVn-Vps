@@ -97,6 +97,7 @@ def initialize(
         "artifactSha256": artifact_sha256,
         "governanceMode": "single-owner-exception",
         "decisionId": "OWN-VPS-04",
+        "assurance": "NO_INDEPENDENT_HUMAN_REVIEW",
         "owner": owner,
         "events": [],
         "physicalEvidenceReview": "OWNER_SECOND_PASS_REQUIRED",
@@ -108,9 +109,20 @@ def initialize(
 def record(state_path: Path, evidence_path: Path) -> dict[str, Any]:
     state = strict_json(state_path)
     evidence = strict_json(evidence_path)
+    require(state.get("schemaVersion") == 2
+            and state.get("governanceMode") == "single-owner-exception"
+            and state.get("decisionId") == "OWN-VPS-04"
+            and state.get("assurance") == "NO_INDEPENDENT_HUMAN_REVIEW"
+            and state.get("owner") == "chung6a8m", "StateGovernanceInvalid")
+    require(set(evidence) == {
+        "schemaVersion", "event", "sourceSha", "machineSha256", "governanceMode",
+        "decisionId", "assurance", "owner", "observedAtUtc", "outcome", "evidenceDigest",
+    }, "EventFieldsInvalid")
     require(evidence.get("schemaVersion") == 2, "EventSchemaInvalid")
     require(evidence.get("governanceMode") == "single-owner-exception"
-            and evidence.get("decisionId") == "OWN-VPS-04", "EventGovernanceInvalid")
+            and evidence.get("decisionId") == "OWN-VPS-04"
+            and evidence.get("assurance") == "NO_INDEPENDENT_HUMAN_REVIEW",
+            "EventGovernanceInvalid")
     event = evidence.get("event")
     require(event in EVENTS, "EventUnknown")
     require(not any(item.get("event") == event for item in state.get("events", [])),
@@ -143,6 +155,11 @@ def record(state_path: Path, evidence_path: Path) -> dict[str, Any]:
 
 def finalize(state_path: Path, output_path: Path) -> dict[str, Any]:
     state = strict_json(state_path)
+    require(state.get("schemaVersion") == 2
+            and state.get("governanceMode") == "single-owner-exception"
+            and state.get("decisionId") == "OWN-VPS-04"
+            and state.get("assurance") == "NO_INDEPENDENT_HUMAN_REVIEW"
+            and state.get("owner") == "chung6a8m", "StateGovernanceInvalid")
     recorded = [item.get("event") for item in state.get("events", [])]
     require(len(recorded) == len(EVENTS) and set(recorded) == set(EVENTS),
             "EventCoverageGap")
@@ -154,12 +171,46 @@ def finalize(state_path: Path, output_path: Path) -> dict[str, Any]:
         "artifactSha256": state["artifactSha256"],
         "governanceMode": "single-owner-exception",
         "decisionId": "OWN-VPS-04",
+        "assurance": "NO_INDEPENDENT_HUMAN_REVIEW",
         "owner": state["owner"],
         "events": ordered,
         "physicalEvidenceReview": "OWNER_SECOND_PASS_REQUIRED",
         "overall": "STRUCTURE_COMPLETE_NOT_REVIEWED",
     }
     write_exclusive(output_path, receipt)
+    return receipt
+
+
+def validate_receipt(path: Path) -> dict[str, Any]:
+    receipt = strict_json(path)
+    require(isinstance(receipt, dict) and set(receipt) == {
+        "schemaVersion", "sourceSha", "machineSha256", "artifactSha256", "governanceMode",
+        "decisionId", "assurance", "owner", "events", "physicalEvidenceReview", "overall",
+    }, "ReceiptFieldsInvalid")
+    require(receipt.get("schemaVersion") == 2
+            and SHA.fullmatch(str(receipt.get("sourceSha", ""))) is not None
+            and DIGEST.fullmatch(str(receipt.get("machineSha256", ""))) is not None
+            and DIGEST.fullmatch(str(receipt.get("artifactSha256", ""))) is not None
+            and receipt.get("governanceMode") == "single-owner-exception"
+            and receipt.get("decisionId") == "OWN-VPS-04"
+            and receipt.get("assurance") == "NO_INDEPENDENT_HUMAN_REVIEW"
+            and receipt.get("owner") == "chung6a8m"
+            and receipt.get("physicalEvidenceReview") == "OWNER_SECOND_PASS_REQUIRED"
+            and receipt.get("overall") == "STRUCTURE_COMPLETE_NOT_REVIEWED",
+            "ReceiptIdentityInvalid")
+    rows = receipt.get("events")
+    require(isinstance(rows, list) and len(rows) == len(EVENTS), "EventCoverageGap")
+    seen: set[str] = set()
+    for row in rows:
+        event = row.get("event") if isinstance(row, dict) else None
+        expected = "EXPECTED_FAILURE_RECOVERED" if event == "failed-deploy-rollback" else "PASS"
+        require(event in EVENTS and event not in seen and row.get("outcome") == expected
+                and DIGEST.fullmatch(str(row.get("evidenceDigest", ""))) is not None
+                and DIGEST.fullmatch(str(row.get("evidenceFileSha256", ""))) is not None
+                and type(row.get("evidenceFileBytes")) is int and row["evidenceFileBytes"] > 0,
+                "ReceiptEventInvalid")
+        seen.add(event)
+    require(seen == set(EVENTS), "EventCoverageGap")
     return receipt
 
 
@@ -178,6 +229,8 @@ def main() -> int:
     done = commands.add_parser("finalize")
     done.add_argument("--state", required=True, type=Path)
     done.add_argument("--output", required=True, type=Path)
+    check = commands.add_parser("validate")
+    check.add_argument("--input", required=True, type=Path)
     args = parser.parse_args()
     try:
         if args.command == "init":
@@ -185,8 +238,10 @@ def main() -> int:
                        args.artifact_sha256, args.owner)
         elif args.command == "record":
             record(args.state, args.evidence)
-        else:
+        elif args.command == "finalize":
             finalize(args.state, args.output)
+        else:
+            validate_receipt(args.input)
         print("VPS09_LINUX_RECEIPT_STRUCTURE_PASS: Owner second-pass review still REQUIRED; "
               "NO_INDEPENDENT_HUMAN_REVIEW")
         return 0

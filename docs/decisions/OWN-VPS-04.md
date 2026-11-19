@@ -27,6 +27,9 @@ cleanup, exact-SHA, CI or signature requirement.
   `APPROVED_FOR_PRODUCTION` assertion.
 - Keep exact-main Environment admission, disabled admin bypass, dedicated
   runner labels, immutable artifact hashes and fail-closed packet verification.
+- Before any protected phase, pin one exact 40-hex candidate in all three
+  Environments as `VPS09_CLOSEOUT_CANDIDATE_SHA`. Every protected job must
+  authenticate both `github.actor` and `github.triggering_actor` as the Owner.
 - Require all 14 gates and all 11 exact-SHA workflows to PASS with zero failed
   or required skipped cases. A source change invalidates the candidate packet.
 
@@ -36,6 +39,10 @@ The exception applies only to VPS08-01..08 when executed as prerequisites of
 VPS-09, and VPS09-01..14, for the Issue #12 closeout candidate. It expires when
 that candidate is approved or rejected. It does not authorize production SQL,
 production rollout, future releases, retroactive evidence or skipped gates.
+
+After approval or rejection, remove the candidate variable or disable all three
+Environments before any further main commit can be dispatched. A different SHA
+requires a separate Owner decision; changing the pin does not extend this one.
 
 ## Explicit assurance limitation
 
