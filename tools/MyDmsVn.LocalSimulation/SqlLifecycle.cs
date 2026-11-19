@@ -212,8 +212,13 @@ OUTPUT INSERTED.UserId VALUES(@name,@normalized,@display,N'Local',@hash,N'',@alg
         await using var command = new SqlCommand(
             "SELECT CONVERT(nvarchar(128),value) FROM sys.extended_properties WHERE class=0 AND name=@name;", connection);
         command.Parameters.Add("@name", SqlDbType.NVarChar, 128).Value = name;
-        return Convert.ToString(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture);
+        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        return NormalizeMarkerValue(value);
     }
+
+    internal static string? NormalizeMarkerValue(object? value) => value is null or DBNull
+        ? null
+        : Convert.ToString(value, CultureInfo.InvariantCulture);
 
     private static async Task AddMarkerAsync(SqlConnection connection, string name, string value)
     {

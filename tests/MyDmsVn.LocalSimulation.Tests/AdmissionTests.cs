@@ -7,6 +7,14 @@ namespace MyDmsVn.LocalSimulation.Tests;
 
 public sealed class AdmissionTests
 {
+    [Fact]
+    public void MissingExtendedPropertyIsNotTreatedAsAnOwnershipMismatch()
+    {
+        Assert.Null(SqlLifecycle.NormalizeMarkerValue(null));
+        Assert.Null(SqlLifecycle.NormalizeMarkerValue(DBNull.Value));
+        Assert.Equal("instance", SqlLifecycle.NormalizeMarkerValue("instance"));
+    }
+
     [Theory]
     [InlineData("create")]
     [InlineData("backup-verify")]
