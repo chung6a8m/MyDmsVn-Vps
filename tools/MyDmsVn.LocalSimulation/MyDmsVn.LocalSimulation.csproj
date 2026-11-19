@@ -11,7 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/MyDmsVn.Server.Infrastructure/MyDmsVn.Server.Infrastructure.csproj">
-      <AdditionalProperties>Vps04Server=true</AdditionalProperties>
+      <AdditionalProperties>Vps04Server=true;Vps06bMediator=true</AdditionalProperties>
     </ProjectReference>
   </ItemGroup>
 </Project>
