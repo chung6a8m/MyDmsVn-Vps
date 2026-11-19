@@ -170,6 +170,29 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertIn("LocalSimulation.GitStateUnavailable", result.stdout)
         self.assertNotIn("LocalSimulation.StateAlreadyExists", result.stdout)
 
+    @unittest.skipUnless(os.name == "nt", "Windows ACL behavior is Windows-specific")
+    def test_runtime_acl_hardening_keeps_owned_files_readable(self):
+        protected = self.outside / "protected"
+        protected.mkdir()
+        sample = protected / "sample.txt"
+        sample.write_text("owned-readable", encoding="utf-8")
+        command = (
+            f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+            f"& (Get-Module LocalSimulation.Runtime) {{ param($p) "
+            f"Protect-LocalDirectory $p; Get-Content -LiteralPath (Join-Path $p 'sample.txt') -Raw }} "
+            f"'{protected}'"
+        )
+
+        result = subprocess.run(
+            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("owned-readable", result.stdout.strip())
+
     def test_reset_refuses_missing_receipt_and_preserves_unrelated_file(self):
         result = self.run_operator(
             "Reset", "-ConfirmInstanceId", "11111111-2222-4333-8444-555555555555"
