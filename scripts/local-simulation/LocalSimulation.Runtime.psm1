@@ -269,8 +269,11 @@ function Initialize-MyDmsVnLocalSimulation {
     $caFileCertificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($caFile)
     $receipt.certificateThumbprint = $caFileCertificate.Thumbprint
     Write-Receipt $receiptPath $receipt
-    $ca = Import-Certificate -FilePath $caFile -CertStoreLocation 'Cert:\CurrentUser\Root'
-    if ($ca.Thumbprint -ne $receipt.certificateThumbprint) { throw [InvalidOperationException]::new('LocalSimulation.CertificateImportMismatch') }
+    Invoke-ExternalSafe 'certutil.exe' @('-user', '-f', '-addstore', 'Root', $caFile) 'LocalSimulation.CertificateImportFailed' | Out-Null
+    $ca = Get-Item -LiteralPath ("Cert:\CurrentUser\Root\{0}" -f $receipt.certificateThumbprint)
+    if ($ca.Thumbprint -ne $receipt.certificateThumbprint -or $ca.Subject -ne ("CN=MyDmsVn Local Sim {0}" -f $instanceId)) {
+        throw [InvalidOperationException]::new('LocalSimulation.CertificateImportMismatch')
+    }
 
     Write-Utf8File (Join-Path $StateRoot 'tls\mssql.conf') "[network]`ntlscert = /var/opt/mssql/tls/sql.crt`ntlskey = /var/opt/mssql/tls/sql.key`nforceencryption = 1`ntlsprotocols = 1.2`n"
     & docker container inspect mydmsvn-local-sim-sql 2>$null | Out-Null

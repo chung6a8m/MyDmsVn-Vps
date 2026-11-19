@@ -152,6 +152,12 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertTrue(result.stdout.strip().startswith("/mnt/c/"), result.stdout)
 
+    def test_runtime_ca_import_is_noninteractive_and_identity_checked(self):
+        source = RUNTIME_MODULE.read_text(encoding="utf-8")
+        self.assertIn("'-user', '-f', '-addstore', 'Root'", source)
+        self.assertIn("LocalSimulation.CertificateImportMismatch", source)
+        self.assertNotIn("Import-Certificate", source)
+
     def test_runtime_initializer_accepts_an_empty_state_directory(self):
         self.state.mkdir(parents=True)
         command = (
