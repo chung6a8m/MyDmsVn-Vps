@@ -36,6 +36,7 @@ def environment_specs() -> dict[str, dict[str, Any]]:
             "adminBypassDisabled": True,
             "decisionId": "OWN-VPS-04",
             "runnerLabels": ("self-hosted", "linux", "vps08-staging"),
+            "ownerVariable": "VPS08_OWNER",
             "requiredSecrets": {"VPS08_STAGING_HOST_ATTESTATION"},
             "requiredVariables": {
                 "VPS08_STAGING_PROBE_URL", "VPS08_STAGING_MACHINE_SHA256",
@@ -49,6 +50,7 @@ def environment_specs() -> dict[str, dict[str, Any]]:
             "adminBypassDisabled": True,
             "decisionId": "OWN-VPS-04",
             "runnerLabels": ("self-hosted", "windows", "vps09-attended"),
+            "ownerVariable": "VPS09_OWNER",
             "requiredSecrets": {
                 "VPS09_ISOLATED_SQL_ADMISSION", "VPS09_READONLY_SQL_ORACLE",
                 "VPS09_JWT_AUDIENCE", "VPS09_WRITER_USERNAME", "VPS09_WRITER_PASSWORD",
@@ -72,6 +74,7 @@ def environment_specs() -> dict[str, dict[str, Any]]:
             "adminBypassDisabled": True,
             "decisionId": "OWN-VPS-04",
             "runnerLabels": ("self-hosted", "linux", "vps09-reviewer"),
+            "ownerVariable": "VPS09_OWNER",
             "requiredSecrets": set(),
             "requiredVariables": {
                 "VPS09_REVIEW_PACKET_PATH", "VPS09_OWNER_PUBKEY_PATH",
@@ -155,7 +158,7 @@ def verify(environment: str, expected_sha: str, admin_bypass_attestation: str) -
                        for item in variables.get("variables", [])}
     require(variable_values.get("VPS09_CLOSEOUT_CANDIDATE_SHA") == expected_sha,
             "CandidateShaNotPinned")
-    require(variable_values.get("VPS09_OWNER") == "chung6a8m", "OwnerNotPinned")
+    require(variable_values.get(spec["ownerVariable"]) == "chung6a8m", "OwnerNotPinned")
     branch = get(f"repos/{REPO}/branches/main")
     require(branch["commit"]["sha"] == expected_sha, "ReviewedMainChanged")
     runners = get(f"repos/{REPO}/actions/runners?per_page=100")

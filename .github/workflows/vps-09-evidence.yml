@@ -329,6 +329,9 @@ jobs:
     runs-on: [self-hosted, linux, vps09-reviewer]
     environment: vps09-release-review
     timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v5
         with:
@@ -343,6 +346,7 @@ jobs:
           FIRST_PASS_RUNNER_SHA256: ${{ vars.VPS09_FIRST_PASS_RUNNER_SHA256 }}
           CLOSEOUT_CANDIDATE_SHA: ${{ vars.VPS09_CLOSEOUT_CANDIDATE_SHA }}
           VPS09_OWNER: ${{ vars.VPS09_OWNER }}
+          VPS09_GITHUB_READ_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -365,4 +369,6 @@ jobs:
             --trusted-key-sha256 "$TRUSTED_PUBKEY_SHA256" \
             --expected-first-pass-runner-sha256 "$FIRST_PASS_RUNNER_SHA256" \
             --expected-second-pass-runner-sha256 "$SECOND_PASS_RUNNER_SHA256"
-          echo "VPS09_RECEIPT_STRUCTURAL_ONLY: OWN-VPS-04 Owner second-pass complete; NO_INDEPENDENT_HUMAN_REVIEW."
+          python3 scripts/vps09_finalize_provenance.py verify \
+            --bundle "$REVIEWED_BUNDLE_PATH" --expected-sha "$CLOSEOUT_CANDIDATE_SHA"
+          echo "VPS09_RECEIPT_STRUCTURAL_ONLY: OWN-VPS-04 protected GitHub finalize provenance verified; NO_INDEPENDENT_HUMAN_REVIEW."
