@@ -142,7 +142,27 @@ class LocalSimulationOperatorTests(unittest.TestCase):
             text=True,
             capture_output=True,
         )
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        diagnostic = ""
+        if result.returncode != 0:
+            binding_literal = str(self.binding).replace("'", "''")
+            diagnostic_command = (
+                "$current=[Security.Principal.WindowsIdentity]::GetCurrent(); "
+                f"$paths=@((Split-Path -Parent '{binding_literal}'),'{binding_literal}'); "
+                "$items=foreach($p in $paths){if(Test-Path -LiteralPath $p){$a=Get-Acl -LiteralPath $p; "
+                "[pscustomobject]@{pathType=$(if((Get-Item -LiteralPath $p).PSIsContainer){'directory'}else{'file'}); "
+                "currentName=$current.Name;currentSid=$current.User.Value;owner=$a.Owner;protected=$a.AreAccessRulesProtected; "
+                "rules=@($a.Access|ForEach-Object{$_.IdentityReference.Value+':'+$_.AccessControlType+':'+$_.FileSystemRights})}}}; "
+                "$items|ConvertTo-Json -Depth 5 -Compress"
+            )
+            observed = subprocess.run(
+                [powershell(), "-NoLogo", "-NoProfile", "-Command", diagnostic_command],
+                cwd=ROOT,
+                env=self.process_env,
+                text=True,
+                capture_output=True,
+            )
+            diagnostic = "\nACL diagnostic: " + observed.stdout + observed.stderr
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr + diagnostic)
 
     def test_preflight_emits_diagnostics_without_creating_state(self):
         result = self.run_operator("Preflight")
@@ -206,7 +226,8 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         )
 
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertTrue(result.stdout.strip().startswith("/mnt/c/"), result.stdout)
+        expected_prefix = "/mnt/" + ROOT.drive[0].lower() + "/"
+        self.assertTrue(result.stdout.strip().startswith(expected_prefix), result.stdout)
 
     def test_runtime_ca_import_is_noninteractive_and_identity_checked(self):
         source = RUNTIME_MODULE.read_text(encoding="utf-8")
