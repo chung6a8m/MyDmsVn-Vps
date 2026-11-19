@@ -53,8 +53,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) { Refuse 'LocalSimulation.PowerShell7
 
 function Test-PathWithinAllowedStateParent {
     $prefix = $allowedStateParent.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
-    return $resolvedStateRoot.Equals($allowedStateParent, [StringComparison]::OrdinalIgnoreCase) -or
-        $resolvedStateRoot.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
+    return $resolvedStateRoot.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Test-ReparsePoint {

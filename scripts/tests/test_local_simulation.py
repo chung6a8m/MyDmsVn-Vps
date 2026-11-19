@@ -542,6 +542,44 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         finally:
             self.state = original_state
 
+    def test_explicit_parent_state_root_is_refused_for_initialize_and_reset(self):
+        STATE_PARENT.mkdir(parents=True, exist_ok=True)
+        sibling = STATE_PARENT / ("review-evidence-" + uuid.uuid4().hex)
+        sibling.write_text("keep", encoding="utf-8")
+        try:
+            for action, extra in (("Initialize", ["-DryRun"]), ("Reset", [])):
+                with self.subTest(action=action):
+                    result = subprocess.run(
+                        [
+                            powershell(),
+                            "-NoLogo",
+                            "-NoProfile",
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-File",
+                            str(SCRIPT),
+                            "-Action",
+                            action,
+                            "-StateRoot",
+                            str(STATE_PARENT),
+                            "-OutputFormat",
+                            "Json",
+                            *extra,
+                        ],
+                        cwd=ROOT,
+                        env=self.process_env,
+                        text=True,
+                        capture_output=True,
+                    )
+                    self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+                    self.assertEqual(
+                        "LocalSimulation.StateRootOutsideAllowedParent",
+                        json.loads(result.stdout)["code"],
+                    )
+                    self.assertEqual("keep", sibling.read_text(encoding="utf-8"))
+        finally:
+            sibling.unlink(missing_ok=True)
+
     def test_reset_resumes_local_cleanup_after_receipt_was_partially_deleted(self):
         receipt = self.write_receipt()
         self.write_binding(receipt)

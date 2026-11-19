@@ -10,6 +10,19 @@ using MyDmsVn.Server.Infrastructure.Operations;
 
 namespace MyDmsVn.LocalSimulation;
 
+internal readonly record struct ExerciseProofCounts(
+    int ReceiptBySaleAndNote,
+    int ReceiptsByNote,
+    int LinesBySale,
+    int LedgerBySale,
+    int JournalByOperationResultAndDisposition,
+    int JournalsByOperation)
+{
+    internal bool IsValid =>
+        ReceiptBySaleAndNote == 1 && ReceiptsByNote == 1 && LinesBySale == 1 && LedgerBySale == 0 &&
+        JournalByOperationResultAndDisposition == 1 && JournalsByOperation == 1;
+}
+
 internal sealed class SqlLifecycle
 {
     private const string InstanceMarker = "MyDmsVn.LocalSimulationInstance";
@@ -51,6 +64,14 @@ SELECT CASE WHEN
    )
  )
 THEN 1 ELSE 0 END;";
+    internal const string ExerciseProofSql = @"
+SELECT
+ (SELECT COUNT(*) FROM dbo.SalesReceipts WHERE SaleId=@sale AND Note=@note),
+ (SELECT COUNT(*) FROM dbo.SalesReceipts WHERE Note=@note),
+ (SELECT COUNT(*) FROM dbo.SalesReceiptLines WHERE SaleId=@sale),
+ (SELECT COUNT(*) FROM dbo.StockLedger WHERE DocumentType=N'SalesReceipt' AND DocumentId=@sale),
+ (SELECT COUNT(*) FROM dbo.WebOperationJournal WHERE OperationId=@operation AND ResultDocumentId=@sale AND Disposition=N'COMMITTED'),
+ (SELECT COUNT(*) FROM dbo.WebOperationJournal WHERE OperationId=@operation);";
     private readonly LocalSimulationSettings _settings;
 
     public SqlLifecycle(LocalSimulationSettings settings) => _settings = settings;
@@ -81,18 +102,17 @@ THEN 1 ELSE 0 END;";
             throw new LocalSimulationBlockedException("LocalSimulation.ProofInputInvalid");
         await using var oracle = new SqlConnection(_settings.BuildOracleConnectionString("127.0.0.1,11433").ConnectionString);
         await oracle.OpenAsync().ConfigureAwait(false);
-        await using var command = new SqlCommand(@"
-SELECT CASE WHEN
- (SELECT COUNT(*) FROM dbo.SalesReceipts WHERE SaleId=@sale AND Note=@note)=1 AND
- (SELECT COUNT(*) FROM dbo.SalesReceiptLines WHERE SaleId=@sale)=1 AND
- (SELECT COUNT(*) FROM dbo.StockLedger WHERE DocumentType=N'SalesReceipt' AND DocumentId=@sale)=0 AND
- (SELECT COUNT(*) FROM dbo.WebOperationJournal WHERE OperationId=@operation AND ResultDocumentId=@sale AND Disposition=N'COMMITTED')=1
-THEN 1 ELSE 0 END;", oracle);
+        await using var command = new SqlCommand(ExerciseProofSql, oracle);
         command.Parameters.Add("@sale", SqlDbType.BigInt).Value = saleId;
         command.Parameters.Add("@note", SqlDbType.NVarChar, 500).Value = note;
         command.Parameters.Add("@operation", SqlDbType.UniqueIdentifier).Value = operationId;
-        if (Convert.ToInt32(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture) != 1)
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow).ConfigureAwait(false);
+        if (!await reader.ReadAsync().ConfigureAwait(false))
             throw new LocalSimulationBlockedException("LocalSimulation.ExerciseProofFailed");
+        var counts = new ExerciseProofCounts(
+            reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2),
+            reader.GetInt32(3), reader.GetInt32(4), reader.GetInt32(5));
+        if (!counts.IsValid) throw new LocalSimulationBlockedException("LocalSimulation.ExerciseProofFailed");
     }
 
     private async Task BackupVerifyAsync()

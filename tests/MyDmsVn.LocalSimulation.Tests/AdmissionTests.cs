@@ -95,6 +95,22 @@ public sealed class AdmissionTests
         Assert.Contains("N'IMPERSONATE'", SqlLifecycle.OracleUnsafePermissionSql, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ExerciseOracleRejectsSyntheticExtraReceiptOrJournal()
+    {
+        var baseline = new ExerciseProofCounts(
+            ReceiptBySaleAndNote: 1,
+            ReceiptsByNote: 1,
+            LinesBySale: 1,
+            LedgerBySale: 0,
+            JournalByOperationResultAndDisposition: 1,
+            JournalsByOperation: 1);
+
+        Assert.True(baseline.IsValid);
+        Assert.False((baseline with { ReceiptsByNote = 2 }).IsValid);
+        Assert.False((baseline with { JournalsByOperation = 2 }).IsValid);
+    }
+
     private static Dictionary<string, string> Valid() => new(StringComparer.Ordinal)
     {
         ["MYDMSVN_LOCAL_SIM_ADMISSION"] = "approved-synthetic-local-only",
