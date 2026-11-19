@@ -250,6 +250,13 @@
       "mydmsvn.contracts": {
         "type": "Project"
       },
+      "mydmsvn.localsimulation": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Data.SqlClient": "[7.0.2, )",
+          "MyDmsVn.Server.Infrastructure": "[1.0.0, )"
+        }
+      },
       "mydmsvn.server.application": {
         "type": "Project",
         "dependencies": {

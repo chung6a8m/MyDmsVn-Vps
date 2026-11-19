@@ -17,6 +17,48 @@ concurrency:
 
 jobs:
 
+  local-simulation-linux-safety:
+    name: Linux local simulation shell safety (12 tests, no skips)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Execute the complete Linux shell safety suite
+        run: |
+          python3 - <<'PY'
+          import unittest
+          expected = 12
+          suite = unittest.defaultTestLoader.loadTestsFromName('scripts.tests.test_local_simulation_wsl')
+          assert suite.countTestCases() == expected, (suite.countTestCases(), expected)
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          assert result.testsRun == expected, (result.testsRun, expected)
+          assert not result.failures and not result.errors and not result.skipped, result
+          PY
+
+  local-simulation-windows-safety:
+    name: Windows local simulation operator safety (30 tests, no skips)
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Execute the complete Windows operator safety suite
+        shell: pwsh
+        env:
+          MYDMSVN_TEST_DOCKER_ENGINE_ID: 11111111-2222-4333-8444-555555555555
+        run: |
+          @'
+          import unittest
+          expected = 30
+          suite = unittest.defaultTestLoader.loadTestsFromName('scripts.tests.test_local_simulation')
+          assert suite.countTestCases() == expected, (suite.countTestCases(), expected)
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          assert result.testsRun == expected, (result.testsRun, expected)
+          assert not result.failures and not result.errors and not result.skipped, result
+          '@ | python -
+
   # Manual pre-merge acceptance trigger: only on the explicit labeled event,
   # same-repo PR head and protected nonproduction environment reviewer approval.
   # Never run mutation tests automatically on pushes or ordinary PR synchronization.
@@ -83,6 +125,25 @@ jobs:
         run: |
           dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode -v minimal
           dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore -v minimal --logger "trx;LogFileName=vps04a-core-boundary.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+      - name: Run local simulation admission tests
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet restore ../../tests/MyDmsVn.LocalSimulation.Tests/MyDmsVn.LocalSimulation.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode -v minimal
+          dotnet test ../../tests/MyDmsVn.LocalSimulation.Tests/MyDmsVn.LocalSimulation.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore -v minimal \
+            --logger "trx;LogFileName=local-simulation-admission.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          path=Path(os.environ['GITHUB_WORKSPACE'])/'vps04a-trx'/'local-simulation-admission.trx'
+          ns={'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          counters=ET.parse(path).getroot().find('./t:ResultSummary/t:Counters',ns)
+          assert counters is not None, 'Missing local simulation TRX counters'
+          counts={k:int(v) for k,v in counters.attrib.items() if k in ('total','passed','failed','executed','notExecuted')}
+          assert counts['total']>=15 and counts['executed']>=15, counts
+          assert counts['failed']==0 and counts['notExecuted']==0 and counts['passed']==counts['total'], counts
+          print(f"PASS local simulation admission: {counts}")
+          PY
       - name: Require native boundary test execution, no failure or skip
         run: |
           python3 - <<'PY'

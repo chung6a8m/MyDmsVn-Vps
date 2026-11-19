@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   isolated-sql13:
-    name: Ubuntu .NET 10 + isolated SQL2022 TLS + golden HTTP/stock and WEB2-WEB6 group parity 15/15
+    name: Ubuntu .NET 10 + isolated SQL2022 TLS + golden HTTP/stock and WEB2-WEB6 group parity 16/16
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     env:
@@ -219,7 +219,7 @@ jobs:
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
             -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
-            --filter 'FullyQualifiedName~Vps04aLiveSqlAcceptanceTests|FullyQualifiedName~Vps04aCiValuationSqlAcceptanceTests' \
+            --filter 'FullyQualifiedName~Vps04aLiveSqlAcceptanceTests|FullyQualifiedName~Vps04aCiValuationSqlAcceptanceTests|FullyQualifiedName~Vps04aCiLocalSimulationOracleSqlAcceptanceTests' \
             --logger 'trx;LogFileName=vps04a-ci-https-sql.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
 
           # Run a separate two-client oversell race ONLY after the normal
@@ -317,7 +317,7 @@ jobs:
           from pathlib import Path
           import xml.etree.ElementTree as ET
           files=list(Path('vps04a-ci-trx').glob('*.trx'))
-          expected={'vps04a-ci-https-sql.trx':6,'vps04a-ci-oversell-race.trx':1,
+          expected={'vps04a-ci-https-sql.trx':7,'vps04a-ci-oversell-race.trx':1,
                     'vps04a-ci-multiwarehouse-fractional.trx':1,
                     'vps04a-ci-group-parity.trx':5,
                     'vps04a-ci-fault-rollback.trx':1,
@@ -333,8 +333,8 @@ jobs:
             n=expected[file.name]
             assert got == {'total':n,'executed':n,'passed':n,'failed':0,'notExecuted':0},(file.name,got)
             total+=n
-          assert total==15
-          print('PASS: 15/15 real HTTPS-to-SQL tests: 10 prior SQL facts + '
+          assert total==16
+          print('PASS: 16/16 real HTTPS-to-SQL tests: 11 SQL/oracle facts + '
                 'five WEB2..WEB6 grouped parity facts; zero failed/skipped')
 
           # A test that reports PASS but omits a group, a case, or expected/
@@ -365,7 +365,7 @@ jobs:
           PY
 
           # VPS-06B independent native-dispatch SQL Oracle: after the original
-          # 15/15 sequential rollback/retry, oversell and WEB2-WEB6 parity facts.
+          # 16/16 sequential rollback/retry, oversell, Oracle and WEB2-WEB6 parity facts.
           # Read-only and exclusively admitted to this disposable SQL13 job.
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
@@ -492,7 +492,7 @@ jobs:
                     ('total','executed','passed','failed','notExecuted')}
             assert counts=={'total':1,'executed':1,'passed':1,'failed':0,'notExecuted':0},(name,counts)
           print('VPS-04B Linux protected audit WEB6: 3/3 real HTTPS-SQL facts, zero failure/skip; '
-                'pre-provisioned mode guard rejects startup; prior 15/15 SQL13 remain separate.')
+                'pre-provisioned mode guard rejects startup; prior 16/16 SQL13 remain separate.')
           PY
 
       - name: Upload only safe WEB2-WEB6 expected actual diff projections

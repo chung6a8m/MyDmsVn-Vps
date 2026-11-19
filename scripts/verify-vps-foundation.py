@@ -147,7 +147,7 @@ def validate_links(path: str, tracked: set[str], errors: list[str]) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default="foundation-report.json")
-    parser.add_argument("--expected-projects", type=int, default=58)
+    parser.add_argument("--expected-projects", type=int, default=60)
     args = parser.parse_args()
     errors: list[str] = []
     index, blob_shas, index_errors = tracked_files()
