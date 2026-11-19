@@ -48,7 +48,7 @@ public sealed class Vps04aCiLocalSimulationOracleSqlAcceptanceTests
 INSERT dbo.SalesReceipts(SaleNo,SaleDate,WarehouseId,EmployeeId,CustomerId,Status,Note,CreatedByUserId)
 OUTPUT INSERTED.SaleId
 VALUES(@number,CONVERT(date,SYSUTCDATETIME()),@warehouse,@employee,@customer,'Draft',@note,@actor);",
-                ("@number", "LS-" + Guid.NewGuid().ToString("N")),
+                ("@number", "LS-" + Guid.NewGuid().ToString("N")[..29]),
                 ("@warehouse", int.Parse(Required("VPS04A_LIVE_WAREHOUSE_ID"), CultureInfo.InvariantCulture)),
                 ("@employee", int.Parse(Required("VPS04A_LIVE_EMPLOYEE_ID"), CultureInfo.InvariantCulture)),
                 ("@customer", int.Parse(Required("VPS04A_LIVE_CUSTOMER_ID"), CultureInfo.InvariantCulture)),
@@ -81,7 +81,7 @@ SELECT TOP(1) u.UserId,j.OperationId,j.DeploymentEpoch,1,1,1,NULL,HASHBYTES('SHA
  'COMMITTED',0x7B7D,@now,@now,DATEADD(day,7,@now)
 FROM dbo.Users u CROSS JOIN dbo.WebOperationJournal j CROSS JOIN @extraSale x
 WHERE u.UserId<>@actor AND j.ActorUserId=@actor AND j.OperationId=@operation ORDER BY u.UserId;",
-                ("@number", "LS-" + Guid.NewGuid().ToString("N")), ("@sale", sale),
+                ("@number", "LS-" + Guid.NewGuid().ToString("N")[..29]), ("@sale", sale),
                 ("@actor", actor), ("@operation", operation));
 
             var duplicates = await ProofCountsAsync(sql, transaction, proofSql, sale, note, operation);
