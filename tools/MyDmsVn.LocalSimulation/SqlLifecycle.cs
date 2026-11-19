@@ -169,7 +169,7 @@ SELECT CASE WHEN
  OR EXISTS(
    SELECT 1 FROM sys.objects o
    CROSS APPLY sys.fn_my_permissions(QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.'+QUOTENAME(o.name),N'OBJECT') p
-   WHERE o.is_ms_shipped=0 AND (
+   WHERE o.is_ms_shipped=0 AND o.type IN (N'U',N'V',N'P',N'FN',N'IF',N'TF') AND (
      p.permission_name<>N'SELECT' OR o.name NOT IN
        (N'WebAuthSessions',N'WebOperationJournal',N'SalesReceipts',N'SalesReceiptLines',N'GoodsReceipts',N'GoodsReceiptLines',N'StockLedger',N'StockValuationEntries',N'StockBalances')
    )
