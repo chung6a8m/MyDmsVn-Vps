@@ -281,7 +281,7 @@ function Write-BoundReceipt {
 function Assert-LocalSimulationIdentity {
     param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Receipt)
     Assert-LocalSimulationRegistration $StateRoot $Receipt
-    $head = (Invoke-ExternalSafe 'git' @('-C', $RepoRoot, 'rev-parse', 'HEAD') 'LocalSimulation.GitStateUnavailable')[0].Trim()
+    $head = ([string](@(Invoke-ExternalSafe 'git' @('-C', $RepoRoot, 'rev-parse', 'HEAD') 'LocalSimulation.GitStateUnavailable')[0])).Trim()
     $dirty = @(Invoke-ExternalSafe 'git' @('-C', $RepoRoot, 'status', '--porcelain') 'LocalSimulation.GitStateUnavailable')
     if ($head -ne [string]$Receipt.sourceSha -or $dirty.Count -ne 0) { throw [InvalidOperationException]::new('LocalSimulation.SourceIdentityMismatch') }
     if ((Get-FileSha256 (Join-Path $RepoRoot 'scripts\local-simulation\mydmsvn-local-sim')) -ne [string]$Receipt.artifacts.bashSha256 -or
@@ -336,7 +336,7 @@ function Initialize-MyDmsVnLocalSimulation {
         schemaVersion = 1; instanceId = $instanceId; sourceSha = $sourceSha
         stateRoot = [IO.Path]::GetFullPath($StateRoot); createdAtUtc = [DateTime]::UtcNow.ToString('O')
         phase = 'initializing'
-        docker = [ordered]@{ container = 'mydmsvn-local-sim-sql'; volume = 'mydmsvn-local-sim-sql-data'; engineId = ((Invoke-ExternalSafe 'docker' @('info', '--format', '{{.ID}}') 'LocalSimulation.DockerBackendUnavailable')[0]).Trim(); intent = $false; created = $false }
+        docker = [ordered]@{ container = 'mydmsvn-local-sim-sql'; volume = 'mydmsvn-local-sim-sql-data'; engineId = ([string](@(Invoke-ExternalSafe 'docker' @('info', '--format', '{{.ID}}') 'LocalSimulation.DockerBackendUnavailable')[0])).Trim(); intent = $false; created = $false }
         wsl = [ordered]@{ distribution = 'Ubuntu'; service = 'mydmsvn-local-sim.service'; installed = $false }
         artifacts = [ordered]@{ bashSha256 = Get-FileSha256 (Join-Path $RepoRoot 'scripts\local-simulation\mydmsvn-local-sim'); sqlHelperSha256 = $null; hostSha256 = $null }
         certificateThumbprint = $null
