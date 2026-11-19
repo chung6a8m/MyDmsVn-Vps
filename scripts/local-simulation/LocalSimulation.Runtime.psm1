@@ -108,6 +108,7 @@ function Invoke-SqlHelper {
         MYDMSVN_LOCAL_SIM_SQL_ADMIN_CONNECTION_STRING = "Server=127.0.0.1,11433;Initial Catalog=master;User ID=sa;Password=$sa;Encrypt=True;TrustServerCertificate=False;Pooling=False;Connect Timeout=5"
         MYDMSVN_LOCAL_SIM_RUNTIME_PASSWORD = (Get-Content -LiteralPath (Join-Path $secrets 'runtime_password') -Raw)
         MYDMSVN_LOCAL_SIM_ORACLE_PASSWORD = (Get-Content -LiteralPath (Join-Path $secrets 'oracle_password') -Raw)
+        MYDMSVN_LOCAL_SIM_MIGRATION_PASSWORD = (Get-Content -LiteralPath (Join-Path $secrets 'migration_password') -Raw)
         MYDMSVN_LOCAL_SIM_WRITER_PASSWORD = (Get-Content -LiteralPath (Join-Path $secrets 'writer_password') -Raw)
     }
     $old = Set-ProcessSettings $settings
@@ -121,10 +122,10 @@ function Invoke-SqlHelper {
 
 function Invoke-FluentMigration {
     param([string] $StateRoot)
-    $sa = Get-Content -LiteralPath (Join-Path $StateRoot 'secrets\sa_password') -Raw
+    $migrationPassword = Get-Content -LiteralPath (Join-Path $StateRoot 'secrets\migration_password') -Raw
     $old = Set-ProcessSettings @{
         VPS07B_OPERATOR_APPROVAL = 'approved-maintenance-and-verified-backup'
-        VPS07B_SQL_CONNECTION_STRING = "Server=127.0.0.1,11433;Initial Catalog=MyDmsVnVps_LocalSimulation;User ID=sa;Password=$sa;Encrypt=True;TrustServerCertificate=False;Pooling=False;Connect Timeout=5"
+        VPS07B_SQL_CONNECTION_STRING = "Server=127.0.0.1,11433;Initial Catalog=MyDmsVnVps_LocalSimulation;User ID=mydmsvn_local_sim_migration;Password=$migrationPassword;Encrypt=True;TrustServerCertificate=False;Pooling=False;Connect Timeout=5"
     }
     try {
         $dll = Join-Path $StateRoot 'artifacts\migrator\MyDmsVn.Server.FluentMigrator.Cli.dll'
@@ -170,7 +171,8 @@ function Initialize-MyDmsVnLocalSimulation {
 
     $secretValues = @{
         sa_password = New-LocalPassword; runtime_password = New-LocalPassword
-        oracle_password = New-LocalPassword; writer_password = New-LocalPassword
+        oracle_password = New-LocalPassword; migration_password = New-LocalPassword
+        writer_password = New-LocalPassword
         proxy_token = New-LocalToken; jwt_keys = ('local-key:' + (New-LocalToken))
     }
     foreach ($name in $secretValues.Keys) { Write-Utf8File (Join-Path $StateRoot "secrets\$name") $secretValues[$name] }

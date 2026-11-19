@@ -10,6 +10,7 @@ public static class LocalSimulationSqlNames
     public const string Database = "MyDmsVnVps_LocalSimulation";
     public const string RuntimeLogin = "mydmsvn_local_sim_runtime";
     public const string OracleLogin = "mydmsvn_local_sim_oracle";
+    public const string MigrationLogin = "mydmsvn_local_sim_migration";
     public const string WriterUsername = "local_sim_writer";
     public const string DeniedUsername = "local_sim_denied";
 }
@@ -31,12 +32,14 @@ public sealed class LocalSimulationSettings
         SqlConnectionStringBuilder adminConnection,
         string runtimePassword,
         string oraclePassword,
+        string migrationPassword,
         string writerPassword)
     {
         InstanceId = instanceId;
         AdminConnection = adminConnection;
         RuntimePassword = runtimePassword;
         OraclePassword = oraclePassword;
+        MigrationPassword = migrationPassword;
         WriterPassword = writerPassword;
     }
 
@@ -45,6 +48,7 @@ public sealed class LocalSimulationSettings
     public SqlConnectionStringBuilder AdminConnection { get; }
     internal string RuntimePassword { get; }
     internal string OraclePassword { get; }
+    internal string MigrationPassword { get; }
     internal string WriterPassword { get; }
 
     public static LocalSimulationSettings Parse(IReadOnlyDictionary<string, string> values)
@@ -74,13 +78,14 @@ public sealed class LocalSimulationSettings
 
         var runtime = Password(values, "MYDMSVN_LOCAL_SIM_RUNTIME_PASSWORD");
         var oracle = Password(values, "MYDMSVN_LOCAL_SIM_ORACLE_PASSWORD");
+        var migration = Password(values, "MYDMSVN_LOCAL_SIM_MIGRATION_PASSWORD");
         var writer = Password(values, "MYDMSVN_LOCAL_SIM_WRITER_PASSWORD");
-        if (runtime == oracle || runtime == writer || oracle == writer)
+        if (new HashSet<string>(StringComparer.Ordinal) { runtime, oracle, migration, writer }.Count != 4)
             throw new LocalSimulationBlockedException("LocalSimulation.PasswordReuseRefused");
 
         admin.Pooling = false;
         admin.ConnectTimeout = Math.Min(admin.ConnectTimeout, 8);
-        return new LocalSimulationSettings(instanceId, admin, runtime, oracle, writer);
+        return new LocalSimulationSettings(instanceId, admin, runtime, oracle, migration, writer);
     }
 
     public SqlConnectionStringBuilder BuildRuntimeConnectionString(string dataSource) => new(AdminConnection.ConnectionString)

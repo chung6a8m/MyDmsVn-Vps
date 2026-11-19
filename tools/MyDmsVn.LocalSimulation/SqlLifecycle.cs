@@ -68,6 +68,19 @@ IF DB_ID(N'MyDmsVnVps_LocalSimulation') IS NULL
             throw new LocalSimulationBlockedException("LocalSimulation.DatabaseOwnershipMismatch");
         if (marker is null)
             await AddMarkerAsync(database, InstanceMarker, _settings.InstanceId.ToString("D")).ConfigureAwait(false);
+        await EnsureMigrationPrincipalAsync(database).ConfigureAwait(false);
+    }
+
+    private async Task EnsureMigrationPrincipalAsync(SqlConnection database)
+    {
+        await using var master = new SqlConnection(_settings.AdminConnection.ConnectionString);
+        await master.OpenAsync().ConfigureAwait(false);
+        await ExecuteAsync(master, LoginSql(LocalSimulationSqlNames.MigrationLogin,
+            _settings.MigrationPassword)).ConfigureAwait(false);
+        await ExecuteAsync(database, $@"
+IF USER_ID(N'{LocalSimulationSqlNames.MigrationLogin}') IS NULL
+    CREATE USER [{LocalSimulationSqlNames.MigrationLogin}] FOR LOGIN [{LocalSimulationSqlNames.MigrationLogin}];
+GRANT CONTROL TO [{LocalSimulationSqlNames.MigrationLogin}];").ConfigureAwait(false);
     }
 
     private async Task ProvisionAsync()
@@ -142,12 +155,12 @@ THEN 1 ELSE 0 END;").ConfigureAwait(false);
         await ExecuteAsync(database, $@"
 IF USER_ID(N'{LocalSimulationSqlNames.RuntimeLogin}') IS NULL CREATE USER [{LocalSimulationSqlNames.RuntimeLogin}] FOR LOGIN [{LocalSimulationSqlNames.RuntimeLogin}];
 IF USER_ID(N'{LocalSimulationSqlNames.OracleLogin}') IS NULL CREATE USER [{LocalSimulationSqlNames.OracleLogin}] FOR LOGIN [{LocalSimulationSqlNames.OracleLogin}];
-IF USER_ID(N'mydmsvn_local_sim_migration') IS NULL CREATE USER [mydmsvn_local_sim_migration] WITHOUT LOGIN;").ConfigureAwait(false);
+IF USER_ID(N'{LocalSimulationSqlNames.MigrationLogin}') IS NULL CREATE USER [{LocalSimulationSqlNames.MigrationLogin}] FOR LOGIN [{LocalSimulationSqlNames.MigrationLogin}];").ConfigureAwait(false);
 
         var root = FindRepositoryRoot();
         var grants = File.ReadAllText(Path.Combine(root, "deployment", "sql", "Provision-MyDmsVnWebPrincipals.sql"))
             .Replace("$(WebRuntimeUser)", LocalSimulationSqlNames.RuntimeLogin, StringComparison.Ordinal)
-            .Replace("$(MigrationUser)", "mydmsvn_local_sim_migration", StringComparison.Ordinal);
+            .Replace("$(MigrationUser)", LocalSimulationSqlNames.MigrationLogin, StringComparison.Ordinal);
         await ExecuteAsync(database, grants).ConfigureAwait(false);
         var desktop = File.ReadAllText(Path.Combine(root, "deployment", "sql", "Provision-MyDmsVnDesktopApiGrants.sql"))
             .Replace("$(WebRuntimeUser)", LocalSimulationSqlNames.RuntimeLogin, StringComparison.Ordinal);
