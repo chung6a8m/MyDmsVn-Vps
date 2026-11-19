@@ -10,8 +10,8 @@ project_docs = {path: ET.parse(path).getroot() for path in projects}
 helpers = [path for path, doc in project_docs.items()
            if any(node.text == "false" for node in doc.iter("IsTestProject"))]
 suites = [path for path in projects if path not in helpers]
-assert len(projects) == 22 and len(helpers) == 7 and len(suites) == 15, \
-    "Test project inventory drift (VPS-09 adds one net10 xUnit acceptance suite)"
+assert len(projects) == 23 and len(helpers) == 7 and len(suites) == 16, \
+    "Test project inventory drift (local simulation adds one net10 xUnit suite)"
 ci_bootstrap = root / "tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj"
 assert ci_bootstrap in helpers and ci_bootstrap not in suites, \
     "Original DbUp SQL13 bootstrap must remain an explicitly marked non-test tool"
@@ -44,6 +44,7 @@ for path in suites:
     elif path.name in {
         "MyDmsVn.Server.AspNetCoreHost.Tests.csproj",
         "MyDmsVn.Vps09.Acceptance.Tests.csproj",
+        "MyDmsVn.LocalSimulation.Tests.csproj",
     }:
         assert target_frameworks == ["net10.0"], path
     else:
@@ -97,7 +98,7 @@ for test_id, floor in expected_smoke_floors.items():
     assert smoke_matrix.count(row) == 1, f"Missing smoke floor {test_id}={floor}"
 assert smoke_matrix.count("minimum_tests:") == len(expected_smoke_floors), "Unexpected smoke floor inventory"
 
-print("VPS-01 static topology: PASS 13 legacy + 2 net10 executable xUnit v3 projects, 7 non-test helpers (including VPS-07B SQL oracle); 29 routes; 178 fixtures; 4 smoke floors")
+print("VPS-01 static topology: PASS 13 legacy + 3 net10 executable xUnit v3 projects, 7 non-test helpers (including VPS-07B SQL oracle); 29 routes; 178 fixtures; 4 smoke floors")
 
 
 # VPS-02 retains the 29 legacy routes; additions and Desktop mappings are versioned independently.

@@ -42,7 +42,19 @@ class LocalSimulationWslTests(unittest.TestCase):
         source = HELPER.read_text(encoding="utf-8")
         self.assertGreaterEqual(source.count("mydmsvn-local-sim-ca.crt"), 2)
         self.assertIn("update-ca-certificates", source)
-        self.assertIn("/opt/mydmsvn-dotnet", source)
+        self.assertIn("/opt/mydmsvn-local-sim/runtime", source)
+
+    def test_install_refuses_preexisting_system_resources(self):
+        source = HELPER.read_text(encoding="utf-8")
+        self.assertIn("admit_lab", source)
+        self.assertIn("id mydmsvn-local-sim", source)
+        for path in (
+            "/opt/mydmsvn-local-sim",
+            "/etc/mydmsvn-local-sim",
+            "/var/lib/mydmsvn-local-sim",
+            "/etc/systemd/system/mydmsvn-local-sim.service",
+        ):
+            self.assertIn(path, source)
 
     def test_verify_has_a_bounded_service_readiness_wait(self):
         source = HELPER.read_text(encoding="utf-8")
@@ -105,6 +117,7 @@ class LocalSimulationWslTests(unittest.TestCase):
         self.assertIn("listen 127.0.0.1:50443 ssl", nginx)
         self.assertIn("proxy_set_header X-Forwarded-Proto https", nginx)
         self.assertIn("include /etc/nginx/mydmsvn-local-sim-proxy-token.conf", nginx)
+        self.assertIn('$http_host != "localhost:50443"', nginx)
         self.assertNotIn("PrivateSql_123!", combined)
         self.assertNotIn("ProxyToken_1234567890_abcdef", combined)
 

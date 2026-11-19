@@ -62,6 +62,20 @@ function Test-ReparsePoint {
     return [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
 }
 
+function Test-ReparsePointInStatePath {
+    $current = $resolvedStateRoot
+    while ($true) {
+        if (Test-Path -LiteralPath $current) {
+            $item = Get-Item -LiteralPath $current -Force
+            if ([bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return $true }
+        }
+        if ($current.Equals($repoRoot, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+        $parent = [IO.Directory]::GetParent($current)
+        if ($null -eq $parent -or $parent.FullName.Equals($current, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+        $current = $parent.FullName
+    }
+}
+
 function Read-ValidatedReceipt {
     param([switch] $RequireConfirmation, [switch] $RequireReady)
 
@@ -89,10 +103,10 @@ function Read-ValidatedReceipt {
     }
     $dockerProperties = @($receipt.docker.PSObject.Properties.Name)
     $wslProperties = @($receipt.wsl.PSObject.Properties.Name)
-    if ('container' -notin $dockerProperties -or 'volume' -notin $dockerProperties -or 'created' -notin $dockerProperties -or
+    if ('container' -notin $dockerProperties -or 'volume' -notin $dockerProperties -or 'engineId' -notin $dockerProperties -or 'created' -notin $dockerProperties -or
         'distribution' -notin $wslProperties -or 'service' -notin $wslProperties -or 'installed' -notin $wslProperties -or
         $receipt.schemaVersion -ne 1 -or $receipt.sourceSha -notmatch '^[0-9a-f]{40}$' -or
-        $receipt.instanceId -notmatch '^[0-9a-fA-F-]{36}$') {
+        $receipt.instanceId -notmatch '^[0-9a-fA-F-]{36}$' -or $receipt.docker.engineId -notmatch '^[0-9a-f-]{36}$') {
         Refuse 'LocalSimulation.ReceiptInvalid'
     }
     $receiptStateRoot = [IO.Path]::GetFullPath([string]$receipt.stateRoot)
@@ -117,6 +131,12 @@ function Read-ValidatedReceipt {
 
 if (-not (Test-PathWithinAllowedStateParent)) {
     Refuse 'LocalSimulation.StateRootOutsideAllowedParent'
+}
+if (Test-ReparsePointInStatePath) {
+    Refuse 'LocalSimulation.ReparsePointRefused'
+}
+if ($DryRun -and $Action -ne 'Initialize') {
+    Refuse 'LocalSimulation.DryRunUnsupported'
 }
 
 if ($Action -eq 'Initialize' -and $DryRun) {
@@ -158,6 +178,12 @@ if ($Action -eq 'Preflight') {
         $dockerCode = $LASTEXITCODE
         $dockerOs = $(if ($dockerOutput.Count -gt 0) { [string]$dockerOutput[0] } else { '' })
         Add-Check 'DockerLinuxEngine' ($dockerCode -eq 0 -and $dockerOs -eq 'linux') 'Docker Server must be reachable and report linux.'
+        $context = @(& docker context inspect --format '{{.Name}}|{{.Endpoints.docker.Host}}' 2>$null)
+        $dockerInfo = @(& docker info --format '{{.OperatingSystem}}' 2>$null)
+        $localDesktop = $LASTEXITCODE -eq 0 -and [string]::IsNullOrWhiteSpace($env:DOCKER_HOST) -and
+            $context.Count -eq 1 -and $context[0] -eq 'desktop-linux|npipe:////./pipe/dockerDesktopLinuxEngine' -and
+            $dockerInfo.Count -eq 1 -and $dockerInfo[0] -eq 'Docker Desktop'
+        Add-Check 'DockerDesktopLocalContext' $localDesktop 'The active context must be the local Docker Desktop Linux named pipe with DOCKER_HOST unset.'
         $containerNames = @(& docker container ls -a --format '{{.Names}}' 2>$null)
         $containerAvailable = $LASTEXITCODE -eq 0 -and 'mydmsvn-local-sim-sql' -notin $containerNames
         $volumeNames = @(& docker volume ls --format '{{.Name}}' 2>$null)
@@ -166,6 +192,7 @@ if ($Action -eq 'Preflight') {
     }
     catch {
         Add-Check 'DockerLinuxEngine' $false 'Docker Server is unavailable.'
+        Add-Check 'DockerDesktopLocalContext' $false 'The local Docker Desktop engine identity cannot be verified.'
         Add-Check 'DockerResourceNamesAvailable' $false 'Docker resource identity cannot be verified.'
     }
 
@@ -181,8 +208,14 @@ if ($Action -eq 'Preflight') {
     try {
         $sdks = (& dotnet --list-sdks 2>$null) -join "`n"
         Add-Check 'DotNetSdk10.0.404' ($sdks -match '(?m)^10\.0\.404\s') 'Exact SDK 10.0.404 must be installed on Windows.'
+        Push-Location $repoRoot
+        try { $repoSdk = [string](& dotnet --version 2>$null) } finally { Pop-Location }
+        Add-Check 'RepoSelectedSdk8.0.428' ($repoSdk.Trim() -eq '8.0.428') 'The repository-selected SDK 8.0.428 is required for Desktop publish.'
     }
-    catch { Add-Check 'DotNetSdk10.0.404' $false 'dotnet SDK inventory is unavailable.' }
+    catch {
+        Add-Check 'DotNetSdk10.0.404' $false 'dotnet SDK inventory is unavailable.'
+        Add-Check 'RepoSelectedSdk8.0.428' $false 'The repository-selected dotnet SDK is unavailable.'
+    }
 
     $net48 = Join-Path ${env:ProgramFiles(x86)} 'Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8'
     Add-Check 'Net48TargetingPack' (Test-Path -LiteralPath $net48 -PathType Container) '.NET Framework 4.8 targeting pack must be installed.'
@@ -226,7 +259,7 @@ if ($Action -eq 'Reset') {
     $receipt = Read-ValidatedReceipt -RequireConfirmation
 
     Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
-    Invoke-RuntimeAction { Reset-MyDmsVnLocalSimulationExternal -RepoRoot $repoRoot -Receipt $receipt } | Out-Null
+    Invoke-RuntimeAction { Reset-MyDmsVnLocalSimulationExternal -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
 
     $deleteTarget = (Get-Item -LiteralPath $resolvedStateRoot -Force).FullName
     if (-not $deleteTarget.Equals($resolvedStateRoot, [StringComparison]::OrdinalIgnoreCase) -or

@@ -24,4 +24,4 @@ load_credential() {
 load_credential MYDMSVN_WEB_SQL_CONNECTION_STRING sql_connection_string
 load_credential MYDMSVN_WEB_JWT_KEYS jwt_keys
 load_credential MYDMSVN_VPS08_PROXY_TOKEN proxy_token
-exec /opt/mydmsvn-dotnet/dotnet /opt/mydmsvn-local-sim/current/MyDmsVn.Server.AspNetCoreHost.dll
+exec /opt/mydmsvn-local-sim/runtime/dotnet /opt/mydmsvn-local-sim/current/MyDmsVn.Server.AspNetCoreHost.dll

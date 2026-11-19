@@ -36,14 +36,16 @@ function Invoke-WslHelper {
 
 function New-LocalPassword {
     $bytes = [byte[]]::new(18)
-    [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-    return 'Aa1!' + [Convert]::ToHexString($bytes).ToLowerInvariant()
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+    return 'Aa1!' + (($bytes | ForEach-Object { $_.ToString('x2') }) -join '')
 }
 
 function New-LocalToken {
     $bytes = [byte[]]::new(32)
-    [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-    return [Convert]::ToHexString($bytes).ToLowerInvariant()
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+    return (($bytes | ForEach-Object { $_.ToString('x2') }) -join '')
 }
 
 function Set-ProcessSettings {
@@ -61,6 +63,12 @@ function Restore-ProcessSettings {
     foreach ($name in $Values.Keys) {
         [Environment]::SetEnvironmentVariable($name, $Values[$name], 'Process')
     }
+}
+
+function Protect-LocalDirectory {
+    param([string] $Path)
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+    Invoke-ExternalSafe 'icacls.exe' @($Path, '/inheritance:r', '/grant:r', ("{0}:(OI)(CI)F" -f $identity), '/t', '/c') 'LocalSimulation.StateAclFailed' | Out-Null
 }
 
 function Invoke-DotNet10 {
@@ -118,6 +126,7 @@ function Invoke-SqlHelper {
         MYDMSVN_LOCAL_SIM_RUNTIME_PASSWORD = (Get-Content -LiteralPath (Join-Path $secrets 'runtime_password') -Raw)
         MYDMSVN_LOCAL_SIM_ORACLE_PASSWORD = (Get-Content -LiteralPath (Join-Path $secrets 'oracle_password') -Raw)
         MYDMSVN_LOCAL_SIM_MIGRATION_PASSWORD = (Get-Content -LiteralPath (Join-Path $secrets 'migration_password') -Raw)
+        MYDMSVN_LOCAL_SIM_DENIED_PASSWORD = (Get-Content -LiteralPath (Join-Path $secrets 'denied_password') -Raw)
         MYDMSVN_LOCAL_SIM_WRITER_PASSWORD = (Get-Content -LiteralPath (Join-Path $secrets 'writer_password') -Raw)
     }
     $old = Set-ProcessSettings $settings
@@ -143,9 +152,73 @@ function Invoke-FluentMigration {
     finally { Restore-ProcessSettings $old }
 }
 
+function Invoke-HttpExercise {
+    param([string] $StateRoot, [pscustomobject] $Receipt)
+    $origin = 'https://localhost:50443'
+    $writerPassword = Get-Content -LiteralPath (Join-Path $StateRoot 'secrets\writer_password') -Raw
+    $deniedPassword = Get-Content -LiteralPath (Join-Path $StateRoot 'secrets\denied_password') -Raw
+    $loginHeaders = @{ Origin = $origin; 'X-Requested-With' = 'XMLHttpRequest' }
+    $writerBody = @{ username = 'local_sim_writer'; password = $writerPassword } | ConvertTo-Json -Compress
+    $writer = Invoke-RestMethod -Uri "$origin/api/v1/auth/login" -Method Post -Headers $loginHeaders -ContentType 'application/json' -Body $writerBody
+    $writerToken = [string]$writer.data.accessToken
+    if ([string]::IsNullOrWhiteSpace($writerToken)) { throw [InvalidOperationException]::new('LocalSimulation.WriterLoginFailed') }
+    $writerHeaders = @{ Authorization = "Bearer $writerToken" }
+    $context = Invoke-RestMethod -Uri "$origin/api/v1/operations/context" -Method Get -Headers $writerHeaders
+    $epoch = [string]$context.data.deploymentEpoch
+    if ($epoch -notmatch '^[0-9a-fA-F-]{36}$') { throw [InvalidOperationException]::new('LocalSimulation.OperationContextFailed') }
+
+    $deniedBody = @{ username = 'local_sim_denied'; password = $deniedPassword } | ConvertTo-Json -Compress
+    $denied = Invoke-RestMethod -Uri "$origin/api/v1/auth/login" -Method Post -Headers $loginHeaders -ContentType 'application/json' -Body $deniedBody
+    $deniedHeaders = @{ Authorization = ("Bearer " + [string]$denied.data.accessToken) }
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri "$origin/api/v1/sales-receipts" -Method Get -Headers $deniedHeaders | Out-Null
+        throw [InvalidOperationException]::new('LocalSimulation.DeniedActorUnexpectedlyAuthorized')
+    }
+    catch {
+        if ($_.Exception.Message -eq 'LocalSimulation.DeniedActorUnexpectedlyAuthorized') { throw }
+        $status = [int]$_.Exception.Response.StatusCode
+        if ($status -ne 403) { throw [InvalidOperationException]::new('LocalSimulation.DeniedActorStatusInvalid') }
+    }
+
+    $operationId = [Guid]::NewGuid().ToString('D')
+    $note = 'LOCAL-VERIFY-' + [Guid]::NewGuid().ToString('N')
+    $writerHeaders['X-MyDmsVn-Deployment-Epoch'] = $epoch
+    $writerHeaders['Idempotency-Key'] = $operationId
+    $body = @{
+        saleDate = [DateTime]::UtcNow.ToString('yyyy-MM-dd')
+        customerId = 1; warehouseId = 1; employeeId = 1; note = $note
+        lines = @(@{ saleLineId = '0'; productId = 1; qty = '1.0000'; unitPrice = '2.0000'; isGift = $false })
+    } | ConvertTo-Json -Depth 5 -Compress
+    $sale = Invoke-RestMethod -Uri "$origin/api/v1/sales-receipts" -Method Post -Headers ($writerHeaders + @{ Origin = $origin }) -ContentType 'application/json' -Body $body
+    $saleId = [string]$sale.data.saleId
+    if ($saleId -notmatch '^[1-9][0-9]*$') { throw [InvalidOperationException]::new('LocalSimulation.WriterMutationFailed') }
+    $proofSettings = Set-ProcessSettings @{
+        MYDMSVN_LOCAL_SIM_PROOF_SALE_ID = $saleId
+        MYDMSVN_LOCAL_SIM_PROOF_OPERATION_ID = $operationId
+        MYDMSVN_LOCAL_SIM_PROOF_NOTE = $note
+    }
+    try { Invoke-SqlHelper $StateRoot $Receipt 'verify-exercise' | Out-Null }
+    finally { Restore-ProcessSettings $proofSettings }
+}
+
 function Write-Receipt {
     param([string] $Path, [hashtable] $Receipt)
     Write-Utf8File $Path ($Receipt | ConvertTo-Json -Depth 8)
+}
+
+function Assert-LocalSimulationIdentity {
+    param([string] $RepoRoot, [pscustomobject] $Receipt)
+    $engineId = @(Invoke-ExternalSafe 'docker' @('info', '--format', '{{.ID}}') 'LocalSimulation.DockerBackendUnavailable')
+    if (([string]$engineId[0]).Trim() -ne [string]$Receipt.docker.engineId) { throw [InvalidOperationException]::new('LocalSimulation.DockerEngineMismatch') }
+    $containerLabel = @(Invoke-ExternalSafe 'docker' @('inspect', '-f', '{{ index .Config.Labels "mydmsvn.local-sim.instance" }}', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlContainerMissing')
+    $volumeLabel = @(Invoke-ExternalSafe 'docker' @('volume', 'inspect', '-f', '{{ index .Labels "mydmsvn.local-sim.instance" }}', 'mydmsvn-local-sim-sql-data') 'LocalSimulation.SqlVolumeMissing')
+    $mount = @(Invoke-ExternalSafe 'docker' @('inspect', '-f', '{{range .Mounts}}{{if eq .Destination "/var/opt/mssql"}}{{.Name}}{{end}}{{end}}', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlMountMissing')
+    if (([string]$containerLabel[0]).Trim() -ne [string]$Receipt.instanceId -or
+        ([string]$volumeLabel[0]).Trim() -ne [string]$Receipt.instanceId -or
+        ([string]$mount[0]).Trim() -ne 'mydmsvn-local-sim-sql-data') {
+        throw [InvalidOperationException]::new('LocalSimulation.ResourceIdentityMismatch')
+    }
+    Invoke-WslHelper $RepoRoot 'identity' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha) -Sudo | Out-Null
 }
 
 function Initialize-MyDmsVnLocalSimulation {
@@ -171,7 +244,7 @@ function Initialize-MyDmsVnLocalSimulation {
         schemaVersion = 1; instanceId = $instanceId; sourceSha = $sourceSha
         stateRoot = [IO.Path]::GetFullPath($StateRoot); createdAtUtc = [DateTime]::UtcNow.ToString('O')
         phase = 'initializing'
-        docker = [ordered]@{ container = 'mydmsvn-local-sim-sql'; volume = 'mydmsvn-local-sim-sql-data'; created = $false }
+        docker = [ordered]@{ container = 'mydmsvn-local-sim-sql'; volume = 'mydmsvn-local-sim-sql-data'; engineId = ((@(& docker info --format '{{.ID}}'))[0]).Trim(); created = $false }
         wsl = [ordered]@{ distribution = 'Ubuntu'; service = 'mydmsvn-local-sim.service'; installed = $false }
         certificateThumbprint = $null
     }
@@ -181,17 +254,22 @@ function Initialize-MyDmsVnLocalSimulation {
     $secretValues = @{
         sa_password = New-LocalPassword; runtime_password = New-LocalPassword
         oracle_password = New-LocalPassword; migration_password = New-LocalPassword
-        writer_password = New-LocalPassword
+        denied_password = New-LocalPassword; writer_password = New-LocalPassword
         proxy_token = New-LocalToken; jwt_keys = ('local-key:' + (New-LocalToken))
     }
     foreach ($name in $secretValues.Keys) { Write-Utf8File (Join-Path $StateRoot "secrets\$name") $secretValues[$name] }
+    Protect-LocalDirectory (Join-Path $StateRoot 'secrets')
 
     Publish-LocalSimulationArtifacts $RepoRoot $StateRoot
     $stateWsl = Convert-ToWslPath $StateRoot
-    Invoke-WslHelper $RepoRoot 'certificates' @($stateWsl) | Out-Null
-    $ca = Import-Certificate -FilePath (Join-Path $StateRoot 'tls\ca.crt') -CertStoreLocation 'Cert:\CurrentUser\Root'
-    $receipt.certificateThumbprint = $ca.Thumbprint
+    Invoke-WslHelper $RepoRoot 'certificates' @($stateWsl, $instanceId) | Out-Null
+    Protect-LocalDirectory (Join-Path $StateRoot 'tls')
+    $caFile = Join-Path $StateRoot 'tls\ca.crt'
+    $caFileCertificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($caFile)
+    $receipt.certificateThumbprint = $caFileCertificate.Thumbprint
     Write-Receipt $receiptPath $receipt
+    $ca = Import-Certificate -FilePath $caFile -CertStoreLocation 'Cert:\CurrentUser\Root'
+    if ($ca.Thumbprint -ne $receipt.certificateThumbprint) { throw [InvalidOperationException]::new('LocalSimulation.CertificateImportMismatch') }
 
     Write-Utf8File (Join-Path $StateRoot 'tls\mssql.conf') "[network]`ntlscert = /var/opt/mssql/tls/sql.crt`ntlskey = /var/opt/mssql/tls/sql.key`nforceencryption = 1`ntlsprotocols = 1.2`n"
     & docker container inspect mydmsvn-local-sim-sql 2>$null | Out-Null
@@ -200,13 +278,17 @@ function Initialize-MyDmsVnLocalSimulation {
     if ($LASTEXITCODE -eq 0) { throw [InvalidOperationException]::new('LocalSimulation.SqlVolumeNameCollision') }
     $labels = @('--label', "mydmsvn.local-sim.instance=$instanceId")
     Invoke-ExternalSafe 'docker' (@('volume', 'create') + $labels + @('mydmsvn-local-sim-sql-data')) 'LocalSimulation.SqlVolumeCreateFailed' | Out-Null
+    $receipt.docker.created = $true
+    Write-Receipt $receiptPath $receipt
     $tls = Join-Path $StateRoot 'tls'
     $image = 'mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04'
     $copyScript = 'mkdir -p /var/opt/mssql/tls /var/opt/mssql/backup; cp /source/sql.crt /source/sql.key /var/opt/mssql/tls/; cp /source/mssql.conf /var/opt/mssql/mssql.conf; chown -R 10001:0 /var/opt/mssql/tls /var/opt/mssql/backup /var/opt/mssql/mssql.conf; chmod 600 /var/opt/mssql/tls/sql.key; chmod 644 /var/opt/mssql/tls/sql.crt /var/opt/mssql/mssql.conf'
     Invoke-ExternalSafe 'docker' @('run', '--rm', '--user', '0', '--entrypoint', '/bin/bash', '--mount', 'type=volume,source=mydmsvn-local-sim-sql-data,target=/var/opt/mssql', '--mount', "type=bind,source=$tls,target=/source,readonly", $image, '-c', $copyScript) 'LocalSimulation.SqlTlsProvisionFailed' | Out-Null
-    Invoke-ExternalSafe 'docker' @('run', '-d', '--name', 'mydmsvn-local-sim-sql', '--hostname', 'mydmsvn-local-sim-sql', '--label', "mydmsvn.local-sim.instance=$instanceId", '-e', 'ACCEPT_EULA=Y', '-e', 'MSSQL_PID=Developer', '-e', ("MSSQL_SA_PASSWORD=" + $secretValues.sa_password), '-p', '127.0.0.1:11433:1433', '-v', 'mydmsvn-local-sim-sql-data:/var/opt/mssql', $image) 'LocalSimulation.SqlContainerCreateFailed' | Out-Null
-    $receipt.docker.created = $true
-    Write-Receipt $receiptPath $receipt
+    $dockerEnvironment = Set-ProcessSettings @{ MSSQL_SA_PASSWORD = $secretValues.sa_password }
+    try {
+        Invoke-ExternalSafe 'docker' @('run', '-d', '--name', 'mydmsvn-local-sim-sql', '--hostname', 'mydmsvn-local-sim-sql', '--label', "mydmsvn.local-sim.instance=$instanceId", '-e', 'ACCEPT_EULA=Y', '-e', 'MSSQL_PID=Developer', '-e', 'MSSQL_SA_PASSWORD', '-p', '127.0.0.1:11433:1433', '-v', 'mydmsvn-local-sim-sql-data:/var/opt/mssql', $image) 'LocalSimulation.SqlContainerCreateFailed' | Out-Null
+    }
+    finally { Restore-ProcessSettings $dockerEnvironment }
 
     $created = $false
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
@@ -226,12 +308,12 @@ function Initialize-MyDmsVnLocalSimulation {
     $renderedWsl = Convert-ToWslPath $rendered
     $hostWsl = Convert-ToWslPath (Join-Path $StateRoot 'artifacts\host')
     Invoke-WslHelper $RepoRoot 'render' @($stateWsl, $renderedWsl, $hostWsl) | Out-Null
-    Invoke-WslHelper $RepoRoot 'prerequisites' @() -Sudo | Out-Null
+    Invoke-WslHelper $RepoRoot 'prerequisites' @($stateWsl) -Sudo | Out-Null
     $receipt.wsl.installed = $true
     Write-Receipt $receiptPath $receipt
     Invoke-WslHelper $RepoRoot 'install' @($stateWsl, $renderedWsl, $hostWsl, $instanceId) -Sudo | Out-Null
-    Invoke-WslHelper $RepoRoot 'start' @() -Sudo | Out-Null
-    Invoke-WslHelper $RepoRoot 'verify' @() -Sudo | Out-Null
+    Invoke-WslHelper $RepoRoot 'start' @($instanceId, $sourceSha) -Sudo | Out-Null
+    Invoke-WslHelper $RepoRoot 'verify' @($instanceId, $sourceSha) -Sudo | Out-Null
     $receipt.phase = 'ready'
     Write-Receipt $receiptPath $receipt
     return [ordered]@{ action = 'Initialize'; status = 'READY'; instanceId = $instanceId; desktopPath = (Join-Path $StateRoot 'artifacts\desktop\MyDmsVn.Desktop.App.exe') }
@@ -239,52 +321,98 @@ function Initialize-MyDmsVnLocalSimulation {
 
 function Start-MyDmsVnLocalSimulation {
     param([string] $RepoRoot, [pscustomobject] $Receipt)
-    $label = @(Invoke-ExternalSafe 'docker' @('inspect', '-f', '{{ index .Config.Labels "mydmsvn.local-sim.instance" }}', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlContainerMissing')
-    if (([string]$label[0]).Trim() -ne [string]$Receipt.instanceId) { throw [InvalidOperationException]::new('LocalSimulation.SqlContainerIdentityMismatch') }
+    Assert-LocalSimulationIdentity $RepoRoot $Receipt
     $running = @(Invoke-ExternalSafe 'docker' @('inspect', '-f', '{{.State.Running}}', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlContainerMissing')
     if ([string]$running[0] -ne 'true') { Invoke-ExternalSafe 'docker' @('start', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlStartFailed' | Out-Null }
-    Invoke-WslHelper $RepoRoot 'start' @() -Sudo | Out-Null
+    Invoke-WslHelper $RepoRoot 'start' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha) -Sudo | Out-Null
     return [ordered]@{ action = 'Start'; status = 'STARTED'; instanceId = $Receipt.instanceId }
 }
 
 function Verify-MyDmsVnLocalSimulation {
     param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Receipt)
+    Assert-LocalSimulationIdentity $RepoRoot $Receipt
     Invoke-SqlHelper $StateRoot $Receipt 'verify' | Out-Null
-    Invoke-WslHelper $RepoRoot 'verify' @() -Sudo | Out-Null
-    Invoke-WslHelper $RepoRoot 'recovery' @() -Sudo | Out-Null
-    return [ordered]@{ action = 'Verify'; status = 'VERIFIED'; instanceId = $Receipt.instanceId; executed = 3; passed = 3; failed = 0; skipped = 0 }
+    Invoke-WslHelper $RepoRoot 'verify' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha) -Sudo | Out-Null
+    Invoke-HttpExercise $StateRoot $Receipt
+    Invoke-WslHelper $RepoRoot 'recovery' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha) -Sudo | Out-Null
+    return [ordered]@{ action = 'Verify'; status = 'VERIFIED'; instanceId = $Receipt.instanceId; executed = 4; passed = 4; failed = 0; skipped = 0 }
 }
 
 function Stop-MyDmsVnLocalSimulation {
     param([string] $RepoRoot, [pscustomobject] $Receipt)
-    Invoke-WslHelper $RepoRoot 'stop' @() -Sudo | Out-Null
+    Assert-LocalSimulationIdentity $RepoRoot $Receipt
+    Invoke-WslHelper $RepoRoot 'stop' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha) -Sudo | Out-Null
     Invoke-ExternalSafe 'docker' @('stop', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlStopFailed' | Out-Null
     return [ordered]@{ action = 'Stop'; status = 'STOPPED'; instanceId = $Receipt.instanceId }
 }
 
+function Get-ResetDockerLabel {
+    param([ValidateSet('container','volume')] [string] $Kind, [string] $Name)
+    if ($Kind -eq 'container') {
+        $label = & docker inspect -f '{{ index .Config.Labels "mydmsvn.local-sim.instance" }}' $Name 2>$null
+    }
+    else {
+        $label = & docker volume inspect -f '{{ index .Labels "mydmsvn.local-sim.instance" }}' $Name 2>$null
+    }
+    if ($LASTEXITCODE -eq 0) { return ([string]$label).Trim() }
+    & docker info 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw [InvalidOperationException]::new('LocalSimulation.DockerBackendUnavailable') }
+    if ($Kind -eq 'container') {
+        $found = @(& docker container ls -a --filter "name=^/$Name`$" --format '{{.Names}}' 2>$null)
+    }
+    else {
+        $found = @(& docker volume ls --filter "name=^$Name`$" --format '{{.Name}}' 2>$null)
+    }
+    if ($LASTEXITCODE -ne 0) { throw [InvalidOperationException]::new('LocalSimulation.DockerInventoryUnavailable') }
+    if ($found.Count -ne 0) { throw [InvalidOperationException]::new('LocalSimulation.DockerIdentityUnreadable') }
+    return $null
+}
+
 function Reset-MyDmsVnLocalSimulationExternal {
-    param([string] $RepoRoot, [pscustomobject] $Receipt)
+    param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Receipt)
+    $engineId = @(Invoke-ExternalSafe 'docker' @('info', '--format', '{{.ID}}') 'LocalSimulation.DockerBackendUnavailable')
+    if (([string]$engineId[0]).Trim() -ne [string]$Receipt.docker.engineId) { throw [InvalidOperationException]::new('LocalSimulation.DockerEngineMismatch') }
     if ([bool]$Receipt.wsl.installed) {
-        & wsl -d Ubuntu -- sudo -- test -f /etc/mydmsvn-local-sim/instance-id 2>$null
-        if ($LASTEXITCODE -eq 0) { Invoke-WslHelper $RepoRoot 'reset' @([string]$Receipt.instanceId) -Sudo | Out-Null }
+        Invoke-WslHelper $RepoRoot 'reset-admission' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha) -Sudo | Out-Null
     }
+    $containerLabel = $null
+    $volumeLabel = $null
     if ([bool]$Receipt.docker.created) {
-        $containerLabel = & docker inspect -f '{{ index .Config.Labels "mydmsvn.local-sim.instance" }}' mydmsvn-local-sim-sql 2>$null
-        if ($LASTEXITCODE -eq 0) {
+        $containerLabel = Get-ResetDockerLabel container 'mydmsvn-local-sim-sql'
+        if ($null -ne $containerLabel) {
             if (([string]$containerLabel).Trim() -ne [string]$Receipt.instanceId) { throw [InvalidOperationException]::new('LocalSimulation.SqlContainerIdentityMismatch') }
-            Invoke-ExternalSafe 'docker' @('rm', '-f', '-v', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlContainerRemoveFailed' | Out-Null
         }
-        $volumeLabel = & docker volume inspect -f '{{ index .Labels "mydmsvn.local-sim.instance" }}' mydmsvn-local-sim-sql-data 2>$null
-        if ($LASTEXITCODE -eq 0) {
+        $volumeLabel = Get-ResetDockerLabel volume 'mydmsvn-local-sim-sql-data'
+        if ($null -ne $volumeLabel) {
             if (([string]$volumeLabel).Trim() -ne [string]$Receipt.instanceId) { throw [InvalidOperationException]::new('LocalSimulation.SqlVolumeIdentityMismatch') }
-            Invoke-ExternalSafe 'docker' @('volume', 'rm', 'mydmsvn-local-sim-sql-data') 'LocalSimulation.SqlVolumeRemoveFailed' | Out-Null
         }
     }
+    $certificatePath = $null
     if ($Receipt.PSObject.Properties.Name -contains 'certificateThumbprint' -and $Receipt.certificateThumbprint -match '^[0-9A-Fa-f]{40}$') {
+        $caFile = Join-Path $StateRoot 'tls\ca.crt'
+        if (-not (Test-Path -LiteralPath $caFile -PathType Leaf)) { throw [InvalidOperationException]::new('LocalSimulation.CertificateIdentityMissing') }
+        $fileCertificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($caFile)
+        $expectedSubject = "CN=MyDmsVn Local Sim {0}" -f $Receipt.instanceId
+        if ($fileCertificate.Thumbprint -ne [string]$Receipt.certificateThumbprint -or $fileCertificate.Subject -ne $expectedSubject) {
+            throw [InvalidOperationException]::new('LocalSimulation.CertificateIdentityMismatch')
+        }
         $certificatePath = "Cert:\CurrentUser\Root\{0}" -f $Receipt.certificateThumbprint
         if (Test-Path -LiteralPath $certificatePath) {
-            Invoke-ExternalSafe 'certutil.exe' @('-user', '-delstore', 'Root', [string]$Receipt.certificateThumbprint) 'LocalSimulation.CertificateRemoveFailed' | Out-Null
+            $storedCertificate = Get-Item -LiteralPath $certificatePath
+            if ($storedCertificate.Subject -ne $expectedSubject) { throw [InvalidOperationException]::new('LocalSimulation.CertificateIdentityMismatch') }
         }
+    }
+    if ([bool]$Receipt.wsl.installed) {
+        Invoke-WslHelper $RepoRoot 'reset' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha) -Sudo | Out-Null
+    }
+    if ($null -ne $containerLabel) {
+        Invoke-ExternalSafe 'docker' @('rm', '-f', '-v', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlContainerRemoveFailed' | Out-Null
+    }
+    if ($null -ne $volumeLabel) {
+        Invoke-ExternalSafe 'docker' @('volume', 'rm', 'mydmsvn-local-sim-sql-data') 'LocalSimulation.SqlVolumeRemoveFailed' | Out-Null
+    }
+    if ($null -ne $certificatePath -and (Test-Path -LiteralPath $certificatePath)) {
+        Invoke-ExternalSafe 'certutil.exe' @('-user', '-delstore', 'Root', [string]$Receipt.certificateThumbprint) 'LocalSimulation.CertificateRemoveFailed' | Out-Null
     }
 }
 

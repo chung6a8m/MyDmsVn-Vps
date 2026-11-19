@@ -33,6 +33,7 @@ public sealed class LocalSimulationSettings
         string runtimePassword,
         string oraclePassword,
         string migrationPassword,
+        string deniedPassword,
         string writerPassword)
     {
         InstanceId = instanceId;
@@ -40,6 +41,7 @@ public sealed class LocalSimulationSettings
         RuntimePassword = runtimePassword;
         OraclePassword = oraclePassword;
         MigrationPassword = migrationPassword;
+        DeniedPassword = deniedPassword;
         WriterPassword = writerPassword;
     }
 
@@ -49,6 +51,7 @@ public sealed class LocalSimulationSettings
     internal string RuntimePassword { get; }
     internal string OraclePassword { get; }
     internal string MigrationPassword { get; }
+    internal string DeniedPassword { get; }
     internal string WriterPassword { get; }
 
     public static LocalSimulationSettings Parse(IReadOnlyDictionary<string, string> values)
@@ -79,13 +82,14 @@ public sealed class LocalSimulationSettings
         var runtime = Password(values, "MYDMSVN_LOCAL_SIM_RUNTIME_PASSWORD");
         var oracle = Password(values, "MYDMSVN_LOCAL_SIM_ORACLE_PASSWORD");
         var migration = Password(values, "MYDMSVN_LOCAL_SIM_MIGRATION_PASSWORD");
+        var denied = Password(values, "MYDMSVN_LOCAL_SIM_DENIED_PASSWORD");
         var writer = Password(values, "MYDMSVN_LOCAL_SIM_WRITER_PASSWORD");
-        if (new HashSet<string>(StringComparer.Ordinal) { runtime, oracle, migration, writer }.Count != 4)
+        if (new HashSet<string>(StringComparer.Ordinal) { runtime, oracle, migration, denied, writer }.Count != 5)
             throw new LocalSimulationBlockedException("LocalSimulation.PasswordReuseRefused");
 
         admin.Pooling = false;
         admin.ConnectTimeout = Math.Min(admin.ConnectTimeout, 8);
-        return new LocalSimulationSettings(instanceId, admin, runtime, oracle, migration, writer);
+        return new LocalSimulationSettings(instanceId, admin, runtime, oracle, migration, denied, writer);
     }
 
     public SqlConnectionStringBuilder BuildRuntimeConnectionString(string dataSource) => new(AdminConnection.ConnectionString)

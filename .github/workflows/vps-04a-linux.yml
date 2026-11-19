@@ -83,6 +83,25 @@ jobs:
         run: |
           dotnet restore ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode -v minimal
           dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore -v minimal --logger "trx;LogFileName=vps04a-core-boundary.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+      - name: Run local simulation admission tests
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet restore ../../tests/MyDmsVn.LocalSimulation.Tests/MyDmsVn.LocalSimulation.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode -v minimal
+          dotnet test ../../tests/MyDmsVn.LocalSimulation.Tests/MyDmsVn.LocalSimulation.Tests.csproj -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore -v minimal \
+            --logger "trx;LogFileName=local-simulation-admission.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          path=Path(os.environ['GITHUB_WORKSPACE'])/'vps04a-trx'/'local-simulation-admission.trx'
+          ns={'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          counters=ET.parse(path).getroot().find('./t:ResultSummary/t:Counters',ns)
+          assert counters is not None, 'Missing local simulation TRX counters'
+          counts={k:int(v) for k,v in counters.attrib.items() if k in ('total','passed','failed','executed','notExecuted')}
+          assert counts['total']>=15 and counts['executed']>=15, counts
+          assert counts['failed']==0 and counts['notExecuted']==0 and counts['passed']==counts['total'], counts
+          print(f"PASS local simulation admission: {counts}")
+          PY
       - name: Require native boundary test execution, no failure or skip
         run: |
           python3 - <<'PY'

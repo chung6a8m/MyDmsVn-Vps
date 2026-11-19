@@ -56,6 +56,7 @@ internal static class Program
             "MYDMSVN_LOCAL_SIM_RUNTIME_PASSWORD",
             "MYDMSVN_LOCAL_SIM_ORACLE_PASSWORD",
             "MYDMSVN_LOCAL_SIM_MIGRATION_PASSWORD",
+            "MYDMSVN_LOCAL_SIM_DENIED_PASSWORD",
             "MYDMSVN_LOCAL_SIM_WRITER_PASSWORD",
         };
         var values = new Dictionary<string, string>(StringComparer.Ordinal);

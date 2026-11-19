@@ -20,6 +20,7 @@ public sealed class AdmissionTests
     [InlineData("backup-verify")]
     [InlineData("provision")]
     [InlineData("verify")]
+    [InlineData("verify-exercise")]
     [InlineData("reset-admission")]
     public void OnlyBoundedLifecycleCommandsAreAdmitted(string command)
     {
@@ -94,6 +95,7 @@ public sealed class AdmissionTests
         ["MYDMSVN_LOCAL_SIM_RUNTIME_PASSWORD"] = "Runtime_1234567890!Aa",
         ["MYDMSVN_LOCAL_SIM_ORACLE_PASSWORD"] = "Oracle_1234567890!Aa",
         ["MYDMSVN_LOCAL_SIM_MIGRATION_PASSWORD"] = "Migration_1234567890!Aa",
+        ["MYDMSVN_LOCAL_SIM_DENIED_PASSWORD"] = "Denied_1234567890!Aa",
         ["MYDMSVN_LOCAL_SIM_WRITER_PASSWORD"] = "Writer_1234567890!Aa",
     };
 }

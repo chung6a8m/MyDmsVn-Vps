@@ -5,6 +5,8 @@ server {
     ssl_certificate_key /etc/mydmsvn-local-sim/tls/nginx.key;
     ssl_protocols TLSv1.2 TLSv1.3;
 
+    if ($http_host != "localhost:50443") { return 444; }
+
     location / {
         proxy_pass http://127.0.0.1:5080;
         proxy_http_version 1.1;

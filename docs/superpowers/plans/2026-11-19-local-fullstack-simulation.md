@@ -37,10 +37,10 @@
 **Interfaces:**
 - Produces: `-Action Preflight|Initialize|Start|Verify|Stop|Reset`, `-StateRoot`, JSON receipt/report files, and fail-closed Reset admission.
 
-- [ ] Write subprocess tests for preflight JSON, missing/forged receipt refusal, symlink refusal, and unrelated-resource preservation; run and observe missing-script failures.
-- [ ] Implement parameter validation, non-mutating preflight, receipt loading/validation, redaction, and Reset orchestration.
-- [ ] Run `python -m unittest scripts.tests.test_local_simulation -v`; expected all pass.
-- [ ] Commit Task 1.
+- [x] Write subprocess tests for preflight JSON, missing/forged receipt refusal, symlink refusal, and unrelated-resource preservation; run and observe missing-script failures.
+- [x] Implement parameter validation, non-mutating preflight, receipt loading/validation, redaction, and Reset orchestration.
+- [x] Run `python -m unittest scripts.tests.test_local_simulation -v`; expected all pass.
+- [x] Commit Task 1.
 
 ### Task 2: Synthetic SQL lifecycle
 
@@ -53,10 +53,10 @@
 - Consumes: receipt instance ID/state root and Docker identity from Task 1.
 - Produces: `create`, `provision`, `verify`, and `reset-admission` commands with JSON-safe results; exact database `MyDmsVnVps_LocalSimulation` and distinct principals.
 
-- [ ] Write admission and provisioning-policy unit tests first; observe failures.
-- [ ] Implement the minimal net10 helper and wire Initialize/Start/Verify.
-- [ ] Run the focused .NET tests and Python lifecycle tests; expected all pass.
-- [ ] Commit Task 2.
+- [x] Write admission and provisioning-policy unit tests first; observe failures.
+- [x] Implement the minimal net10 helper and wire Initialize/Start/Verify.
+- [x] Run the focused .NET tests and Python lifecycle tests; expected all pass.
+- [x] Commit Task 2.
 
 ### Task 3: WSL systemd, Nginx, publish, and recovery drills
 
@@ -69,10 +69,10 @@
 - Consumes: receipt, generated TLS material, published Host/Desktop, and SQL runtime configuration.
 - Produces: `mydmsvn-local-sim.service`, localhost HTTPS `50443`, Kestrel `127.0.0.1:5080`, and start/stop/verify/reset operations.
 
-- [ ] Write sandbox tests for install-path admission, generated config, proxy negatives, recovery result reporting, and cleanup ownership; observe failures.
-- [ ] Implement WSL install/start/verify/stop/reset and publish wiring without changing production templates.
-- [ ] Run policy tests, Bash syntax checks, focused native Host tests, and dry-run rendering; expected all pass.
-- [ ] Commit Task 3.
+- [x] Write sandbox tests for install-path admission, generated config, proxy negatives, recovery result reporting, and cleanup ownership; observe failures.
+- [x] Implement WSL install/start/verify/stop/reset and publish wiring without changing production templates.
+- [x] Run policy tests, Bash syntax checks, focused native Host tests, and dry-run rendering; expected all pass.
+- [x] Commit Task 3.
 
 ### Task 4: Runbook and final verification
 
@@ -84,7 +84,7 @@
 - Consumes: all operator commands from Tasks 1-3.
 - Produces: prerequisites, lifecycle, attended Desktop checkpoint, recovery drills, troubleshooting, evidence limits, and cleanup procedure.
 
-- [ ] Document exact commands and safety boundaries.
+- [x] Document exact commands and safety boundaries.
 - [ ] Run all new tests, existing Python suite in WSL, static repository checks, locked restores/builds for changed .NET projects, and secret/path scans.
 - [ ] Perform final whole-branch review and fix Critical/Important findings via RED→GREEN.
 - [ ] Commit Task 4.

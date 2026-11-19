@@ -26,9 +26,35 @@ internal sealed class SqlLifecycle
             case "backup-verify": await BackupVerifyAsync().ConfigureAwait(false); return;
             case "provision": await ProvisionAsync().ConfigureAwait(false); return;
             case "verify": await VerifyAsync().ConfigureAwait(false); return;
+            case "verify-exercise": await VerifyExerciseAsync().ConfigureAwait(false); return;
             case "reset-admission": await VerifyMarkerAsync().ConfigureAwait(false); return;
             default: throw new LocalSimulationBlockedException("LocalSimulation.CommandInvalid");
         }
+    }
+
+    private async Task VerifyExerciseAsync()
+    {
+        await VerifyMarkerAsync().ConfigureAwait(false);
+        var saleText = Environment.GetEnvironmentVariable("MYDMSVN_LOCAL_SIM_PROOF_SALE_ID");
+        var operationText = Environment.GetEnvironmentVariable("MYDMSVN_LOCAL_SIM_PROOF_OPERATION_ID");
+        var note = Environment.GetEnvironmentVariable("MYDMSVN_LOCAL_SIM_PROOF_NOTE");
+        if (!long.TryParse(saleText, NumberStyles.None, CultureInfo.InvariantCulture, out var saleId) || saleId <= 0 ||
+            !Guid.TryParseExact(operationText, "D", out var operationId) ||
+            note is null || !System.Text.RegularExpressions.Regex.IsMatch(note, @"\ALOCAL-VERIFY-[0-9a-f]{32}\z"))
+            throw new LocalSimulationBlockedException("LocalSimulation.ProofInputInvalid");
+        await using var oracle = new SqlConnection(_settings.BuildOracleConnectionString("127.0.0.1,11433").ConnectionString);
+        await oracle.OpenAsync().ConfigureAwait(false);
+        await using var command = new SqlCommand(@"
+SELECT CASE WHEN
+ (SELECT COUNT(*) FROM dbo.SalesReceipts WHERE SaleId=@sale AND Note=@note)=1 AND
+ (SELECT COUNT(*) FROM dbo.SalesReceiptLines WHERE SaleId=@sale)=1 AND
+ (SELECT COUNT(*) FROM dbo.WebOperationJournal WHERE OperationId=@operation AND ResultDocumentId=@sale AND Disposition=N'COMMITTED')=1
+THEN 1 ELSE 0 END;", oracle);
+        command.Parameters.Add("@sale", SqlDbType.BigInt).Value = saleId;
+        command.Parameters.Add("@note", SqlDbType.NVarChar, 500).Value = note;
+        command.Parameters.Add("@operation", SqlDbType.UniqueIdentifier).Value = operationId;
+        if (Convert.ToInt32(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture) != 1)
+            throw new LocalSimulationBlockedException("LocalSimulation.ExerciseProofFailed");
     }
 
     private async Task BackupVerifyAsync()
@@ -53,6 +79,8 @@ WITH CHECKSUM;", master)
     {
         await using var master = new SqlConnection(_settings.AdminConnection.ConnectionString);
         await master.OpenAsync().ConfigureAwait(false);
+        var createdHere = await ScalarIntAsync(master,
+            "SELECT CASE WHEN DB_ID(N'MyDmsVnVps_LocalSimulation') IS NULL THEN 1 ELSE 0 END;").ConfigureAwait(false) == 1;
         await using (var create = new SqlCommand(@"
 IF DB_ID(N'MyDmsVnVps_LocalSimulation') IS NULL
     CREATE DATABASE [MyDmsVnVps_LocalSimulation];", master))
@@ -66,6 +94,8 @@ IF DB_ID(N'MyDmsVnVps_LocalSimulation') IS NULL
         var marker = await ReadMarkerAsync(database, InstanceMarker).ConfigureAwait(false);
         if (marker is not null && marker != _settings.InstanceId.ToString("D"))
             throw new LocalSimulationBlockedException("LocalSimulation.DatabaseOwnershipMismatch");
+        if (marker is null && !createdHere)
+            throw new LocalSimulationBlockedException("LocalSimulation.ExistingDatabaseUnmarked");
         if (marker is null)
             await AddMarkerAsync(database, InstanceMarker, _settings.InstanceId.ToString("D")).ConfigureAwait(false);
         await EnsureMigrationPrincipalAsync(database).ConfigureAwait(false);
@@ -95,10 +125,7 @@ GRANT CONTROL TO [{LocalSimulationSqlNames.MigrationLogin}];").ConfigureAwait(fa
         await EnsureLoginsAsync().ConfigureAwait(false);
         await EnsureUsersAndGrantsAsync(database).ConfigureAwait(false);
         if (await ReadMarkerAsync(database, SeedMarker).ConfigureAwait(false) is null)
-        {
             await SeedAsync(database).ConfigureAwait(false);
-            await AddMarkerAsync(database, SeedMarker, "synthetic-v1").ConfigureAwait(false);
-        }
         await VerifyAsync().ConfigureAwait(false);
     }
 
@@ -122,6 +149,11 @@ SELECT CASE WHEN
  ISNULL(IS_ROLEMEMBER('db_datawriter'),0)<>0 OR
  ISNULL(HAS_PERMS_BY_NAME('dbo.WebOperationJournal','OBJECT','SELECT'),0)<>1 OR
  ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceipts','OBJECT','INSERT'),0)<>0
+ OR EXISTS(
+   SELECT 1 FROM sys.objects o
+   CROSS APPLY sys.fn_my_permissions(QUOTENAME(OBJECT_SCHEMA_NAME(o.object_id))+N'.'+QUOTENAME(o.name),N'OBJECT') p
+   WHERE o.is_ms_shipped=0 AND p.permission_name IN (N'INSERT',N'UPDATE',N'DELETE',N'ALTER',N'CONTROL',N'TAKE OWNERSHIP')
+ )
 THEN 1 ELSE 0 END;").ConfigureAwait(false);
         if (unsafePermission != 0)
             throw new LocalSimulationBlockedException("LocalSimulation.OraclePermissionRefused");
@@ -184,7 +216,7 @@ GRANT SELECT ON dbo.StockBalances TO [{LocalSimulationSqlNames.OracleLogin}];").
         var writerId = await InsertUserAsync(database, transaction, LocalSimulationSqlNames.WriterUsername,
             _settings.WriterPassword, hasher).ConfigureAwait(false);
         await InsertUserAsync(database, transaction, LocalSimulationSqlNames.DeniedUsername,
-            _settings.WriterPassword, hasher).ConfigureAwait(false);
+            _settings.DeniedPassword, hasher).ConfigureAwait(false);
         await using (var binding = new SqlCommand(
             "INSERT dbo.SystemSecuritySettings(Id,SuperuserUserId,BoundNormalizedUsername) VALUES (1,@id,@name);",
             database, transaction))
@@ -198,6 +230,7 @@ INSERT dbo.Customers(Code,Name) VALUES (N'LOCAL-CUST',N'Local Simulation Custome
 INSERT dbo.Warehouses(Code,Name) VALUES (N'LOCAL-WH',N'Local Simulation Warehouse');
 INSERT dbo.Employees(Code,Name) VALUES (N'LOCAL-EMP',N'Local Simulation Employee');
 INSERT dbo.Products(Code,Name,Unit) VALUES (N'LOCAL-PROD',N'Local Simulation Product',N'EA');").ConfigureAwait(false);
+        await AddMarkerAsync(database, transaction, SeedMarker, "synthetic-v1").ConfigureAwait(false);
         await transaction.CommitAsync().ConfigureAwait(false);
     }
 
@@ -237,6 +270,15 @@ OUTPUT INSERTED.UserId VALUES(@name,@normalized,@display,N'Local',@hash,N'',@alg
     {
         await using var command = new SqlCommand(
             "EXEC sys.sp_addextendedproperty @name=@markerName,@value=@markerValue;", connection);
+        command.Parameters.Add("@markerName", SqlDbType.NVarChar, 128).Value = name;
+        command.Parameters.Add("@markerValue", SqlDbType.NVarChar, 128).Value = value;
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    private static async Task AddMarkerAsync(SqlConnection connection, SqlTransaction transaction, string name, string value)
+    {
+        await using var command = new SqlCommand(
+            "EXEC sys.sp_addextendedproperty @name=@markerName,@value=@markerValue;", connection, transaction);
         command.Parameters.Add("@markerName", SqlDbType.NVarChar, 128).Value = name;
         command.Parameters.Add("@markerValue", SqlDbType.NVarChar, 128).Value = value;
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);

@@ -6,12 +6,12 @@ This runbook operates a disposable MyDmsVn lab on one Windows workstation: SQL S
 
 ## Owned resources and prerequisites
 
-Run commands from the repository root in a normal PowerShell session. Preflight requires Docker Desktop with the Linux engine, WSL distribution `Ubuntu` with systemd and noninteractive sudo, .NET SDK 10.0.404, the .NET Framework 4.8 targeting pack, ports 50443/5080/11433 free, and at least 15 GB free.
+Run commands from the repository root in a normal PowerShell session. Preflight requires the local Docker Desktop `desktop-linux` named-pipe context with the Linux engine, WSL distribution `Ubuntu` with systemd and noninteractive sudo, .NET SDKs 8.0.428 and 10.0.404, the .NET Framework 4.8 targeting pack, ports 50443/5080/11433 free, and at least 15 GB free.
 
 The operator owns only these named resources:
 
 - Docker container `mydmsvn-local-sim-sql` and volume `mydmsvn-local-sim-sql-data`, both labeled with the generated instance ID;
-- WSL service/user/directories named `mydmsvn-local-sim`, Nginx site files of the same name, the owned WSL CA entry, and `/opt/mydmsvn-dotnet`;
+- WSL service/user/directories named `mydmsvn-local-sim`, Nginx site files of the same name, the owned WSL CA entry, and `/opt/mydmsvn-local-sim`;
 - the Current User Root CA recorded by thumbprint in `TestResults/local-simulation/receipt.json`;
 - ignored state below `TestResults/local-simulation`.
 
@@ -37,7 +37,7 @@ The final JSON includes `instanceId`, status `READY`, and `desktopPath`. Do not 
 .\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action Stop -OutputFormat Json
 ```
 
-`Verify` is non-empty: it checks the database ownership/schema/restricted identities, Nginx HTTPS plus direct-Kestrel rejection, then kills the systemd main process and requires a different PID with healthy HTTPS within 30 seconds. Success reports exactly three passed checks and zero failed/skipped checks.
+`Verify` is non-empty: it checks the receipt-bound Docker/WSL/source identity and database ownership/schema/restricted identities; verifies Nginx HTTPS, wrong-Host denial, and direct-Kestrel rejection; authenticates distinct writer and denied users; requires the denied user to receive HTTP 403; writes one synthetic sales receipt over HTTPS and proves the committed business row/journal with the read-only SQL Oracle; then kills the systemd main process and requires a different PID with healthy HTTPS within 30 seconds. Success reports exactly four passed checks and zero failed/skipped checks.
 
 To launch the Desktop checkpoint after `Start`, use the path returned by `Initialize`:
 
@@ -59,7 +59,7 @@ $receipt.instanceId
 .\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action Reset -ConfirmInstanceId $receipt.instanceId -OutputFormat Json
 ```
 
-Reset validates the receipt path, instance ID, Docker labels, WSL marker, and CA thumbprint before deletion. It refuses missing/malformed receipts, mismatched identities, paths outside the ignored state tree, and reparse points. It removes only owned resources; unrelated Docker containers, volumes, WSL services, files, and certificates are preserved. A partial failed initialization is reset with the same command.
+Reset validates the receipt path, instance ID, Docker engine and labels, WSL marker/source link, and CA file/store subject and thumbprint before any deletion. It refuses missing/malformed receipts, mismatched identities, paths outside the ignored state tree, ancestor or leaf reparse points, and `-DryRun`. It removes only owned resources; unrelated Docker containers, volumes, WSL services, files, and certificates are preserved. A partial failed initialization is reset with the same command only when its acquisition marker proves ownership; otherwise state is retained for diagnosis.
 
 ## Troubleshooting
 

@@ -18,6 +18,15 @@ def powershell():
     return shutil.which("pwsh") or shutil.which("powershell") or "powershell"
 
 
+def docker_engine_id():
+    result = subprocess.run(
+        ["docker", "info", "--format", "{{.ID}}"], text=True, capture_output=True
+    )
+    if result.returncode != 0:
+        raise unittest.SkipTest("reachable local Docker engine required")
+    return result.stdout.strip()
+
+
 @unittest.skipUnless(shutil.which("pwsh") or shutil.which("powershell"), "PowerShell required")
 class LocalSimulationOperatorTests(unittest.TestCase):
     def setUp(self):
@@ -67,6 +76,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
             "docker": {
                 "container": "mydmsvn-local-sim-sql",
                 "volume": "mydmsvn-local-sim-sql-data",
+                "engineId": docker_engine_id(),
                 "created": False,
             },
             "wsl": {
@@ -99,6 +109,13 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertEqual("mydmsvn-local-sim-sql", report["resources"]["container"])
         self.assertEqual("mydmsvn-local-sim.service", report["resources"]["service"])
         self.assertEqual("https://localhost:50443", report["resources"]["origin"])
+        self.assertFalse(self.state.exists())
+
+    def test_reset_dry_run_is_refused_before_any_mutation(self):
+        result = self.run_operator("Reset", "-DryRun")
+
+        self.assertEqual(2, result.returncode)
+        self.assertEqual("LocalSimulation.DryRunUnsupported", json.loads(result.stdout)["code"])
         self.assertFalse(self.state.exists())
 
     def test_lifecycle_actions_require_receipt(self):
@@ -219,6 +236,32 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         finally:
             if self.state.exists():
                 subprocess.run(["cmd", "/c", "rmdir", str(self.state)], capture_output=True)
+            shutil.rmtree(target, ignore_errors=True)
+
+    @unittest.skipUnless(os.name == "nt", "junction behavior is Windows-specific")
+    def test_reset_refuses_reparse_point_ancestor(self):
+        junction = STATE_PARENT / ("junction-" + uuid.uuid4().hex)
+        target = pathlib.Path(tempfile.mkdtemp(prefix="mydmsvn-junction-target-"))
+        original_state = self.state
+        try:
+            made = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(junction), str(target)],
+                capture_output=True,
+                text=True,
+            )
+            if made.returncode != 0:
+                self.skipTest("Windows junction creation is unavailable")
+            self.state = junction / "child"
+
+            result = self.run_operator("Reset", "-ConfirmInstanceId", "11111111-2222-4333-8444-555555555555")
+
+            self.assertEqual(2, result.returncode)
+            self.assertEqual("LocalSimulation.ReparsePointRefused", json.loads(result.stdout)["code"])
+            self.assertTrue(target.exists())
+        finally:
+            self.state = original_state
+            if junction.exists():
+                subprocess.run(["cmd", "/c", "rmdir", str(junction)], capture_output=True)
             shutil.rmtree(target, ignore_errors=True)
 
 
