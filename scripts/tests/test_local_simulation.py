@@ -542,6 +542,31 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         finally:
             self.state = original_state
 
+    def test_runbook_paths_match_the_default_active_state_root(self):
+        runbook = (ROOT / "docs" / "runbooks" / "local-fullstack-simulation.md").read_text(
+            encoding="utf-8"
+        )
+        operator = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("$StateRoot = Join-Path $allowedStateParent 'active'", operator)
+        expected_paths = (
+            "TestResults/local-simulation/active/receipt.json",
+            "TestResults/local-simulation/active/secrets",
+            r"TestResults\local-simulation\active\receipt.json",
+            r"TestResults\local-simulation\active\artifacts\desktop\MyDmsVn.Desktop.App.exe",
+        )
+        for path in expected_paths:
+            with self.subTest(path=path):
+                self.assertIn(path, runbook)
+        stale_paths = (
+            "TestResults/local-simulation/receipt.json",
+            "TestResults/local-simulation/secrets",
+            r"TestResults\local-simulation\receipt.json",
+            r"TestResults\local-simulation\artifacts\desktop\MyDmsVn.Desktop.App.exe",
+        )
+        for path in stale_paths:
+            with self.subTest(stale=path):
+                self.assertNotIn(path, runbook)
+
     def test_explicit_parent_state_root_is_refused_for_initialize_and_reset(self):
         STATE_PARENT.mkdir(parents=True, exist_ok=True)
         sibling = STATE_PARENT / ("review-evidence-" + uuid.uuid4().hex)
