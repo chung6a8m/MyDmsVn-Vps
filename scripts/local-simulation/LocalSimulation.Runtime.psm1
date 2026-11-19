@@ -105,7 +105,7 @@ function Invoke-SqlHelper {
     $settings = @{
         MYDMSVN_LOCAL_SIM_ADMISSION = 'approved-synthetic-local-only'
         MYDMSVN_LOCAL_SIM_INSTANCE_ID = [string]$Receipt.instanceId
-        MYDMSVN_LOCAL_SIM_SQL_ADMIN_CONNECTION_STRING = "Server=localhost,11433;Initial Catalog=master;User ID=sa;Password=$sa;Encrypt=True;TrustServerCertificate=False;Pooling=False;Connect Timeout=5"
+        MYDMSVN_LOCAL_SIM_SQL_ADMIN_CONNECTION_STRING = "Server=127.0.0.1,11433;Initial Catalog=master;User ID=sa;Password=$sa;Encrypt=True;TrustServerCertificate=False;Pooling=False;Connect Timeout=5"
         MYDMSVN_LOCAL_SIM_RUNTIME_PASSWORD = (Get-Content -LiteralPath (Join-Path $secrets 'runtime_password') -Raw)
         MYDMSVN_LOCAL_SIM_ORACLE_PASSWORD = (Get-Content -LiteralPath (Join-Path $secrets 'oracle_password') -Raw)
         MYDMSVN_LOCAL_SIM_WRITER_PASSWORD = (Get-Content -LiteralPath (Join-Path $secrets 'writer_password') -Raw)
@@ -124,7 +124,7 @@ function Invoke-FluentMigration {
     $sa = Get-Content -LiteralPath (Join-Path $StateRoot 'secrets\sa_password') -Raw
     $old = Set-ProcessSettings @{
         VPS07B_OPERATOR_APPROVAL = 'approved-maintenance-and-verified-backup'
-        VPS07B_SQL_CONNECTION_STRING = "Server=localhost,11433;Initial Catalog=MyDmsVnVps_LocalSimulation;User ID=sa;Password=$sa;Encrypt=True;TrustServerCertificate=False;Pooling=False;Connect Timeout=5"
+        VPS07B_SQL_CONNECTION_STRING = "Server=127.0.0.1,11433;Initial Catalog=MyDmsVnVps_LocalSimulation;User ID=sa;Password=$sa;Encrypt=True;TrustServerCertificate=False;Pooling=False;Connect Timeout=5"
     }
     try {
         $dll = Join-Path $StateRoot 'artifacts\migrator\MyDmsVn.Server.FluentMigrator.Cli.dll'
@@ -200,9 +200,9 @@ function Initialize-MyDmsVnLocalSimulation {
     Invoke-FluentMigration $StateRoot
     Invoke-SqlHelper $StateRoot ([pscustomobject]$receipt) 'provision' | Out-Null
 
-    $runtimeSql = "Server=host.docker.internal,11433;Initial Catalog=MyDmsVnVps_LocalSimulation;User ID=mydmsvn_local_sim_runtime;Password=$($secretValues.runtime_password);Encrypt=True;TrustServerCertificate=False;Pooling=False"
+    $runtimeSql = "Server=localhost,11433;Initial Catalog=MyDmsVnVps_LocalSimulation;User ID=mydmsvn_local_sim_runtime;Password=$($secretValues.runtime_password);Encrypt=True;TrustServerCertificate=False;Pooling=False"
     Write-Utf8File (Join-Path $StateRoot 'secrets\sql_connection_string') $runtimeSql
-    $instanceEnv = "INSTANCE_ID=$instanceId`nSOURCE_SHA=$sourceSha`nPUBLIC_ORIGIN=https://localhost:50443`nSQL_SERVER=host.docker.internal,11433`n"
+    $instanceEnv = "INSTANCE_ID=$instanceId`nSOURCE_SHA=$sourceSha`nPUBLIC_ORIGIN=https://localhost:50443`nSQL_SERVER=localhost,11433`n"
     Write-Utf8File (Join-Path $StateRoot 'instance.env') $instanceEnv
     $rendered = Join-Path $StateRoot 'rendered'
     $renderedWsl = Convert-ToWslPath $rendered

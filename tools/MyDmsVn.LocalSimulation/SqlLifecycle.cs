@@ -92,7 +92,7 @@ IF DB_ID(N'MyDmsVnVps_LocalSimulation') IS NULL
     private async Task VerifyAsync()
     {
         await VerifyMarkerAsync().ConfigureAwait(false);
-        var runtime = _settings.BuildRuntimeConnectionString("localhost,11433").ConnectionString;
+        var runtime = _settings.BuildRuntimeConnectionString("127.0.0.1,11433").ConnectionString;
         await new SqlWebRuntimePrincipalValidator(requireJournal: true, requireResolution: true, requireDesktopApi: true)
             .ValidateAsync(runtime, CancellationToken.None).ConfigureAwait(false);
         await new SqlSuperuserBindingValidator()
@@ -100,7 +100,7 @@ IF DB_ID(N'MyDmsVnVps_LocalSimulation') IS NULL
             .ConfigureAwait(false);
 
         await using var oracle = new SqlConnection(
-            _settings.BuildOracleConnectionString("localhost,11433").ConnectionString);
+            _settings.BuildOracleConnectionString("127.0.0.1,11433").ConnectionString);
         await oracle.OpenAsync().ConfigureAwait(false);
         var unsafePermission = await ScalarIntAsync(oracle, @"
 SELECT CASE WHEN

@@ -73,7 +73,7 @@ certificates() {
   openssl req -x509 -new -sha256 -days 30 -key "$tls/ca.key" -subj '/CN=MyDmsVn Local Simulation CA' -out "$tls/ca.crt" >/dev/null 2>&1
   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$tls/sql.key" >/dev/null 2>&1
   openssl req -new -key "$tls/sql.key" -subj '/CN=localhost' -out "$tls/sql.csr" >/dev/null 2>&1
-  printf 'subjectAltName=DNS:localhost,DNS:host.docker.internal\nextendedKeyUsage=serverAuth\n' >"$tls/sql.ext"
+  printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\nextendedKeyUsage=serverAuth\n' >"$tls/sql.ext"
   openssl x509 -req -sha256 -days 30 -in "$tls/sql.csr" -CA "$tls/ca.crt" -CAkey "$tls/ca.key" -CAcreateserial -extfile "$tls/sql.ext" -out "$tls/sql.crt" >/dev/null 2>&1
   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$tls/nginx.key" >/dev/null 2>&1
   openssl req -new -key "$tls/nginx.key" -subj '/CN=localhost' -out "$tls/nginx.csr" >/dev/null 2>&1
