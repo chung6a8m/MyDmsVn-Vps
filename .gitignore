@@ -22,6 +22,7 @@ _ReSharper*/
 *.userosscache
 *.sln.docstates
 .worktrees/
+.superpowers/
 
 # ------------------------------
 # Test / coverage
