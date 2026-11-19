@@ -85,6 +85,7 @@ THEN 1 ELSE 0 END;";
 SELECT CASE WHEN
  (SELECT COUNT(*) FROM dbo.SalesReceipts WHERE SaleId=@sale AND Note=@note)=1 AND
  (SELECT COUNT(*) FROM dbo.SalesReceiptLines WHERE SaleId=@sale)=1 AND
+ (SELECT COUNT(*) FROM dbo.StockLedger WHERE DocumentType=N'SalesReceipt' AND DocumentId=@sale)=0 AND
  (SELECT COUNT(*) FROM dbo.WebOperationJournal WHERE OperationId=@operation AND ResultDocumentId=@sale AND Disposition=N'COMMITTED')=1
 THEN 1 ELSE 0 END;", oracle);
         command.Parameters.Add("@sale", SqlDbType.BigInt).Value = saleId;

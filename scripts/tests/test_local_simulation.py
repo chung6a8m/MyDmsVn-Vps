@@ -19,6 +19,9 @@ def powershell():
 
 
 def docker_engine_id():
+    override = os.environ.get("MYDMSVN_TEST_DOCKER_ENGINE_ID")
+    if override:
+        return override
     result = subprocess.run(
         ["docker", "info", "--format", "{{.ID}}"], text=True, capture_output=True
     )
@@ -36,6 +39,17 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.binding = self.local_app_data / "MyDmsVn" / "LocalSimulation" / "binding.json"
         self.process_env = os.environ.copy()
         self.process_env["LOCALAPPDATA"] = str(self.local_app_data)
+        docker_override = self.process_env.get("MYDMSVN_TEST_DOCKER_ENGINE_ID")
+        if docker_override and os.name == "nt":
+            fake_bin = self.outside / "fake-bin"
+            fake_bin.mkdir()
+            (fake_bin / "docker.cmd").write_text(
+                "@echo off\r\n"
+                f'if "%1"=="info" (echo {docker_override}& exit /b 0)\r\n'
+                "exit /b 1\r\n",
+                encoding="utf-8",
+            )
+            self.process_env["PATH"] = str(fake_bin) + os.pathsep + self.process_env["PATH"]
         (self.outside / "keep.txt").write_text("unrelated", encoding="utf-8")
 
     def tearDown(self):
@@ -300,6 +314,35 @@ class LocalSimulationOperatorTests(unittest.TestCase):
             start.index("Invoke-WslHelper $RepoRoot 'start'"),
         )
 
+    def test_http_exercise_replays_same_request_and_rejects_changed_payload(self):
+        command = (
+            f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+            "& (Get-Module LocalSimulation.Runtime) { "
+            "$script:calls=[Collections.Generic.List[string]]::new(); "
+            "$send={ param($uri,$headers,$body) $script:calls.Add($body); "
+            "if($script:calls.Count -lt 3){ [pscustomobject]@{StatusCode=200;Body=[pscustomobject]@{data=[pscustomobject]@{saleId='42'}}} } "
+            "else { [pscustomobject]@{StatusCode=409;Body=[pscustomobject]@{error=[pscustomobject]@{code='Idempotency.KeyConflict'}}} } }; "
+            "$result=Invoke-IdempotentSalesExercise -Uri 'https://localhost:50443/api/v1/sales-receipts' "
+            "-Headers @{} -Body '{\"note\":\"original\"}' -ChangedBody '{\"note\":\"changed\"}' -Send $send; "
+            "[pscustomobject]@{saleId=$result.data.saleId;calls=@($script:calls)}|ConvertTo-Json -Compress }"
+        )
+
+        result = subprocess.run(
+            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT,
+            env=self.process_env,
+            text=True,
+            capture_output=True,
+        )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual("42", report["saleId"])
+        self.assertEqual(
+            ['{"note":"original"}', '{"note":"original"}', '{"note":"changed"}'],
+            report["calls"],
+        )
+
     def test_runtime_initializer_accepts_an_empty_state_directory(self):
         self.state.mkdir(parents=True)
         command = (
@@ -387,6 +430,55 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertEqual("RESET", json.loads(result.stdout)["status"])
         self.assertFalse(self.state.exists())
         self.assertEqual("unrelated", (self.outside / "keep.txt").read_text(encoding="utf-8"))
+
+    def test_default_reset_deletes_only_active_instance_and_preserves_parent_sibling(self):
+        isolated_repo = self.outside / "isolated-repo"
+        isolated_scripts = isolated_repo / "scripts" / "local-simulation"
+        isolated_scripts.mkdir(parents=True)
+        isolated_operator = isolated_scripts / SCRIPT.name
+        isolated_runtime = isolated_scripts / RUNTIME_MODULE.name
+        shutil.copy2(SCRIPT, isolated_operator)
+        shutil.copy2(RUNTIME_MODULE, isolated_runtime)
+        active_state = isolated_repo / "TestResults" / "local-simulation" / "active"
+        sibling = active_state.parent / "evidence" / "keep.txt"
+        sibling.parent.mkdir(parents=True)
+        sibling.write_text("must-remain", encoding="utf-8")
+        original_state = self.state
+        self.state = active_state
+        try:
+            receipt = self.write_receipt()
+            command = (
+                f"Import-Module '{isolated_runtime}' -Force -DisableNameChecking; "
+                f"& (Get-Module LocalSimulation.Runtime) {{ param($s) $p=Join-Path $s 'receipt.json'; "
+                "$r=Get-Content $p -Raw|ConvertFrom-Json; New-LocalSimulationRegistration $s $r $p } "
+                f"'{active_state}'"
+            )
+            registered = subprocess.run(
+                [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+                cwd=isolated_repo,
+                env=self.process_env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(0, registered.returncode, registered.stdout + registered.stderr)
+
+            result = subprocess.run(
+                [
+                    powershell(), "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", str(isolated_operator), "-Action", "Reset",
+                    "-ConfirmInstanceId", receipt["instanceId"], "-OutputFormat", "Json",
+                ],
+                cwd=isolated_repo,
+                env=self.process_env,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertFalse(active_state.exists())
+            self.assertEqual("must-remain", sibling.read_text(encoding="utf-8"))
+        finally:
+            self.state = original_state
 
     def test_reset_resumes_local_cleanup_after_receipt_was_partially_deleted(self):
         receipt = self.write_receipt()

@@ -1,6 +1,7 @@
 import json
 import os
 import pathlib
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -69,7 +70,41 @@ class LocalSimulationWslTests(unittest.TestCase):
         reset = source.split("reset_lab()", 1)[1].split("reset_sandbox()", 1)[0]
         self.assertIn("LocalSimulation.ResetPostconditionFailed", reset)
         self.assertIn("LocalSimulation.UserRemoveFailed", reset)
-        self.assertGreater(reset.rindex("rm -rf -- /etc/mydmsvn-local-sim"), reset.index("systemctl reload nginx"))
+        self.assertGreater(reset.rindex("rm -rf -- /etc/mydmsvn-local-sim"), reset.index("reload_nginx_after_reset"))
+
+    def test_reset_does_not_reload_or_start_inactive_nginx(self):
+        calls = self.base / "nginx-systemctl-calls"
+        script = rf'''
+set -euo pipefail
+helper={shlex.quote(linux_path(HELPER))}
+call_log={shlex.quote(linux_path(calls))}
+systemctl() {{
+  printf 'systemctl %s\n' "$*" >>"$call_log"
+  if [[ "$1" == "is-active" ]]; then
+    return 3
+  fi
+  return 97
+}}
+nginx() {{
+  printf 'nginx %s\n' "$*" >>"$call_log"
+  return 0
+}}
+source "$helper"
+reload_nginx_after_reset
+'''
+        driver = self.base / "inactive-nginx-reset-test.sh"
+        driver.write_text(script, encoding="utf-8", newline="\n")
+        command = ["bash", linux_path(driver)]
+        if os.name == "nt":
+            command = ["wsl", "-d", "Ubuntu", "--", *command]
+
+        result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            ["nginx -t", "systemctl is-active --quiet nginx"],
+            calls.read_text(encoding="utf-8").splitlines(),
+        )
 
     def test_verify_has_a_bounded_service_readiness_wait(self):
         source = HELPER.read_text(encoding="utf-8")

@@ -20,7 +20,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $allowedStateParent = [IO.Path]::GetFullPath((Join-Path $repoRoot 'TestResults\local-simulation'))
 if ([string]::IsNullOrWhiteSpace($StateRoot)) {
-    $StateRoot = $allowedStateParent
+    $StateRoot = Join-Path $allowedStateParent 'active'
 }
 $resolvedStateRoot = [IO.Path]::GetFullPath($StateRoot)
 

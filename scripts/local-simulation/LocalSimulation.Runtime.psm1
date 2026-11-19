@@ -361,6 +361,39 @@ function Invoke-FluentMigration {
     finally { Restore-ProcessSettings $old }
 }
 
+function Invoke-LocalJsonPost {
+    param([string] $Uri, [hashtable] $Headers, [string] $Body)
+    try {
+        $response = Invoke-WebRequest -UseBasicParsing -SkipHttpErrorCheck -Uri $Uri -Method Post -Headers $Headers -ContentType 'application/json' -Body $Body
+        $parsed = if ([string]::IsNullOrWhiteSpace([string]$response.Content)) { $null } else { [string]$response.Content | ConvertFrom-Json }
+        return [pscustomobject]@{ StatusCode = [int]$response.StatusCode; Body = $parsed }
+    }
+    catch { throw [InvalidOperationException]::new('LocalSimulation.HttpExerciseFailed') }
+}
+
+function Invoke-IdempotentSalesExercise {
+    param(
+        [string] $Uri,
+        [hashtable] $Headers,
+        [string] $Body,
+        [string] $ChangedBody,
+        [scriptblock] $Send = { param($target, $requestHeaders, $requestBody) Invoke-LocalJsonPost $target $requestHeaders $requestBody }
+    )
+    $first = & $Send $Uri $Headers $Body
+    if ($first.StatusCode -ne 200 -or [string]$first.Body.data.saleId -notmatch '^[1-9][0-9]*$') { throw [InvalidOperationException]::new('LocalSimulation.WriterMutationFailed') }
+    $replay = & $Send $Uri $Headers $Body
+    if ($replay.StatusCode -ne 200 -or
+        ($replay.Body | ConvertTo-Json -Depth 8 -Compress) -cne ($first.Body | ConvertTo-Json -Depth 8 -Compress) -or
+        [string]$replay.Body.data.saleId -ne [string]$first.Body.data.saleId) {
+        throw [InvalidOperationException]::new('LocalSimulation.IdempotencyReplayFailed')
+    }
+    $conflict = & $Send $Uri $Headers $ChangedBody
+    if ($conflict.StatusCode -ne 409 -or [string]$conflict.Body.error.code -ne 'Idempotency.KeyConflict') {
+        throw [InvalidOperationException]::new('LocalSimulation.IdempotencyConflictFailed')
+    }
+    return $first.Body
+}
+
 function Invoke-HttpExercise {
     param([string] $StateRoot, [pscustomobject] $Receipt)
     $origin = 'https://localhost:50443'
@@ -398,7 +431,10 @@ function Invoke-HttpExercise {
         customerId = 1; warehouseId = 1; employeeId = 1; note = $note
         lines = @(@{ saleLineId = '0'; productId = 1; qty = '1.0000'; unitPrice = '2.0000'; isGift = $false })
     } | ConvertTo-Json -Depth 5 -Compress
-    $sale = Invoke-RestMethod -Uri "$origin/api/v1/sales-receipts" -Method Post -Headers ($writerHeaders + @{ Origin = $origin }) -ContentType 'application/json' -Body $body
+    $changed = $body | ConvertFrom-Json
+    $changed.note = $note + '-changed'
+    $changedBody = $changed | ConvertTo-Json -Depth 5 -Compress
+    $sale = Invoke-IdempotentSalesExercise -Uri "$origin/api/v1/sales-receipts" -Headers ($writerHeaders + @{ Origin = $origin }) -Body $body -ChangedBody $changedBody
     $saleId = [string]$sale.data.saleId
     if ($saleId -notmatch '^[1-9][0-9]*$') { throw [InvalidOperationException]::new('LocalSimulation.WriterMutationFailed') }
     $proofSettings = Set-ProcessSettings @{
