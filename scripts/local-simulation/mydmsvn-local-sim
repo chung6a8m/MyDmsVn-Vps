@@ -177,6 +177,7 @@ verify_lab() {
 
 recovery_drill() {
   [[ "$(id -u)" == 0 ]] || fail 'LocalSimulation.RootRequired'
+  systemctl reset-failed mydmsvn-local-sim.service
   systemctl restart mydmsvn-local-sim.service
   local before current recovered=0 https=0
   before="$(systemctl show mydmsvn-local-sim.service --property=MainPID --value)"
