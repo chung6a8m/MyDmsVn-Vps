@@ -15,7 +15,7 @@ function Invoke-NativeCapture {
         $exitCode = $LASTEXITCODE
     }
     finally { $ErrorActionPreference = $priorPreference }
-    return [pscustomobject]@{ ExitCode = $exitCode; Output = @($output | ForEach-Object { [string]$_ }) }
+    return [pscustomobject]@{ ExitCode = $exitCode; Output = [object[]]@($output | ForEach-Object { [string]$_ }) }
 }
 
 function Invoke-ExternalSafe {
