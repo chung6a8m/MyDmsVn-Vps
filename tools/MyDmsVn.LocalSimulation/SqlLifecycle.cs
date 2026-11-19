@@ -160,7 +160,11 @@ SELECT CASE WHEN
    JOIN sys.database_principals member ON member.principal_id=drm.member_principal_id
    WHERE member.name=USER_NAME()
  )
- OR EXISTS(SELECT 1 FROM sys.fn_my_permissions(NULL,N'DATABASE') WHERE permission_name<>N'CONNECT')
+ OR EXISTS(
+   SELECT 1 FROM sys.fn_my_permissions(NULL,N'DATABASE')
+   WHERE permission_name IN (N'CONTROL',N'ALTER',N'CREATE TABLE',N'CREATE PROCEDURE',N'CREATE FUNCTION',N'DELETE',N'EXECUTE',N'INSERT',N'SELECT',N'TAKE OWNERSHIP',N'UPDATE')
+      OR permission_name LIKE N'ALTER ANY %'
+ )
  OR EXISTS(SELECT 1 FROM sys.fn_my_permissions(N'dbo',N'SCHEMA'))
  OR EXISTS(
    SELECT 1 FROM sys.objects o
