@@ -217,7 +217,7 @@ reset_lab() {
   rm -f -- /etc/nginx/sites-enabled/mydmsvn-local-sim /etc/nginx/sites-available/mydmsvn-local-sim /etc/nginx/mydmsvn-local-sim-proxy-token.conf
   rm -f -- /usr/local/share/ca-certificates/mydmsvn-local-sim-ca.crt
   update-ca-certificates --fresh >/dev/null
-  rm -rf -- /opt/mydmsvn-local-sim /etc/mydmsvn-local-sim /var/lib/mydmsvn-local-sim
+  rm -rf -- /opt/mydmsvn-local-sim /opt/mydmsvn-dotnet /etc/mydmsvn-local-sim /var/lib/mydmsvn-local-sim
   userdel mydmsvn-local-sim >/dev/null 2>&1 || true
   systemctl daemon-reload
   nginx -t >/dev/null && systemctl reload nginx || true

@@ -18,6 +18,7 @@ def powershell():
     return shutil.which("pwsh") or shutil.which("powershell") or "powershell"
 
 
+@unittest.skipUnless(shutil.which("pwsh") or shutil.which("powershell"), "PowerShell required")
 class LocalSimulationOperatorTests(unittest.TestCase):
     def setUp(self):
         self.state = STATE_PARENT / ("test-" + uuid.uuid4().hex)

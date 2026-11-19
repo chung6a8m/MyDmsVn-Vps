@@ -10,6 +10,8 @@ Independent Windows Desktop + Linux VPS modernization of MyDmsVn, starting from 
 
 See [Owner decisions](docs/decisions/README.md), [target architecture](docs/architecture/overview.md), and the [single authoritative roadmap status](docs/roadmap/README.md).
 
+For a disposable, synthetic Docker + WSL + Windows Desktop developer environment, use the [local full-stack simulation runbook](docs/runbooks/local-fullstack-simulation.md). Its results are local diagnostics only and do not satisfy VPS-08/VPS-09 acceptance.
+
 ## Current implementation stage: VPS-08 SOURCE-ONLY MERGED; deployment NOT VERIFIED
 
 **VPS-08 source-only integration is MERGED** in [PR #27](https://github.com/chung6a8m/MyDmsVn-Vps/pull/27) after explicit Owner approval on **2026-11-18**. Reviewed source HEAD `516e4cc9ffd378412b2a370b04ab269a6f49dc70` passed **10/10 mandatory workflows**, including **33/33** native proxy/Kestrel tests and **59/59** SHA-bound published files. Merge commit: [`628aaf994`](https://github.com/chung6a8m/MyDmsVn-Vps/commit/628aaf994556595f5987286e84ab7491b9054c50). Deployment templates, protected staging workflow, credential loader, immutable rollout, and review fixes F05–F07 are integrated.

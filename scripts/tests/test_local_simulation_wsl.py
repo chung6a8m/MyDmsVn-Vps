@@ -42,6 +42,7 @@ class LocalSimulationWslTests(unittest.TestCase):
         source = HELPER.read_text(encoding="utf-8")
         self.assertGreaterEqual(source.count("mydmsvn-local-sim-ca.crt"), 2)
         self.assertIn("update-ca-certificates", source)
+        self.assertIn("/opt/mydmsvn-dotnet", source)
 
     def test_verify_has_a_bounded_service_readiness_wait(self):
         source = HELPER.read_text(encoding="utf-8")
