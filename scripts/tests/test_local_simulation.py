@@ -158,6 +158,17 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertIn("LocalSimulation.CertificateImportMismatch", source)
         self.assertNotIn("Import-Certificate", source)
 
+    def test_start_waits_for_sql_verification_before_starting_wsl_service(self):
+        source = RUNTIME_MODULE.read_text(encoding="utf-8")
+        start = source.split("function Start-MyDmsVnLocalSimulation", 1)[1].split(
+            "function Verify-MyDmsVnLocalSimulation", 1
+        )[0]
+        self.assertIn("Wait-LocalSimulationSqlReady $StateRoot $Receipt", start)
+        self.assertLess(
+            start.index("Wait-LocalSimulationSqlReady"),
+            start.index("Invoke-WslHelper $RepoRoot 'start'"),
+        )
+
     def test_runtime_initializer_accepts_an_empty_state_directory(self):
         self.state.mkdir(parents=True)
         command = (

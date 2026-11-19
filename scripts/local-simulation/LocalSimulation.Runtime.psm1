@@ -222,6 +222,17 @@ function Assert-LocalSimulationIdentity {
     Invoke-WslHelper $RepoRoot 'identity' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha) -Sudo | Out-Null
 }
 
+function Wait-LocalSimulationSqlReady {
+    param([string] $StateRoot, [pscustomobject] $Receipt)
+    for ($attempt = 0; $attempt -lt 30; $attempt++) {
+        try { Invoke-SqlHelper $StateRoot $Receipt 'verify' | Out-Null; return }
+        catch {
+            if ($attempt -eq 29) { throw [InvalidOperationException]::new('LocalSimulation.SqlReadinessFailed') }
+            Start-Sleep -Seconds 2
+        }
+    }
+}
+
 function Initialize-MyDmsVnLocalSimulation {
     param([string] $RepoRoot, [string] $StateRoot)
     if (Test-Path -LiteralPath $StateRoot) {
@@ -324,10 +335,11 @@ function Initialize-MyDmsVnLocalSimulation {
 }
 
 function Start-MyDmsVnLocalSimulation {
-    param([string] $RepoRoot, [pscustomobject] $Receipt)
+    param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Receipt)
     Assert-LocalSimulationIdentity $RepoRoot $Receipt
     $running = @(Invoke-ExternalSafe 'docker' @('inspect', '-f', '{{.State.Running}}', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlContainerMissing')
     if ([string]$running[0] -ne 'true') { Invoke-ExternalSafe 'docker' @('start', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlStartFailed' | Out-Null }
+    Wait-LocalSimulationSqlReady $StateRoot $Receipt
     Invoke-WslHelper $RepoRoot 'start' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha) -Sudo | Out-Null
     return [ordered]@{ action = 'Start'; status = 'STARTED'; instanceId = $Receipt.instanceId }
 }

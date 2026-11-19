@@ -274,7 +274,7 @@ if ($Action -in @('Start', 'Verify', 'Stop')) {
     $receipt = Read-ValidatedReceipt -RequireReady
     Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
     if ($Action -eq 'Start') {
-        $result = Invoke-RuntimeAction { Start-MyDmsVnLocalSimulation -RepoRoot $repoRoot -Receipt $receipt }
+        $result = Invoke-RuntimeAction { Start-MyDmsVnLocalSimulation -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt }
     }
     elseif ($Action -eq 'Verify') {
         $result = Invoke-RuntimeAction { Verify-MyDmsVnLocalSimulation -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt }
