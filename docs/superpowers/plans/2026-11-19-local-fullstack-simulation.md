@@ -88,4 +88,3 @@
 - [ ] Run all new tests, existing Python suite in WSL, static repository checks, locked restores/builds for changed .NET projects, and secret/path scans.
 - [ ] Perform final whole-branch review and fix Critical/Important findings via RED→GREEN.
 - [ ] Commit Task 4.
-

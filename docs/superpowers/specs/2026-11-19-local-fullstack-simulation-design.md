@@ -24,4 +24,3 @@ The repository supplies one PowerShell entry point with `Preflight`, `Initialize
 ## Success criteria
 
 Preflight reports actionable capability results without mutation. Initialize creates a receipt-bound lab, publishes the existing applications, provisions schema13 and least-privilege identities, and installs the local WSL service/proxy. Start and Verify refuse drift. Verify covers HTTPS health, direct/proxy denial, representative authenticated API/SQL behavior, service restart and SIGKILL recovery. Reset proves ownership before deleting only lab-owned resources.
-
