@@ -381,7 +381,7 @@ function Initialize-MyDmsVnLocalSimulation {
     $labels = @('--label', "mydmsvn.local-sim.instance=$instanceId")
     Invoke-ExternalSafe 'docker' (@('volume', 'create') + $labels + @('mydmsvn-local-sim-sql-data')) 'LocalSimulation.SqlVolumeCreateFailed' | Out-Null
     $createdLabel = Invoke-ExternalSafe 'docker' @('volume', 'inspect', '-f', '{{ index .Labels "mydmsvn.local-sim.instance" }}', 'mydmsvn-local-sim-sql-data') 'LocalSimulation.SqlVolumeIdentityUnreadable'
-    if (([string]$createdLabel[0]).Trim() -ne $instanceId) { throw [InvalidOperationException]::new('LocalSimulation.SqlVolumeIdentityMismatch') }
+    if (([string]$createdLabel).Trim() -ne $instanceId) { throw [InvalidOperationException]::new('LocalSimulation.SqlVolumeIdentityMismatch') }
     $receipt.docker.created = $true
     Write-BoundReceipt $StateRoot $receiptPath $receipt
     $tls = Join-Path $StateRoot 'tls'
