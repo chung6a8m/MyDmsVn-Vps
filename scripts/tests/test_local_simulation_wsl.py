@@ -57,7 +57,7 @@ class LocalSimulationWslTests(unittest.TestCase):
                     f"INSTANCE_ID={self.instance_id}",
                     "SOURCE_SHA=" + "a" * 40,
                     "PUBLIC_ORIGIN=https://localhost:50443",
-                    "SQL_SERVER=localhost,11433",
+                    "SQL_SERVER=127.0.0.1,11433",
                 ]
             )
             + "\n",
@@ -66,7 +66,7 @@ class LocalSimulationWslTests(unittest.TestCase):
         for name, value in {
             "proxy_token": "ProxyToken_1234567890_abcdef",
             "jwt_keys": "local-key:JwtKey_1234567890_abcdef",
-            "sql_connection_string": "Server=localhost,11433;Password=PrivateSql_123!",
+            "sql_connection_string": "Server=127.0.0.1,11433;Password=PrivateSql_123!",
         }.items():
             (self.state / "secrets" / name).write_text(value, encoding="utf-8")
         for name in ("ca.crt", "nginx.crt", "nginx.key"):
