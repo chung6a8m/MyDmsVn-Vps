@@ -36,7 +36,7 @@ jobs:
           PY
 
   local-simulation-windows-safety:
-    name: Windows local simulation operator safety (27 tests, no skips)
+    name: Windows local simulation operator safety (28 tests, no skips)
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
@@ -51,7 +51,7 @@ jobs:
         run: |
           @'
           import unittest
-          expected = 27
+          expected = 28
           suite = unittest.defaultTestLoader.loadTestsFromName('scripts.tests.test_local_simulation')
           assert suite.countTestCases() == expected, (suite.countTestCases(), expected)
           result = unittest.TextTestRunner(verbosity=2).run(suite)

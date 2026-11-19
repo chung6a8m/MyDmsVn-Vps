@@ -337,6 +337,34 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertEqual("LocalSimulation.RegistrationAclInvalid", json.loads(result.stdout)["code"])
         self.assertTrue(self.state.exists())
 
+    @unittest.skipUnless(os.name == "nt", "Windows ACL behavior is Windows-specific")
+    def test_registration_accepts_system_and_builtin_administrators(self):
+        receipt = self.write_receipt()
+        self.write_binding(receipt)
+        for sid in ("*S-1-5-18", "*S-1-5-32-544"):
+            changed = subprocess.run(
+                ["icacls.exe", str(self.binding), "/grant", sid + ":F"],
+                env=self.process_env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(0, changed.returncode, changed.stdout + changed.stderr)
+        command = (
+            f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+            f"& (Get-Module LocalSimulation.Runtime) {{ param($s,$r) Assert-LocalSimulationRegistration $s ($r|ConvertFrom-Json) }} "
+            f"'{self.state}' '{json.dumps(receipt)}'"
+        )
+
+        result = subprocess.run(
+            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT,
+            env=self.process_env,
+            text=True,
+            capture_output=True,
+        )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_start_waits_for_sql_verification_before_starting_wsl_service(self):
         source = RUNTIME_MODULE.read_text(encoding="utf-8")
         start = source.split("function Start-MyDmsVnLocalSimulation", 1)[1].split(

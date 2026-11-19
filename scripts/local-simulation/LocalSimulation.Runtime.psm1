@@ -144,7 +144,8 @@ function Assert-CurrentUserOnlyAcl {
         foreach ($rule in $acl.Access) {
             if ($rule.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow) { continue }
             $ruleSid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier])
-            if ($ruleSid.Value -ne $currentSid.Value) {
+            if ($ruleSid.Value -ne $currentSid.Value -and
+                $ruleSid.Value -notin @('S-1-5-18', 'S-1-5-32-544')) {
                 throw [InvalidOperationException]::new('LocalSimulation.RegistrationAclInvalid')
             }
         }
