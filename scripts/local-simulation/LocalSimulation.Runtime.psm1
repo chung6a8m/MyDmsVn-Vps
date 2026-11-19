@@ -140,7 +140,14 @@ function Write-Receipt {
 
 function Initialize-MyDmsVnLocalSimulation {
     param([string] $RepoRoot, [string] $StateRoot)
-    if (Test-Path -LiteralPath $StateRoot) { throw [InvalidOperationException]::new('LocalSimulation.StateAlreadyExists') }
+    if (Test-Path -LiteralPath $StateRoot) {
+        $stateItem = Get-Item -LiteralPath $StateRoot -Force
+        if (-not $stateItem.PSIsContainer -or
+            [bool]($stateItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+            @(Get-ChildItem -LiteralPath $StateRoot -Force).Count -gt 0) {
+            throw [InvalidOperationException]::new('LocalSimulation.StateAlreadyExists')
+        }
+    }
     $dirty = @(Invoke-ExternalSafe 'git' @('-C', $RepoRoot, 'status', '--porcelain') 'LocalSimulation.GitStateUnavailable')
     if ($dirty.Count -gt 0) { throw [InvalidOperationException]::new('LocalSimulation.SourceTreeMustBeClean') }
     $sourceLines = @(Invoke-ExternalSafe 'git' @('-C', $RepoRoot, 'rev-parse', 'HEAD') 'LocalSimulation.GitStateUnavailable')

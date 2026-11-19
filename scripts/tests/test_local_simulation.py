@@ -134,6 +134,24 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertTrue(result.stdout.strip().startswith("/mnt/c/"), result.stdout)
 
+    def test_runtime_initializer_accepts_an_empty_state_directory(self):
+        self.state.mkdir(parents=True)
+        command = (
+            f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+            f"try {{ Initialize-MyDmsVnLocalSimulation -RepoRoot '{self.outside}' "
+            f"-StateRoot '{self.state}' }} catch {{ $_.Exception.Message }}"
+        )
+        result = subprocess.run(
+            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("LocalSimulation.GitStateUnavailable", result.stdout)
+        self.assertNotIn("LocalSimulation.StateAlreadyExists", result.stdout)
+
     def test_reset_refuses_missing_receipt_and_preserves_unrelated_file(self):
         result = self.run_operator(
             "Reset", "-ConfirmInstanceId", "11111111-2222-4333-8444-555555555555"
