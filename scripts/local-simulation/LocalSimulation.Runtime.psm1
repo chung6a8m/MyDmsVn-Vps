@@ -70,7 +70,8 @@ function Invoke-DotNet10 {
     $global = '{"sdk":{"version":"10.0.404","rollForward":"disable","allowPrerelease":false}}'
     Write-Utf8File (Join-Path $sdk 'global.json') $global
     Push-Location $sdk
-    try { return Invoke-ExternalSafe 'dotnet' $Arguments $FailureCode }
+    $boundedArguments = @($Arguments) + @('-nodeReuse:false', '-p:UseSharedCompilation=false')
+    try { return Invoke-ExternalSafe 'dotnet' $boundedArguments $FailureCode }
     finally { Pop-Location }
 }
 
@@ -98,8 +99,8 @@ function Publish-LocalSimulationArtifacts {
 
     Push-Location $RepoRoot
     try {
-        Invoke-ExternalSafe 'dotnet' @('restore', 'src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj', '--locked-mode') 'LocalSimulation.DesktopRestoreFailed' | Out-Null
-        Invoke-ExternalSafe 'dotnet' @('publish', 'src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj', '-c', 'Release', '-f', 'net48', '--no-restore', '-p:PlatformTarget=x86', '-o', (Join-Path $artifacts 'desktop')) 'LocalSimulation.DesktopPublishFailed' | Out-Null
+        Invoke-ExternalSafe 'dotnet' @('restore', 'src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj', '--locked-mode', '-nodeReuse:false', '-p:UseSharedCompilation=false') 'LocalSimulation.DesktopRestoreFailed' | Out-Null
+        Invoke-ExternalSafe 'dotnet' @('publish', 'src/MyDmsVn.Desktop.App/MyDmsVn.Desktop.App.csproj', '-c', 'Release', '-f', 'net48', '--no-restore', '-p:PlatformTarget=x86', '-nodeReuse:false', '-p:UseSharedCompilation=false', '-o', (Join-Path $artifacts 'desktop')) 'LocalSimulation.DesktopPublishFailed' | Out-Null
     }
     finally { Pop-Location }
     }
