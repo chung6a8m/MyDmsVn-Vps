@@ -92,7 +92,7 @@ install_lab() {
   [[ "$requested" == "$INSTANCE_ID" ]] || fail 'LocalSimulation.InstanceMismatch'
   regular_dir "$rendered"; regular_dir "$publish"
   command -v nginx >/dev/null || fail 'LocalSimulation.NginxMissing'
-  [[ -x /usr/bin/dotnet ]] || fail 'LocalSimulation.AspNetRuntimeMissing'
+  [[ -x /opt/mydmsvn-dotnet/dotnet ]] || fail 'LocalSimulation.AspNetRuntimeMissing'
   if ! id mydmsvn-local-sim >/dev/null 2>&1; then useradd --system --no-create-home --shell /usr/sbin/nologin mydmsvn-local-sim; fi
   install -d -o root -g root -m 0755 /opt/mydmsvn-local-sim /opt/mydmsvn-local-sim/releases /usr/local/libexec
   install -d -o root -g root -m 0700 /etc/mydmsvn-local-sim /etc/mydmsvn-local-sim/credentials /etc/mydmsvn-local-sim/tls
@@ -124,24 +124,25 @@ install_lab() {
 
 install_prerequisites() {
   [[ "$(id -u)" == 0 ]] || fail 'LocalSimulation.RootRequired'
+  local runtime_root=/opt/mydmsvn-dotnet runtime_version=10.0.11 archive work
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
-  apt-get install -y -qq ca-certificates curl
-  if ! dpkg-query -W -f='${Status}' packages-microsoft-prod 2>/dev/null | grep -q '^install ok installed$'; then
-    local package
-    package="$(mktemp --suffix=.deb)"
-    trap "rm -f -- '$package'" EXIT
+  apt-get install -y -qq ca-certificates curl nginx
+  if [[ ! -x "$runtime_root/dotnet" || ! -d "$runtime_root/shared/Microsoft.AspNetCore.App/$runtime_version" ]]; then
+    work="$(mktemp -d)"; archive="$work/aspnetcore-runtime.tar.gz"
+    trap "rm -rf -- '$work'" EXIT
     curl --fail --silent --show-error --location \
-      https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb \
-      --output "$package"
-    dpkg -i "$package" >/dev/null
-    rm -f -- "$package"
-    trap - EXIT
+      https://builds.dotnet.microsoft.com/dotnet/aspnetcore/Runtime/10.0.11/aspnetcore-runtime-10.0.11-linux-x64.tar.gz \
+      --output "$archive"
+    printf '%s  %s\n' \
+      '4c6be0623330074e699dab8084be15a1baebb7a518c0dd8ce99f93cf79777cd46f3a38ef9d25edc152ed606f084b63736bd9e4082eb32d188fc357bf6ac4d1d6' \
+      "$archive" | sha512sum --check --status || fail 'LocalSimulation.AspNetRuntimeHashMismatch'
+    install -d -o root -g root -m 0755 "$runtime_root"
+    tar -xzf "$archive" -C "$runtime_root"
+    rm -rf -- "$work"; trap - EXIT
   fi
-  apt-get update -qq
-  apt-get install -y -qq nginx aspnetcore-runtime-10.0
   command -v nginx >/dev/null || fail 'LocalSimulation.NginxMissing'
-  [[ -x /usr/bin/dotnet ]] || fail 'LocalSimulation.AspNetRuntimeMissing'
+  "$runtime_root/dotnet" --list-runtimes | grep -q "Microsoft.AspNetCore.App $runtime_version " || fail 'LocalSimulation.AspNetRuntimeMissing'
   printf '{"schemaVersion":1,"status":"PREREQUISITES_READY","notice":"LOCAL SIMULATION - NOT VPS-08/09 ACCEPTANCE"}\n'
 }
 

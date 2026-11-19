@@ -28,12 +28,14 @@ def run_helper(*args):
 
 
 class LocalSimulationWslTests(unittest.TestCase):
-    def test_prerequisites_use_the_pinned_ubuntu_microsoft_feed(self):
+    def test_prerequisites_use_a_hash_pinned_aspnet_runtime(self):
         source = HELPER.read_text(encoding="utf-8")
         self.assertIn(
-            "https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb",
+            "aspnetcore/Runtime/10.0.11/aspnetcore-runtime-10.0.11-linux-x64.tar.gz",
             source,
         )
+        self.assertIn("4c6be0623330074e699dab8084be15a1", source)
+        self.assertIn("sha512sum --check --status", source)
         self.assertNotIn("curl |", source)
 
     def setUp(self):
