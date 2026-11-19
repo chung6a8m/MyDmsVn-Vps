@@ -81,11 +81,13 @@ function Publish-LocalSimulationArtifacts {
     $helper = Join-Path $RepoRoot 'tools\MyDmsVn.LocalSimulation\MyDmsVn.LocalSimulation.csproj'
     $migrator = Join-Path $RepoRoot 'src\MyDmsVn.Server.FluentMigrator.Cli\MyDmsVn.Server.FluentMigrator.Cli.csproj'
     $host = Join-Path $RepoRoot 'src\MyDmsVn.Server.AspNetCoreHost\MyDmsVn.Server.AspNetCoreHost.csproj'
-    foreach ($project in @($helper, $migrator, $host)) {
-        Invoke-DotNet10 $StateRoot @('restore', $project, '-p:Vps04Server=true', '-p:Vps06bMediator=true', '--locked-mode') 'LocalSimulation.LockedRestoreFailed' | Out-Null
-    }
+    # Restore immediately before each publish. These projects intentionally use
+    # different conditional dependency graphs and share referenced-project obj paths.
+    Invoke-DotNet10 $StateRoot @('restore', $helper, '-p:Vps04Server=true', '-p:Vps06bMediator=true', '--locked-mode') 'LocalSimulation.LockedRestoreFailed' | Out-Null
     Invoke-DotNet10 $StateRoot @('publish', $helper, '-p:Vps04Server=true', '-p:Vps06bMediator=true', '-c', 'Release', '-f', 'net10.0', '--no-restore', '-o', (Join-Path $artifacts 'sql-helper')) 'LocalSimulation.SqlHelperPublishFailed' | Out-Null
-    Invoke-DotNet10 $StateRoot @('publish', $migrator, '-p:Vps04Server=true', '-p:Vps06bMediator=true', '-c', 'Release', '-f', 'net10.0', '--no-restore', '-o', (Join-Path $artifacts 'migrator')) 'LocalSimulation.MigratorPublishFailed' | Out-Null
+    Invoke-DotNet10 $StateRoot @('restore', $migrator, '-p:Vps04Server=true', '--locked-mode') 'LocalSimulation.LockedRestoreFailed' | Out-Null
+    Invoke-DotNet10 $StateRoot @('publish', $migrator, '-p:Vps04Server=true', '-c', 'Release', '-f', 'net10.0', '--no-restore', '-o', (Join-Path $artifacts 'migrator')) 'LocalSimulation.MigratorPublishFailed' | Out-Null
+    Invoke-DotNet10 $StateRoot @('restore', $host, '-p:Vps04Server=true', '-p:Vps06bMediator=true', '--locked-mode') 'LocalSimulation.LockedRestoreFailed' | Out-Null
     Invoke-DotNet10 $StateRoot @('publish', $host, '-p:Vps04Server=true', '-p:Vps06bMediator=true', '-p:UseAppHost=false', '-c', 'Release', '-f', 'net10.0', '--no-restore', '-warnaserror', '-o', (Join-Path $artifacts 'host')) 'LocalSimulation.HostPublishFailed' | Out-Null
 
     Push-Location $RepoRoot
