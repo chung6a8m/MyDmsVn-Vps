@@ -55,7 +55,7 @@ VALUES(@number,CONVERT(date,SYSUTCDATETIME()),@warehouse,@employee,@customer,'Dr
                 ("@note", note), ("@actor", actor));
             await ExecuteAsync(sql, transaction, @"
 DECLARE @now datetime2(7)=SYSUTCDATETIME();
-INSERT dbo.SalesReceiptLines(SaleId,LineNo,ProductId,Qty,Unit,IsGift,LineAmount,UnitPrice,CreatedByUserId)
+INSERT dbo.SalesReceiptLines(SaleId,[LineNo],ProductId,Qty,Unit,IsGift,LineAmount,UnitPrice,CreatedByUserId)
 VALUES(@sale,1,@product,1,N'EA',0,2,2,@actor);
 INSERT dbo.WebOperationJournal(ActorUserId,OperationId,DeploymentEpoch,ContractVersion,CodecVersion,OperationKind,
  RequestTargetId,RequestFingerprint,ResultDocumentId,Disposition,ResultBytes,CreatedAtUtc,CompletedAtUtc,ResultExpiresAtUtc)
