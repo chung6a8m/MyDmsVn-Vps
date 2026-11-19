@@ -49,6 +49,19 @@ class LocalSimulationOperatorTests(unittest.TestCase):
                 "exit /b 1\r\n",
                 encoding="utf-8",
             )
+            (fake_bin / "wsl.cmd").write_text(
+                "@echo off\r\n"
+                "setlocal EnableDelayedExpansion\r\n"
+                'if not "%4"=="wslpath" exit /b 1\r\n'
+                'set "p=%~6"\r\n'
+                'set "drive=!p:~0,1!"\r\n'
+                'for %%L in (a b c d e f g h i j k l m n o p q r s t u v w x y z) do if /I "!drive!"=="%%L" set "drive=%%L"\r\n'
+                'set "rest=!p:~3!"\r\n'
+                'set "rest=!rest:\\=/!"\r\n'
+                "echo /mnt/!drive!/!rest!\r\n"
+                "exit /b 0\r\n",
+                encoding="utf-8",
+            )
             self.process_env["PATH"] = str(fake_bin) + os.pathsep + self.process_env["PATH"]
         (self.outside / "keep.txt").write_text("unrelated", encoding="utf-8")
 
