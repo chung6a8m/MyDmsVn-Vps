@@ -15,10 +15,10 @@ internal static class V1ModelStateErrors
             .Select(pair => pair.Key).ToArray();
         var field = keys.Contains("") ? null : keys.FirstOrDefault(key => key is "limit" or "search" or "fromDate" or "toDate" or "customerId" or "warehouseId" or
             "employeeId" or "status" or "productId" or "pageSize" or "cursor" or "saleId" or "receiptId" or "pageNumber" or "fromUtc" or "toUtc");
-        var salesError = keys.FirstOrDefault(key => key.StartsWith(V1SalesRequestFormatter.ErrorPrefix, System.StringComparison.Ordinal));
-        if (salesError != null)
+        var mutationError = keys.FirstOrDefault(key => key.StartsWith(V1MutationRequestFormatter.ErrorPrefix, System.StringComparison.Ordinal));
+        if (mutationError != null)
         {
-            var path = salesError.Substring(V1SalesRequestFormatter.ErrorPrefix.Length);
+            var path = mutationError.Substring(V1MutationRequestFormatter.ErrorPrefix.Length);
             field = path.Length == 0 ? null : path;
         }
         var correlation = context.HttpContext.RequestServices

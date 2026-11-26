@@ -41,7 +41,7 @@ public sealed class SalesReceiptsController(IMediator mediator, IRequestCorrelat
     }
 
     [HttpPost]
-    [V1SalesMutation]
+    [V1WriteMutation]
     [ProducesResponseType(typeof(V1SuccessEnvelope<SalesDetailResponse>), 200)]
     [ProducesResponseType(typeof(V1ErrorEnvelope), 409)]
     [ProducesResponseType(typeof(V1ErrorEnvelope), 410)]
@@ -52,7 +52,7 @@ public sealed class SalesReceiptsController(IMediator mediator, IRequestCorrelat
                 cancellationToken).ConfigureAwait(false), SalesHttpMapper.Detail, cancellationToken);
 
     [HttpPut("{saleId}/draft")]
-    [V1SalesMutation]
+    [V1WriteMutation]
     [ProducesResponseType(typeof(V1SuccessEnvelope<SalesDetailResponse>), 200)]
     [ProducesResponseType(typeof(V1ErrorEnvelope), 404)]
     [ProducesResponseType(typeof(V1ErrorEnvelope), 409)]
@@ -65,7 +65,7 @@ public sealed class SalesReceiptsController(IMediator mediator, IRequestCorrelat
                 cancellationToken).ConfigureAwait(false), SalesHttpMapper.Detail, cancellationToken);
 
     [HttpPost("{saleId}/post")]
-    [V1SalesMutation]
+    [V1WriteMutation]
     [ProducesResponseType(typeof(V1SuccessEnvelope<SalesPostResponse>), 200)]
     [ProducesResponseType(typeof(V1ErrorEnvelope), 404)]
     [ProducesResponseType(typeof(V1ErrorEnvelope), 409)]

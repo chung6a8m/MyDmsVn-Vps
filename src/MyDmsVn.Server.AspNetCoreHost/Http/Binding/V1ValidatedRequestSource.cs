@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.Extensions.DependencyInjection;
 using MyDmsVn.Server.HttpHost.Features.Sales;
+using MyDmsVn.Server.HttpHost.Features.Receipts;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -33,7 +34,7 @@ internal static class V1ValidatedRequestSource
 // Match the existing ID-before-query-before-body order on mutation routes.
 // Core admission (transport, authentication, cap) runs before MVC resource filters.
 [AttributeUsage(AttributeTargets.Method)]
-internal sealed class V1SalesMutationAttribute : Attribute, IAsyncResourceFilter
+internal sealed class V1WriteMutationAttribute : Attribute, IAsyncResourceFilter
 {
     public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
     {
@@ -42,6 +43,8 @@ internal sealed class V1SalesMutationAttribute : Attribute, IAsyncResourceFilter
             var request = context.HttpContext.Request;
             if (request.RouteValues.TryGetValue("saleId", out var id))
                 V1ScalarBinders.PositiveLong(id as string ?? "", "saleId");
+            if (request.RouteValues.TryGetValue("receiptId", out var receiptId))
+                V1ScalarBinders.PositiveLong(receiptId as string ?? "", "receiptId");
             V1QueryPolicy.Read(request);
         }
         catch (V1BindingException error)
@@ -54,17 +57,17 @@ internal sealed class V1SalesMutationAttribute : Attribute, IAsyncResourceFilter
     }
 }
 
-// Native MVC System.Text.Json input formatter for Sales mutations only.
+// Native MVC System.Text.Json input formatter for Sales and Receipt mutations only.
 // A single strict parse supplies both typed input and the immutable canonical
 // source. The explicit field traversal is needed for v1 error precedence, not
 // a new general serializer; other MVC routes keep the normal JSON formatter.
-internal sealed class V1SalesRequestFormatter : InputFormatter
+internal sealed class V1MutationRequestFormatter : InputFormatter
 {
     private static readonly UTF8Encoding Utf8 = new(false, true);
-    internal const string ErrorPrefix = "vps10-sales:";
+    internal const string ErrorPrefix = "vps10-mutation:";
 
-    public V1SalesRequestFormatter() => SupportedMediaTypes.Add("application/json");
-    protected override bool CanReadType(Type type) => SalesRequestReader.Supports(type);
+    public V1MutationRequestFormatter() => SupportedMediaTypes.Add("application/json");
+    protected override bool CanReadType(Type type) => SalesRequestReader.Supports(type) || ReceiptRequestReader.Supports(type);
     public override bool CanRead(InputFormatterContext context) => CanReadType(context.ModelType);
 
     public override async Task<InputFormatterResult> ReadRequestBodyAsync(InputFormatterContext context)
@@ -91,7 +94,9 @@ internal sealed class V1SalesRequestFormatter : InputFormatter
             });
             if (document.RootElement.ValueKind != JsonValueKind.Object) throw new V1BindingException();
             ValidateTree(document.RootElement, 0);
-            var model = SalesRequestReader.Read(context.ModelType, document.RootElement);
+            var model = SalesRequestReader.Supports(context.ModelType)
+                ? SalesRequestReader.Read(context.ModelType, document.RootElement)
+                : ReceiptRequestReader.Read(context.ModelType, document.RootElement);
             V1ValidatedRequestSource.Set(context.HttpContext, document);
             document = null; // registered for disposal at response completion
             return await InputFormatterResult.SuccessAsync(model).ConfigureAwait(false);

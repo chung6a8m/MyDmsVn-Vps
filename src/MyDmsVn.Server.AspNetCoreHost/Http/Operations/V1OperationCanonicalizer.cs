@@ -16,17 +16,20 @@ internal static class V1OperationCanonicalizer
         WebOperationKind.SalesCreate => ("Sales.Create", "POST", "/api/v1/sales-receipts"),
         WebOperationKind.SalesUpdate => ("Sales.Update", "PUT", "/api/v1/sales-receipts/{saleId}/draft"),
         WebOperationKind.SalesPost => ("Sales.Post", "POST", "/api/v1/sales-receipts/{saleId}/post"),
+        WebOperationKind.ReceiptCreate => ("Receipt.Create", "POST", "/api/v1/goods-receipts"),
+        WebOperationKind.ReceiptUpdate => ("Receipt.Update", "PUT", "/api/v1/goods-receipts/{receiptId}/draft"),
+        WebOperationKind.ReceiptPost => ("Receipt.Post", "POST", "/api/v1/goods-receipts/{receiptId}/post"),
         _ => throw new V1BindingException()
     };
 
     internal static string Canonicalize(WebOperationKind kind, long? targetId, JsonElement validatedSource)
     {
         var description = Describe(kind);
-        if ((kind == WebOperationKind.SalesCreate ? targetId.HasValue : !targetId.HasValue || targetId <= 0) ||
+        if ((kind is WebOperationKind.SalesCreate or WebOperationKind.ReceiptCreate ? targetId.HasValue : !targetId.HasValue || targetId <= 0) ||
             validatedSource.ValueKind != JsonValueKind.Object) throw new V1BindingException();
 
         var result = new StringBuilder("{\"body\":");
-        WriteObject(validatedSource, result, body: true, line: false, includeNote: kind != WebOperationKind.SalesPost);
+        WriteObject(validatedSource, result, body: true, line: false, includeNote: kind is not (WebOperationKind.SalesPost or WebOperationKind.ReceiptPost));
         result.Append(",\"contract\":\"web4-v1\",\"method\":");
         String(description.Method, result);
         result.Append(",\"operationKind\":");
@@ -52,7 +55,7 @@ internal static class V1OperationCanonicalizer
             String(name, output);
             output.Append(':');
             if (!value.TryGetProperty(name, out var property)) output.Append("null");
-            else if (line && name is "qty" or "unitPrice")
+            else if (line && name is "qty" or "unitPrice" or "quantity" or "unitCost")
                 String(decimal.Parse(property.GetString()!, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture)
                     .ToString("F4", CultureInfo.InvariantCulture), output);
             else if (body && name == "expectedVersion")

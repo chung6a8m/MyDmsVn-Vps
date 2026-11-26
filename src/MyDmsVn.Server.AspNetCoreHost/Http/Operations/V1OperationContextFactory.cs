@@ -42,7 +42,8 @@ internal sealed class V1OperationContextFactory : IV1OperationContextFactory
         var epoch = ReadGuid(request, Epoch, v4: false);
         var canonical = V1OperationCanonicalizer.Canonicalize(kind, targetId, V1ValidatedRequestSource.Get(context));
         var description = V1OperationCanonicalizer.Describe(kind);
-        var path = description.Route.Replace("{saleId}", targetId?.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        var path = description.Route.Replace("{saleId}", targetId?.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("{receiptId}", targetId?.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
         // Do not accept encoded aliases, dot segments, query strings or trailing slash.
         var raw = context.Features.Get<IHttpRequestFeature>()?.RawTarget;
         if (!string.Equals(request.Method, description.Method, StringComparison.Ordinal) ||

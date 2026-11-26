@@ -38,6 +38,25 @@ internal static class ReceiptHttpMapper
             value.PostedAtUtc.HasValue ? Utc(value.PostedAtUtc.Value) : null, value.Version, lines);
     }
 
+    internal static SaveGoodsReceiptRequest ToApplication(ReceiptCreateRequest value) =>
+        new(value.ReceiptDate.ToDateTime(TimeOnly.MinValue), value.WarehouseId, value.EmployeeId, value.Note, Lines(value.Lines));
+
+    internal static UpdateGoodsReceiptDraftRequest ToApplication(long receiptId, ReceiptUpdateRequest value) =>
+        new(receiptId, value.ExpectedVersion, value.ReceiptDate.ToDateTime(TimeOnly.MinValue),
+            value.WarehouseId, value.EmployeeId, value.Note, Lines(value.Lines));
+
+    internal static PostGoodsReceiptRequest ToApplication(long receiptId, ReceiptPostRequest value) =>
+        new(receiptId, value.ExpectedVersion);
+
+    private static SaveGoodsReceiptLineRequest[] Lines(ReceiptSaveLineRequest[] values) =>
+        values.Select(line => new SaveGoodsReceiptLineRequest(line.ProductId, line.Quantity, line.UnitCost)).ToArray();
+
+    internal static ReceiptPostResponse Post(PostGoodsReceiptResponse value)
+    {
+        Require(value.Status == "Posted");
+        return new(Id(value.ReceiptId), value.Status, Utc(value.PostedAtUtc));
+    }
+
     private static bool CanonicalVersion(string value)
     {
         if (value == null || value.Length != 12) return false;

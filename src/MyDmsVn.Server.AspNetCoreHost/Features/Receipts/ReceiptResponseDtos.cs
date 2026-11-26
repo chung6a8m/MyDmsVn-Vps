@@ -15,3 +15,5 @@ public sealed record ReceiptDetailResponse(
 public sealed record ReceiptLineResponse(
     string ReceiptLineId, int LineNumber, int ProductId, string Quantity, string UnitCost,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? ProductDisplayName, bool ProductIsActive);
+
+public sealed record ReceiptPostResponse(string ReceiptId, string Status, string PostedAtUtc);

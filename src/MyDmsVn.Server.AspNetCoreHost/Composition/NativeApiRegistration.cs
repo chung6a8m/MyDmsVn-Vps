@@ -27,7 +27,7 @@ internal static class NativeApiRegistration
         services.AddScoped<IV1OperationContextFactory, V1OperationContextFactory>();
         services.AddControllers(options =>
             {
-                options.InputFormatters.Insert(0, new V1SalesRequestFormatter());
+                options.InputFormatters.Insert(0, new V1MutationRequestFormatter());
                 options.ModelBinderProviders.Insert(0, new CatalogLookupQueryBinderProvider());
                 options.ModelBinderProviders.Insert(0, new V1SalesReadBinderProvider());
                 options.ModelBinderProviders.Insert(0, new V1Web3ReadBinderProvider());
@@ -115,7 +115,8 @@ internal static class NativeApiRegistration
                     "WEB4-enabled writes require Idempotency-Key and X-MyDmsVn-Deployment-Epoch. " +
                     "WEB3 collection reads require pageNumber (1–2147483647) and pageSize (1–200). " +
                     "Receipt detail requires canonical positive Int64 path text; no query or body. " +
-                    "WEB3 output uses explicit nullable fields and fixed decimal scale. " +
+                    "Receipt writes accept strict application/json UTF-8, no query; quantity and unitCost are invariant decimal strings; " +
+                    "expectedVersion is canonical Base64 of eight bytes. WEB3 output uses explicit nullable fields and fixed decimal scale. " +
                     "Stock card requires warehouseId/productId and accepts UTC Z instants only.";
                 return Task.CompletedTask;
             });
