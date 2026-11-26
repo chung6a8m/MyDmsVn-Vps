@@ -113,7 +113,9 @@ internal static class NativeApiRegistration
                     "search is limited after trimming, cursor is bound to filters/pageSize, detail accepts a positive canonical Int64 path and no query/body. " +
                     "Sales writes accept strict application/json UTF-8, no query; decimal and Int64 wire fields are strings. " +
                     "WEB4-enabled writes require Idempotency-Key and X-MyDmsVn-Deployment-Epoch. " +
-                    "WEB3 receipt and inventory reads require pageNumber and pageSize (1–200), explicit nullable fields and fixed decimal scale. " +
+                    "WEB3 collection reads require pageNumber (1–2147483647) and pageSize (1–200). " +
+                    "Receipt detail requires canonical positive Int64 path text; no query or body. " +
+                    "WEB3 output uses explicit nullable fields and fixed decimal scale. " +
                     "Stock card requires warehouseId/productId and accepts UTC Z instants only.";
                 return Task.CompletedTask;
             });

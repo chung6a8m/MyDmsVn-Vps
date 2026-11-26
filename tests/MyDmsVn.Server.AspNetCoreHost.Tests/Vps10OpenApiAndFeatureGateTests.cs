@@ -101,17 +101,34 @@ public sealed class Vps10OpenApiAndFeatureGateTests
         foreach (var field in new[] { "note", "postedAtUtc", "warehouseDisplayName", "employeeDisplayName", "lines", "receiptId" })
             Assert.Contains(field, receiptData.GetProperty("required").EnumerateArray().Select(p => p.GetString()));
         Assert.Equal("date", Resolve(document, receiptProperties.GetProperty("receiptDate")).GetProperty("format").GetString());
+        foreach (var field in new[] { "note", "postedAtUtc", "warehouseDisplayName", "employeeDisplayName" })
+            AssertNullableString(Resolve(document, receiptProperties.GetProperty(field)));
+        var receiptLine = Resolve(document, Resolve(document, receiptProperties.GetProperty("lines")).GetProperty("items"));
+        var receiptLineProperties = receiptLine.GetProperty("properties");
+        AssertNullableString(Resolve(document, receiptLineProperties.GetProperty("productDisplayName")));
+        Assert.Contains("productDisplayName", receiptLine.GetProperty("required").EnumerateArray().Select(p => p.GetString()));
+        Assert.Equal(@"^[0-9]+\.[0-9]{4}$", Resolve(document, receiptLineProperties.GetProperty("quantity")).GetProperty("pattern").GetString());
         var receiptList = receiptListPath.GetProperty("get");
         var receiptParams = receiptList.GetProperty("parameters").EnumerateArray().ToArray();
         Assert.Equal(5, receiptParams.Length);
         foreach (var name in new[] { "pageNumber", "pageSize" })
             Assert.True(Assert.Single(receiptParams, p => p.GetProperty("name").GetString() == name).GetProperty("required").GetBoolean());
+        var pageNumberSchema = Resolve(document, Assert.Single(receiptParams, p => p.GetProperty("name").GetString() == "pageNumber").GetProperty("schema"));
+        var pageSizeSchema = Resolve(document, Assert.Single(receiptParams, p => p.GetProperty("name").GetString() == "pageSize").GetProperty("schema"));
+        Assert.Equal(2147483647m, pageNumberSchema.GetProperty("maximum").GetDecimal());
+        Assert.Equal(200m, pageSizeSchema.GetProperty("maximum").GetDecimal());
+        Assert.Contains("Receipt detail requires canonical positive Int64 path text; no query or body.", document.GetProperty("info").GetProperty("description").GetString());
         var balances = paths.GetProperty("/api/v1/inventory/balances").GetProperty("get");
         var balanceData = RequiredObjectData(document, Resolve(document, ResponseSchema(balances.GetProperty("responses"), "200")));
         Assert.Contains("totalCount", balanceData.GetProperty("required").EnumerateArray().Select(p => p.GetString()));
         Assert.Equal("string", Resolve(document, balanceData.GetProperty("properties").GetProperty("totalCount")).GetProperty("type").GetString());
         var balanceRow = Resolve(document, Resolve(document, balanceData.GetProperty("properties").GetProperty("items")).GetProperty("items"));
         Assert.Contains("averageUnitCost", balanceRow.GetProperty("required").EnumerateArray().Select(p => p.GetString()));
+        var balanceProperties = balanceRow.GetProperty("properties");
+        var averageSchema = Resolve(document, balanceProperties.GetProperty("averageUnitCost"));
+        AssertNullableString(averageSchema);
+        Assert.Equal(@"^[0-9]+\.[0-9]{8}$", averageSchema.GetProperty("pattern").GetString());
+        Assert.Equal(@"^[0-9]+\.[0-9]{4}$", Resolve(document, balanceProperties.GetProperty("inventoryValue")).GetProperty("pattern").GetString());
         var card = paths.GetProperty("/api/v1/inventory/stock-card").GetProperty("get");
         var cardParams = card.GetProperty("parameters").EnumerateArray().ToArray();
         Assert.Equal(6, cardParams.Length);
@@ -223,6 +240,13 @@ public sealed class Vps10OpenApiAndFeatureGateTests
         var resolved = Resolve(document, data);
         Assert.Equal("object", resolved.GetProperty("type").GetString());
         return resolved;
+    }
+
+    private static void AssertNullableString(JsonElement schema)
+    {
+        var type = schema.GetProperty("type");
+        Assert.Equal(JsonValueKind.Array, type.ValueKind);
+        Assert.Equal(new[] { "null", "string" }, type.EnumerateArray().Select(x => x.GetString()).OrderBy(x => x, StringComparer.Ordinal).ToArray());
     }
 
     private static JsonElement Resolve(JsonElement document, JsonElement schema)
