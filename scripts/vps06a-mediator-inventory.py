@@ -26,7 +26,11 @@ sources = sorted([
 sources = [p for p in sources if not any(name in {"bin", "obj"} for name in p.parts)
            and "MyDmsVn.Vps06A.MediatorCanary" not in p.parts
            and not p.name.startswith("Vps06b")
-           and p.name not in {"Vps06bInternals.cs", "GeneratedMediatorRegistration.cs"}]
+           and p.name not in {"Vps06bInternals.cs", "GeneratedMediatorRegistration.cs"}
+           # VPS-10.1 composition tests target only net10.0 / generated Mediator,
+           # not the frozen legacy MediatR path. Keep all legacy counts unchanged.
+           and p.relative_to(root).as_posix() !=
+           "tests/MyDmsVn.Server.AspNetCoreHost.Tests/Vps10HostCompositionTests.cs"]
 # Keep the 06A negative/frozen lexical inventory of the net48/legacy code
 # path. Conditional VPS-06B native source does not alter that original baseline.
 def legacy_slice(data: str) -> str:
