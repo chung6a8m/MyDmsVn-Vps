@@ -11,6 +11,11 @@ param(
 
     [string] $ConfirmInstanceId,
 
+    [string] $CandidateRoot,
+    [string] $CandidateSourceSha,
+    [string] $DesktopManifestSha256,
+    [string] $HostManifestSha256,
+
     [switch] $DryRun
 )
 
@@ -151,8 +156,32 @@ if ($DryRun -and $Action -ne 'Initialize') {
     Refuse 'LocalSimulation.DryRunUnsupported'
 }
 
+function Invoke-RuntimeAction {
+    param([scriptblock] $Operation)
+    try { return & $Operation }
+    catch {
+        $code = [string]$_.Exception.Message
+        if ($code -notmatch '^LocalSimulation\.[A-Za-z0-9.]+$') { $code = 'LocalSimulation.UnexpectedFailure' }
+        Refuse $code
+    }
+}
+
+$candidate = $null
+$candidateInputs = @($CandidateRoot, $CandidateSourceSha, $DesktopManifestSha256, $HostManifestSha256)
+$providedCandidateInputs = @($candidateInputs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+$candidateOptionNames = @('CandidateRoot', 'CandidateSourceSha', 'DesktopManifestSha256', 'HostManifestSha256')
+if (@($candidateOptionNames | Where-Object { $PSBoundParameters.ContainsKey($_) }).Count -gt 0) {
+    if ($Action -ne 'Initialize' -or $providedCandidateInputs.Count -ne $candidateInputs.Count) {
+        Refuse 'LocalSimulation.CandidateArgumentsInvalid'
+    }
+    Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
+    $candidate = Invoke-RuntimeAction {
+        Get-LocalSimulationCandidate $CandidateRoot $CandidateSourceSha $DesktopManifestSha256 $HostManifestSha256
+    }
+}
+
 if ($Action -eq 'Initialize' -and $DryRun) {
-    Write-Outcome -Value @{
+    $plan = @{
         action = 'Initialize'
         status = 'PLANNED'
         resources = [ordered]@{
@@ -163,17 +192,9 @@ if ($Action -eq 'Initialize' -and $DryRun) {
             kestrel = 'http://127.0.0.1:5080'
             sql = 'localhost,11433'
         }
-    } -ExitCode 0
-}
-
-function Invoke-RuntimeAction {
-    param([scriptblock] $Operation)
-    try { return & $Operation }
-    catch {
-        $code = [string]$_.Exception.Message
-        if ($code -notmatch '^LocalSimulation\.[A-Za-z0-9.]+$') { $code = 'LocalSimulation.UnexpectedFailure' }
-        Refuse $code
     }
+    if ($null -ne $candidate) { $plan.candidate = $candidate.identity }
+    Write-Outcome -Value $plan -ExitCode 0
 }
 
 if ($Action -eq 'Preflight') {
@@ -187,7 +208,12 @@ if ($Action -eq 'Preflight') {
     $bindingPath = Join-Path (Join-Path $env:LOCALAPPDATA 'MyDmsVn\LocalSimulation') 'binding.json'
     Add-Check 'LocalRegistrationAvailable' (-not (Test-Path -LiteralPath $bindingPath)) 'No prior local simulation binding may exist.'
 
+    $dockerSqlMemory = $false
     try {
+        $memoryOutput = @(& docker info --format '{{.MemTotal}}' 2>$null)
+        $memoryBytes = 0L
+        $dockerSqlMemory = $LASTEXITCODE -eq 0 -and $memoryOutput.Count -eq 1 -and
+            [long]::TryParse($memoryOutput[0], [ref]$memoryBytes) -and $memoryBytes -ge 2GB
         $dockerOutput = @(& docker version --format '{{.Server.Os}}' 2>$null)
         $dockerCode = $LASTEXITCODE
         $dockerOs = $(if ($dockerOutput.Count -gt 0) { [string]$dockerOutput[0] } else { '' })
@@ -209,6 +235,8 @@ if ($Action -eq 'Preflight') {
         Add-Check 'DockerDesktopLocalContext' $false 'The local Docker Desktop engine identity cannot be verified.'
         Add-Check 'DockerResourceNamesAvailable' $false 'Docker resource identity cannot be verified.'
     }
+
+    Add-Check 'DockerSqlMemory' $dockerSqlMemory 'The Docker Linux engine requires at least 2 GiB RAM to start SQL Server.'
 
     try {
         & wsl -d Ubuntu -- systemctl is-system-running --quiet 2>$null
@@ -265,7 +293,7 @@ if ($Action -eq 'Initialize') {
     catch { Refuse 'LocalSimulation.PreflightInvalid' }
     if ($preflightCode -ne 0 -or $preflight.status -ne 'READY') { Refuse 'LocalSimulation.PreflightBlocked' }
     Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
-    $result = Invoke-RuntimeAction { Initialize-MyDmsVnLocalSimulation -RepoRoot $repoRoot -StateRoot $resolvedStateRoot }
+    $result = Invoke-RuntimeAction { Initialize-MyDmsVnLocalSimulation -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Candidate $candidate }
     Write-Outcome -Value $result -ExitCode 0
 }
 

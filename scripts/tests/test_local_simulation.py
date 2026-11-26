@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import pathlib
@@ -174,6 +175,198 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertGreaterEqual(len(report["checks"]), 6)
         self.assertIn("DockerResourceNamesAvailable", {item["name"] for item in report["checks"]})
         self.assertFalse(self.state.exists())
+
+    @unittest.skipUnless(os.name == "nt", "Windows Docker preflight")
+    def test_preflight_blocks_when_docker_reports_less_than_two_gibibytes(self):
+        fake_bin = self.outside / "memory-probe"
+        fake_bin.mkdir()
+        self.process_env["PATH"] = str(fake_bin) + os.pathsep + self.process_env["PATH"]
+        for memory, expected in (("1008324608", False), ("2147483648", True), ("unavailable", False)):
+            with self.subTest(memory=memory):
+                (fake_bin / "docker.cmd").write_text(
+                    f"@echo off\nif \"%1\"==\"info\" (echo {memory}& exit /b 0)\nexit /b 1\n",
+                    encoding="utf-8",
+                )
+                report = json.loads(self.run_operator("Preflight").stdout)
+                by_name = {check["name"]: check["passed"] for check in report["checks"]}
+                self.assertIn("DockerSqlMemory", by_name)
+                self.assertEqual(expected, by_name["DockerSqlMemory"])
+                self.assertFalse(self.state.exists())
+
+    def candidate_fixture(self, source="b" * 40, extra_path=None):
+        candidate = self.outside / "candidate"
+        candidate.mkdir()
+        digests = []
+        for kind, filenames in (
+            ("desktop", ["MyDmsVn.Desktop.App.exe"]),
+            ("host", [
+                "MyDmsVn.Server.AspNetCoreHost.dll",
+                "MyDmsVn.Server.AspNetCoreHost.deps.json",
+                "MyDmsVn.Server.AspNetCoreHost.runtimeconfig.json",
+            ]),
+        ):
+            directory = candidate / kind
+            directory.mkdir()
+            files = {}
+            for name in filenames:
+                payload = name.encode("ascii")
+                (directory / name).write_bytes(payload)
+                files[name] = {"size": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
+            if kind == "desktop":
+                manifest = directory / "vps03-desktop-manifest.json"
+                document = {
+                    "sourceSha": source, "targetFramework": "net48", "platformTarget": "x86",
+                    "files": [{"path": name, "length": row["size"], "sha256": row["sha256"]}
+                              for name, row in files.items()],
+                }
+            else:
+                manifest = directory / "vps08-manifest.json"
+                if extra_path is not None:
+                    files[extra_path] = next(iter(files.values()))
+                document = {"source_sha": source, "format": "vps08-linux-v1", "files": files}
+            manifest.write_bytes(json.dumps(document).encode("ascii"))
+            digests.append(hashlib.sha256(manifest.read_bytes()).hexdigest())
+        return candidate, digests
+
+    def run_candidate_dry_run(self, candidate, digests, source="b" * 40):
+        return self.run_operator(
+            "Initialize", "-DryRun", "-CandidateRoot", str(candidate),
+            "-CandidateSourceSha", source, "-DesktopManifestSha256", digests[0],
+            "-HostManifestSha256", digests[1],
+        )
+
+    def test_initialize_dry_run_refuses_explicitly_empty_candidate_parameters(self):
+        result = self.run_operator(
+            "Initialize", "-DryRun", "-CandidateRoot", "",
+            "-CandidateSourceSha", "", "-DesktopManifestSha256", "", "-HostManifestSha256", "",
+        )
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        self.assertEqual("LocalSimulation.CandidateArgumentsInvalid", json.loads(result.stdout)["code"])
+        self.assertFalse(self.state.exists())
+
+    def test_initialize_dry_run_reports_manifest_bound_prebuilt_pair(self):
+        candidate, digests = self.candidate_fixture()
+        result = self.run_candidate_dry_run(candidate, digests)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual("PLANNED", report["status"])
+        self.assertEqual("b" * 40, report["candidate"]["sourceSha"])
+        self.assertEqual(digests[0], report["candidate"]["desktopManifestSha256"])
+        self.assertEqual(digests[1], report["candidate"]["hostManifestSha256"])
+        self.assertFalse(self.state.exists())
+        self.assertFalse(self.binding.exists())
+
+    def test_initialize_dry_run_refuses_wrong_source_or_manifest_hash(self):
+        candidate, digests = self.candidate_fixture()
+        for source, hashes in (("a" * 40, digests), ("b" * 40, ["0" * 64, digests[1]])):
+            with self.subTest(source=source, hashes=hashes):
+                result = self.run_candidate_dry_run(candidate, hashes, source)
+                self.assertEqual(2, result.returncode, result.stderr)
+                self.assertEqual("LocalSimulation.CandidateArtifactMismatch", json.loads(result.stdout)["code"])
+                self.assertFalse(self.state.exists())
+
+    def test_initialize_dry_run_refuses_extra_missing_or_modified_payload(self):
+        candidate, digests = self.candidate_fixture()
+        binary = candidate / "desktop" / "MyDmsVn.Desktop.App.exe"
+        additional = candidate / "host" / "unexpected.dll"
+        additional.write_bytes(b"unexpected")
+        result = self.run_candidate_dry_run(candidate, digests)
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertEqual("LocalSimulation.CandidateArtifactMismatch", json.loads(result.stdout)["code"])
+        additional.unlink()
+        binary.write_bytes(b"modified")
+        result = self.run_candidate_dry_run(candidate, digests)
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertEqual("LocalSimulation.CandidateArtifactMismatch", json.loads(result.stdout)["code"])
+        binary.unlink()
+        result = self.run_candidate_dry_run(candidate, digests)
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertEqual("LocalSimulation.CandidateArtifactMismatch", json.loads(result.stdout)["code"])
+        self.assertFalse(self.state.exists())
+
+    def test_initialize_dry_run_refuses_unsafe_manifest_path(self):
+        candidate, digests = self.candidate_fixture(extra_path="../keep.txt")
+        result = self.run_candidate_dry_run(candidate, digests)
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertEqual("LocalSimulation.CandidateArtifactMismatch", json.loads(result.stdout)["code"])
+        self.assertEqual("unrelated", (self.outside / "keep.txt").read_text(encoding="utf-8"))
+        self.assertFalse(self.state.exists())
+
+
+    def test_prebuilt_copy_returns_the_expected_host_manifest_hash(self):
+        candidate, digests = self.candidate_fixture()
+        host = candidate / "host"
+        rows = [f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}"
+                for path in sorted(host.iterdir(), key=lambda item: item.name)]
+        hash_expected = hashlib.sha256(("\n".join(rows) + "\n").encode("ascii")).hexdigest()
+        destination = self.outside / "staged"
+        destination.mkdir()
+        command = (
+            f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+            f"$pair = Get-LocalSimulationCandidate '{candidate}' '{'b' * 40}' '{digests[0]}' '{digests[1]}'; "
+            f"& (Get-Module LocalSimulation.Runtime) {{ param($candidate,$dest) "
+            "Copy-LocalSimulationCandidate $candidate $dest "
+            f"}} $pair '{destination}'"
+        )
+        result = subprocess.run(
+            [powershell(), "-NoProfile", "-Command", command], env=self.process_env,
+            text=True, capture_output=True,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(hash_expected, result.stdout.strip())
+        self.assertEqual(hash_expected, hashlib.sha256((destination / "host" / "artifact-manifest.txt").read_bytes()).hexdigest())
+        self.assertEqual(
+            (candidate / "desktop" / "MyDmsVn.Desktop.App.exe").read_bytes(),
+            (destination / "desktop" / "MyDmsVn.Desktop.App.exe").read_bytes(),
+        )
+
+    @unittest.skipUnless(os.name == "nt", "Windows junction verification")
+    def test_initialize_dry_run_refuses_candidate_reparse_ancestor(self):
+        candidate, digests = self.candidate_fixture()
+        junction = self.outside / "junction"
+        result = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(junction), str(candidate)],
+            text=True, capture_output=True,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        try:
+            result = self.run_candidate_dry_run(junction, digests)
+            self.assertEqual(2, result.returncode, result.stderr)
+            self.assertEqual("LocalSimulation.CandidateArtifactMismatch", json.loads(result.stdout)["code"])
+            self.assertFalse(self.state.exists())
+        finally:
+            junction.rmdir()
+
+    @unittest.skipUnless(os.name == "nt", "Windows junction verification")
+    def test_prebuilt_copy_refuses_destination_junction_before_touching_target(self):
+        candidate, digests = self.candidate_fixture()
+        destination = self.outside / "staged"
+        destination.mkdir()
+        unrelated = self.outside / "unrelated"
+        unrelated.mkdir()
+        junction = destination / "desktop"
+        created = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(junction), str(unrelated)],
+            text=True, capture_output=True,
+        )
+        self.assertEqual(0, created.returncode, created.stderr)
+        try:
+            command = (
+                "$ErrorActionPreference='Stop'; "
+                f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+                f"$pair = Get-LocalSimulationCandidate '{candidate}' '{'b' * 40}' '{digests[0]}' '{digests[1]}'; "
+                f"& (Get-Module LocalSimulation.Runtime) {{ param($candidate,$dest) "
+                "Copy-LocalSimulationCandidate $candidate $dest "
+                f"}} $pair '{destination}'"
+            )
+            result = subprocess.run(
+                [powershell(), "-NoProfile", "-Command", command], env=self.process_env,
+                text=True, capture_output=True,
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertEqual([], list(unrelated.iterdir()), result.stdout + result.stderr)
+        finally:
+            junction.rmdir()
 
     def test_initialize_dry_run_reports_exact_resources_without_mutation(self):
         result = self.run_operator("Initialize", "-DryRun")

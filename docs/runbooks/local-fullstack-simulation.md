@@ -6,7 +6,7 @@ This runbook operates a disposable MyDmsVn lab on one Windows workstation: SQL S
 
 ## Owned resources and prerequisites
 
-Run commands from the repository root in PowerShell 7 (`pwsh`). Preflight requires the local Docker Desktop `desktop-linux` named-pipe context with the Linux engine, WSL distribution `Ubuntu` with systemd and noninteractive sudo, .NET SDKs 8.0.428 and 10.0.404, the .NET Framework 4.8 targeting pack, ports 50443/5080/11433 free, and at least 15 GB free.
+Run commands from the repository root in PowerShell 7 (`pwsh`). Preflight requires the local Docker Desktop `desktop-linux` named-pipe context with the Linux engine and at least 2 GiB of Docker engine RAM, WSL distribution `Ubuntu` with systemd and noninteractive sudo, .NET SDKs 8.0.428 and 10.0.404, the .NET Framework 4.8 targeting pack, ports 50443/5080/11433 free, and at least 15 GB free.
 
 The default instance state root is `TestResults/local-simulation/active`. When using a custom `-StateRoot`, select a dedicated child directory **inside** `TestResults/local-simulation` (not the parent itself), pass the same `-StateRoot` to every action, and adjust the example artifact/receipt paths below. The commands shown use the default root.
 
@@ -30,6 +30,21 @@ The pinned SQL image is Developer edition. The pinned ASP.NET 10.0.11 Linux runt
 Initialization requires a clean Git source tree and an absent or empty state root. It publishes locked artifacts, creates verified TLS, creates and labels the Docker resources, makes a verified local backup of the empty synthetic database, migrates through the dedicated control principal to schema 13, provisions restricted runtime/oracle identities, seeds synthetic fixtures, installs the WSL service, and waits for HTTPS readiness. The backup remains in the same disposable Docker volume; it is a migration admission artifact, not off-host disaster recovery.
 
 The final JSON includes `instanceId`, status `READY`, and `desktopPath`. Do not edit the receipt or secret files.
+
+For a reviewed prebuilt pair, verify the archive digests and source identity against the publication receipts before extracting. Put the verified Desktop and Host payloads in separate `desktop` and `host` children of an absolute local candidate directory. Retain `vps03-desktop-manifest.json` and `vps08-manifest.json` alongside their respective payloads. Pass the reviewed source SHA and the verified SHA-256 of each manifest to both initialization commands.
+
+```powershell
+$pair = @{
+    CandidateRoot = $verifiedCandidateDirectory
+    CandidateSourceSha = $reviewedCandidateSha
+    DesktopManifestSha256 = $verifiedDesktopManifestHash
+    HostManifestSha256 = $verifiedHostManifestHash
+}
+.\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action Initialize -DryRun -OutputFormat Json @pair
+.\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action Initialize -OutputFormat Json @pair
+```
+
+Dry run checks the pair without provisioning. Initialize copies and rechecks the exact pair, publishes the SQL tooling from the clean checkout, and records the candidate separately from the tooling source in the bound receipt. Start and Verify still require the owning tooling checkout. Use the `desktopPath` returned by Initialize for the attended workflow.
 
 ## Operate and verify
 
