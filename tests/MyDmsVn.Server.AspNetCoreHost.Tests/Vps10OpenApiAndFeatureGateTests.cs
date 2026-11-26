@@ -57,6 +57,7 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             "/api/v1/catalog/warehouses/lookup",
             "/api/v1/catalog/warehouses/{id}",
             "/api/v1/catalog/warehouses/{id}/active",
+            "/api/v1/foundation/status",
             "/api/v1/goods-receipts",
             "/api/v1/goods-receipts/{receiptId}",
             "/api/v1/goods-receipts/{receiptId}/draft",
@@ -66,7 +67,14 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             "/api/v1/sales-receipts",
             "/api/v1/sales-receipts/{saleId}",
             "/api/v1/sales-receipts/{saleId}/draft",
-            "/api/v1/sales-receipts/{saleId}/post"
+            "/api/v1/sales-receipts/{saleId}/post",
+            "/api/v1/security/import/apply",
+            "/api/v1/security/import/preview",
+            "/api/v1/security/mutations",
+            "/api/v1/security/permissions/catalog",
+            "/api/v1/security/permissions/check",
+            "/api/v1/security/roles",
+            "/api/v1/security/users"
         }, paths.EnumerateObject().Select(p => p.Name).OrderBy(p => p, StringComparer.Ordinal).ToArray());
         foreach (var route in paths.EnumerateObject().Where(p => p.Name.StartsWith("/api/v1/catalog/", StringComparison.Ordinal) && p.Name.EndsWith("/lookup", StringComparison.Ordinal)))
         {
@@ -116,6 +124,47 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             {
                 Assert.True(mutation.TryGetProperty("requestBody", out _));
                 Assert.True(mutation.GetProperty("responses").TryGetProperty("409", out _));
+            }
+        }
+        foreach (var (path, fields) in new[]
+        {
+            ("/api/v1/security/mutations", new[] { "expectedRevision", "expectedRelatedRevision" }),
+            ("/api/v1/security/import/apply", new[] { "expectedTargetRevision" })
+        })
+        {
+            var postOperation = paths.GetProperty(path).GetProperty("post");
+            var request = Resolve(document, postOperation.GetProperty("requestBody").GetProperty("content")
+                .GetProperty("application/json").GetProperty("schema"));
+            var requestProperties = request.GetProperty("properties");
+            Assert.False(requestProperties.TryGetProperty("actorUserId", out _));
+            var required = request.GetProperty("required").EnumerateArray().Select(x => x.GetString()).ToArray();
+            if (path.EndsWith("/mutations", StringComparison.Ordinal))
+            {
+                foreach (var optional in new[] { "targetId", "relatedId" })
+                {
+                    Assert.DoesNotContain(optional, required);
+                    var optionalIdSchema = Resolve(document, requestProperties.GetProperty(optional));
+                    Assert.Equal("int32", optionalIdSchema.GetProperty("format").GetString());
+                    var idTypes = optionalIdSchema.GetProperty("type").EnumerateArray().Select(x => x.GetString()).ToArray();
+                    Assert.Contains("integer", idTypes);
+                    Assert.Contains("null", idTypes);
+                }
+            }
+            else
+            {
+                Assert.Contains("expectedTargetRevision", required);
+                Assert.Contains("targetId", required);
+            }
+            foreach (var field in fields)
+            {
+                var revision = Resolve(document, requestProperties.GetProperty(field));
+                Assert.Equal("int64", revision.GetProperty("format").GetString());
+                var type = revision.GetProperty("type");
+                var types = type.ValueKind == JsonValueKind.Array
+                    ? type.EnumerateArray().Select(x => x.GetString()).ToArray()
+                    : new[] { type.GetString() };
+                Assert.Contains("integer", types);
+                Assert.DoesNotContain("string", types);
             }
         }
         // WEB3 reads and receipt writes are native.

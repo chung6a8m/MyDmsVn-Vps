@@ -17,6 +17,7 @@ using MyDmsVn.Contracts;
 using MyDmsVn.Server.HttpHost.Features.Catalog;
 using MyDmsVn.Server.HttpHost.Features.Sales;
 using MyDmsVn.Server.HttpHost.Features.Inventory;
+using MyDmsVn.Server.HttpHost.Features.Security;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -30,6 +31,7 @@ internal static class NativeApiRegistration
                 options.InputFormatters.Insert(0, new V1MutationRequestFormatter());
                 options.ModelBinderProviders.Insert(0, new CatalogLookupQueryBinderProvider());
                 options.ModelBinderProviders.Insert(0, new CatalogCrudQueryBinderProvider());
+                options.ModelBinderProviders.Insert(0, new SecurityQueryBinderProvider());
                 options.ModelBinderProviders.Insert(0, new V1SalesReadBinderProvider());
                 options.ModelBinderProviders.Insert(0, new V1Web3ReadBinderProvider());
                 options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
@@ -91,6 +93,7 @@ internal static class NativeApiRegistration
                 V1Web3OpenApi.Describe(schema, context.JsonTypeInfo.Type, context.JsonPropertyInfo?.Name, context.ParameterDescription?.Name);
                 DescribeSalesResponse(schema, context.JsonTypeInfo.Type);
                 DescribeSalesRequest(schema, context.JsonTypeInfo.Type);
+                DescribeSecurityRequest(schema, context.JsonTypeInfo.Type);
                 // A URL segment is text. Avoid advertising a JSON integer that
                 // JavaScript clients could round before formatting the path.
                 if ((context.ParameterDescription?.Name is "saleId" or "receiptId") && context.JsonTypeInfo.Type == typeof(long))
@@ -121,11 +124,41 @@ internal static class NativeApiRegistration
                     "Stock card requires warehouseId/productId and accepts UTC Z instants only. " +
                     "Catalog CRUD requires DesktopApiEnabled and an active Bearer session; list defaults pageNumber=1, pageSize=50, includeInactive=false. " +
                     "CRUD IDs are canonical positive Int32 path segments; mutations accept strict JSON with per-entity allowlists and no query. " +
-                    "Catalog writes are not journalled; no automatic resend.";
+                    "Catalog writes are not journalled; no automatic resend. " +
+                    "Security and Foundation require DesktopApiEnabled and an active Bearer session; exact query names and strict JSON allowlists. " +
+                    "Security revisions are JSON integer/int64 tokens, never strings; the actor is taken only from the admitted session.";
                 return Task.CompletedTask;
             });
         });
         return services;
+    }
+
+    private static void DescribeSecurityRequest(OpenApiSchema schema, Type type)
+    {
+        string[]? required = type == typeof(SecurityMutationBody) ? new[] { "target", "operation" }
+            : type == typeof(PermissionImportPreviewBody) ? new[] { "targetType", "targetId", "json" }
+            : type == typeof(PermissionImportApplyBody) ? new[] { "targetType", "targetId", "json", "expectedTargetRevision", "expectedCatalogDigest" }
+            : null;
+        if (required == null || schema.Properties == null) return;
+        schema.Required = new HashSet<string>(required, StringComparer.Ordinal);
+        if (type == typeof(SecurityMutationBody))
+        {
+            // Legacy wire accepts omitted or explicit null optional IDs; only
+            // the Application command uses zero as the default sentinel.
+            foreach (var name in new[] { "targetId", "relatedId" })
+                if (schema.Properties.TryGetValue(name, out var id) && id is OpenApiSchema integer)
+                {
+                    integer.Type = JsonSchemaType.Integer | JsonSchemaType.Null;
+                    integer.Format = "int32";
+                }
+        }
+        foreach (var name in new[] { "expectedRevision", "expectedRelatedRevision", "expectedTargetRevision" })
+            if (schema.Properties.TryGetValue(name, out var value) && value is OpenApiSchema revision)
+            {
+                revision.Type = name == "expectedTargetRevision"
+                    ? JsonSchemaType.Integer : JsonSchemaType.Integer | JsonSchemaType.Null;
+                revision.Format = "int64";
+            }
     }
 
     // Input records use typed decimal/long values after binding; OpenAPI must
