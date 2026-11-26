@@ -1,4 +1,4 @@
-// Net10-only strict JSON DOM. The net48 linked sources retain their Json.NET
+// Historical VPS-05 test-only strict JSON DOM. The net48 sources retain their Json.NET
 // implementation. All nodes here are backed by System.Text.Json.Nodes.
 using System;
 using System.Collections;

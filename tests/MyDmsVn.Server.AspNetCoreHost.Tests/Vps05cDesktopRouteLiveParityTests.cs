@@ -863,8 +863,8 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             app.UseRouting();
             app.UseMiddleware<CoreApiAdmissionMiddleware>();
             app.Use((context, next) => NativeApiRegistration.AdmitDesktopFeatureAsync(context, next));
-            Net10RouteTable.Map(app);
-            Net10RouteTable.MapFallback(app);
+            NativeEndpointRoutes.Map(app);
+            NativeEndpointRoutes.MapFallback(app);
             await app.StartAsync();
 
             var address = app.Services.GetRequiredService<IServer>()

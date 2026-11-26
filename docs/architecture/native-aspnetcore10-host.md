@@ -18,12 +18,12 @@ Việc cho phép nâng cấp Desktop gỡ yêu cầu duy trì vô thời hạn b
 
 "Giữ v1" trong trao đổi thiết kế có nghĩa giữ business wire contract hiện tại. Phạm vi thực tế gồm **57 cặp verb/path**: 52 dưới `/api/v1`, 2 dưới `/api/v2`, 3 dưới `/api/v3`. Các route operation resolution/resend v2/v3 hiện hữu vẫn được giữ. Không suy diễn thành chỉ bảo toàn các route có prefix v1.
 
-## 2. Vấn đề đã đo từ source
+## 2. Vấn đề đã đo từ source baseline (lịch sử)
 
 - [Host project](../../src/MyDmsVn.Server.AspNetCoreHost/MyDmsVn.Server.AspNetCoreHost.csproj) source-link `Server.HttpHost/*.cs` dưới `Legacy`.
-- [CompatWebApi](../../src/MyDmsVn.Server.AspNetCoreHost/CompatWebApi.cs) định nghĩa façade `System.Web.Http`/OWIN và request service theo string key.
-- [Net10RouteTable](../../src/MyDmsVn.Server.AspNetCoreHost/Net10RouteTable.cs) chỉ chấp nhận action parameter `string`/`CancellationToken`, dispatch bằng reflection qua `HttpRequestMessage`/`HttpResponseMessage`.
-- [StrictWireJson](../../src/MyDmsVn.Server.HttpHost/StrictWireJson.cs), [WireDom](../../src/MyDmsVn.Server.AspNetCoreHost/WireDom.cs) và các `*WireInput` đọc/kiểm tra JSON nhiều lượt rồi dựng DTO.
+- `CompatWebApi.cs` (file tại baseline) định nghĩa façade `System.Web.Http`/OWIN và request service theo string key.
+- `Net10RouteTable.cs` (file tại baseline) chỉ chấp nhận action parameter `string`/`CancellationToken`, dispatch bằng reflection qua `HttpRequestMessage`/`HttpResponseMessage`.
+- [StrictWireJson](../../src/MyDmsVn.Server.HttpHost/StrictWireJson.cs), `WireDom.cs` (file tại baseline) và các `*WireInput` đọc/kiểm tra JSON nhiều lượt rồi dựng DTO.
 - [HttpDesktopWire](../../src/MyDmsVn.Desktop.Infrastructure.Http/HttpDesktopWire.cs) đã format invariant nhưng còn dựng DOM và normalize GoodsReceipt response bằng parse/rename/serialize.
 - [ReceiptNumericInput](../../src/MyDmsVn.Desktop.WinForms/ReceiptNumericInput.cs) đã nhận culture rõ ràng; không cần chuyển việc hiểu dấu thập phân của người dùng sang Server.
 
@@ -31,7 +31,7 @@ Việc cho phép nâng cấp Desktop gỡ yêu cầu duy trì vô thời hạn b
 
 ## 3. Tổ chức đích
 
-Các đường dẫn dưới đây là **target mới**, chưa phải các file đã tồn tại. Dùng project host hiện tại; chưa tạo thêm project hoặc generic framework.
+Các đường dẫn dưới đây mô tả tổ chức đích của VPS-10. Dùng project host hiện tại; chưa tạo thêm project hoặc generic framework.
 
 | Vị trí trong `src/MyDmsVn.Server.AspNetCoreHost/` | Trách nhiệm |
 | --- | --- |
@@ -122,3 +122,13 @@ VPS-10 có thể phát triển trên môi trường DEV/disposable hiện hữu 
 - [ASP.NET Core 10 error handling](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/error-handling?view=aspnetcore-10.0) và [OpenAPI](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/openapi/aspnetcore-openapi?view=aspnetcore-10.0).
 
 Các tham chiếu được dùng để thiết kế, không phải quyền tự nâng phiên bản package/SDK. Đối chiếu API với target net10 của repo khi thực hiện.
+
+## Handoff VPS-10.7 — Native-only production boundary
+
+- [NativeEndpointRoutes](../../src/MyDmsVn.Server.AspNetCoreHost/Composition/NativeEndpointRoutes.cs) maps MVC and the compatibility 404/405 HTTP responses. It never invokes controller actions itself. [EndpointInventory](../../src/MyDmsVn.Server.AspNetCoreHost/Composition/EndpointInventory.cs) reads actual endpoint metadata and checks it against the 57-row [NativeRouteContract](../../src/MyDmsVn.Server.AspNetCoreHost/Composition/NativeRouteContract.cs); the compiled inventory is independently checked against frozen route manifests.
+- Configuration, token validation/issuance, login admission, signed WEB6 receipts and trace audit helpers are owned by the native Host. Signed claim parsing uses System.Text.Json with strict UTF-8, bounded depth, unique members and explicit scalar checks; signature/identity/lifetime rules and signing-key purposes remain unchanged.
+- Admission errors outside MVC use the same typed error envelope and JSON profile as native endpoints. No request-message or response-message bridge, fake OWIN/Web API namespace, or legacy DOM is needed in production.
+- The separate net48 HttpHost and original frozen corpus remain unchanged. Historical STJ wire helpers are compiled only into the net10 test project as an oracle, not as an endpoint owner; production tests must exercise native handlers, not just the oracle.
+- CI rejects source links, retired production types, external evaluated Compile inputs and blocked runtime dependencies; checks both built and published .deps.json. Development OpenAPI checks every method/path and response schema, not merely distinct paths. The `--list-routes` diagnostic is SQL-free and preserves its existing JSON contract.
+
+See [VPS-10.7 evidence](../evidence/vps-10-7-bridge-removal.md) for source scope and outstanding validation. A source change or successful CI is not proof of a physical paired Desktop/Host upgrade.

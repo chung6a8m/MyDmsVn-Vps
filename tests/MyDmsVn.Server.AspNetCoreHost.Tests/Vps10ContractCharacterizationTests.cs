@@ -31,7 +31,7 @@ public sealed class Vps10ContractCharacterizationTests
         using var manifest = Read("vps-10-route-migration.json");
         using var old = Read("vps-01-route-inventory.json");
         using var added = Read("vps-02-route-additions.json");
-        using var actual = JsonDocument.Parse(Net10RouteTable.ToInventoryJson());
+        using var actual = JsonDocument.Parse(NativeEndpointRoutes.ToInventoryJson());
         var rows = manifest.RootElement.GetProperty("routes").EnumerateArray().ToArray();
         var frozen = old.RootElement.GetProperty("endpoints").EnumerateArray()
             .Concat(added.RootElement.GetProperty("endpoints").EnumerateArray()).ToArray();

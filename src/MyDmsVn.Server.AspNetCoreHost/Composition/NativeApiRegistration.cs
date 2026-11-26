@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -54,13 +53,10 @@ internal static class NativeApiRegistration
             })
             .ConfigureApplicationPartManager(manager =>
             {
-                // Legacy types ending in Controller would otherwise satisfy
-                // MVC naming conventions despite inheriting its shim ApiController.
+                // Explicitly select the Host assembly, including when built by
+                // SQL-free test factories. MVC discovers native controllers.
                 manager.ApplicationParts.Clear();
                 manager.ApplicationParts.Add(new AssemblyPart(typeof(Program).Assembly));
-                foreach (var provider in manager.FeatureProviders.OfType<ControllerFeatureProvider>().ToArray())
-                    manager.FeatureProviders.Remove(provider);
-                manager.FeatureProviders.Add(new NativeControllerFeatureProvider());
             });
         services.ConfigureHttpJsonOptions(options => V1HttpJson.Configure(options.SerializerOptions));
         services.AddOpenApi("v1-native", options =>
@@ -241,7 +237,7 @@ internal static class NativeApiRegistration
 
     internal static void MapNativeOpenApi(WebApplication app)
     {
-        // Diagnostic documentation only; never expose the partial document in Production.
+        // Diagnostic documentation only; never expose it in Production.
         if (app.Environment.IsDevelopment())
             app.MapOpenApi("/openapi/{documentName}.json");
     }
@@ -260,14 +256,9 @@ internal static class NativeApiRegistration
         await next().ConfigureAwait(false);
     }
 
-    private sealed class NativeControllerFeatureProvider : ControllerFeatureProvider
-    {
-        protected override bool IsController(TypeInfo typeInfo) =>
-            typeof(ControllerBase).IsAssignableFrom(typeInfo.AsType()) && base.IsController(typeInfo);
-    }
 }
 
-// Apply only to future additive Desktop API controllers/actions. Legacy
+// Apply only to additive Desktop API controllers/actions. Legacy
 // WEB2 lookup routes deliberately do not require this feature switch.
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, Inherited = true)]
 internal sealed class V1DesktopApiRequiredAttribute : Attribute { }

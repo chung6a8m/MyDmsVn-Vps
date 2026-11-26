@@ -94,6 +94,7 @@ jobs:
             -p:Vps04Server=true -p:Vps06bMediator=true -p:UseAppHost=false \
             -c Release -f net10.0 --no-restore -warnaserror -o "$GITHUB_WORKSPACE/vps08-publish"
           test -f "$GITHUB_WORKSPACE/vps08-publish/MyDmsVn.Server.AspNetCoreHost.dll"
+          python3 ../../scripts/verify-vps04b-runtime-boundary.py --artifact "$GITHUB_WORKSPACE/vps08-publish/MyDmsVn.Server.AspNetCoreHost.deps.json"
           python3 - <<'PY'
           from pathlib import Path
           deps=Path('../../vps08-publish/MyDmsVn.Server.AspNetCoreHost.deps.json').read_text()

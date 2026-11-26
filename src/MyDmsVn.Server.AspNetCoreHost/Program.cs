@@ -14,7 +14,7 @@ internal static class Program
     {
         if (args.Length == 1 && args[0] == "--list-routes")
         {
-            Console.WriteLine(Net10RouteTable.ToInventoryJson());
+            Console.WriteLine(NativeEndpointRoutes.ToInventoryJson());
             return;
         }
 
@@ -72,7 +72,7 @@ internal static class Program
             app.Use(async (context, next) =>
             {
                 // ASP.NET Core stores consumed values as X-Original-*; prevent them
-                // from entering legacy API controller request-header adapters.
+                // from entering the admitted HTTP boundary.
                 context.Request.Headers.Remove("X-Original-For");
                 context.Request.Headers.Remove("X-Original-Proto");
                 await next().ConfigureAwait(false);
@@ -83,8 +83,8 @@ internal static class Program
         app.UseRouting();
         app.UseMiddleware<CoreApiAdmissionMiddleware>();
         app.Use((context, next) => NativeApiRegistration.AdmitDesktopFeatureAsync(context, next));
-        Net10RouteTable.Map(app);
+        NativeEndpointRoutes.Map(app);
         NativeApiRegistration.MapNativeOpenApi(app);
-        Net10RouteTable.MapFallback(app);
+        NativeEndpointRoutes.MapFallback(app);
     }
 }

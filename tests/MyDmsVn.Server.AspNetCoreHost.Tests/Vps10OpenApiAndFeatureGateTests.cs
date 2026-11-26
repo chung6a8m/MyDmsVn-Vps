@@ -27,9 +27,9 @@ public sealed class Vps10OpenApiAndFeatureGateTests
         var builder = NewBuilder(environment);
         builder.Services.AddVps10NativeApi();
         await using var app = builder.Build();
-        Net10RouteTable.Map(app);
+        NativeEndpointRoutes.Map(app);
         NativeApiRegistration.MapNativeOpenApi(app);
-        Net10RouteTable.MapFallback(app);
+        NativeEndpointRoutes.MapFallback(app);
         await app.StartAsync();
         using var client = Client(app);
         using var response = await client.GetAsync("/openapi/v1-native.json");
@@ -39,6 +39,23 @@ public sealed class Vps10OpenApiAndFeatureGateTests
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var document = json.RootElement;
         var paths = document.GetProperty("paths");
+        // Path-only coverage misses missing PUT/POST operations on shared paths.
+        // The startup contract is also independently compared against frozen
+        // v1/v2/v3 manifests by verify-vps-04a.py.
+        var expectedOperations = NativeRouteContract.Routes
+            .Select(row => row.Verb.ToLowerInvariant() + " " + row.Path.Replace(":int}", "}"))
+            .OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var operations = paths.EnumerateObject()
+            .SelectMany(path => path.Value.EnumerateObject()
+                .Where(member => member.Name is "get" or "post" or "put" or "delete" or "patch" or "head" or "options" or "trace")
+                .Select(member => (Identity: member.Name + " " + path.Name, Operation: member.Value)))
+            .ToArray();
+        Assert.Equal(57, operations.Length);
+        Assert.Equal(expectedOperations, operations.Select(item => item.Identity)
+            .OrderBy(value => value, StringComparer.Ordinal).ToArray());
+        foreach (var item in operations)
+            Assert.Equal(JsonValueKind.Object, ResponseSchema(item.Operation.GetProperty("responses"), "200").ValueKind);
+
         Assert.Equal(new[]
         {
             "/api/v1/auth/capabilities",

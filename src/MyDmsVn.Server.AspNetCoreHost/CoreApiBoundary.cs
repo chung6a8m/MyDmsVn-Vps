@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
+using MyDmsVn.Contracts;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,10 +29,10 @@ internal static class CoreApiBoundary
         try
         {
             var options = context.RequestServices.GetRequiredService<WebHostOptions>();
-            using var guard = CheckTransport(context, options, correlation);
+            var guard = CheckTransport(context, options, correlation);
             if (guard != null)
             {
-                await Net10RouteTable.WriteAsync(context, guard).ConfigureAwait(false);
+                await NativeHttpErrors.WriteAsync(context, guard).ConfigureAwait(false);
                 return;
             }
 
@@ -69,8 +69,8 @@ internal static class CoreApiBoundary
                     .ConfigureAwait(false);
                 if (admitted == null)
                 {
-                    using var denied = Unauthorized(correlation);
-                    await Net10RouteTable.WriteAsync(context, denied).ConfigureAwait(false);
+                    context.Response.Headers["WWW-Authenticate"] = "Bearer";
+                    await NativeHttpErrors.WriteAsync(context, 401, "Auth.Unauthorized", "Authentication is required.", correlation).ConfigureAwait(false);
                     return;
                 }
                 actor = admitted.User;
@@ -83,10 +83,8 @@ internal static class CoreApiBoundary
                 var audit = context.RequestServices.GetRequiredService<ISecurityAuditReadiness>().Snapshot;
                 if (audit.Status == SecurityAuditReadinessStatus.Degraded)
                 {
-                    using var unavailable = HttpJson.Error(503,
-                        SecurityAuditReadinessSnapshot.PersistenceFailureReason,
-                        "Required security audit persistence is unavailable.", correlation);
-                    await Net10RouteTable.WriteAsync(context, unavailable).ConfigureAwait(false);
+                    await NativeHttpErrors.WriteAsync(context, 503, SecurityAuditReadinessSnapshot.PersistenceFailureReason,
+                        "Required security audit persistence is unavailable.", correlation).ConfigureAwait(false);
                     return;
                 }
             }
@@ -108,9 +106,8 @@ internal static class CoreApiBoundary
             context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("MyDmsVn.HttpAdmission")
                 .LogError("API request failed before response start. CorrelationId: {CorrelationId}", correlation);
             // SQL errors, key material, claims and tokens must not enter the error response.
-            using var failure = HttpJson.Error(500, "InternalError",
-                "An unexpected error occurred.", correlation);
-            await Net10RouteTable.WriteAsync(context, failure).ConfigureAwait(false);
+            await NativeHttpErrors.WriteAsync(context, 500, "InternalError",
+                "An unexpected error occurred.", correlation).ConfigureAwait(false);
         }
     }
 
@@ -121,14 +118,6 @@ internal static class CoreApiBoundary
         values?.Count == 1 && Regex.IsMatch(values[0], @"\A[A-Za-z0-9_-]{1,128}\z")
             ? values[0] : Guid.NewGuid().ToString("N");
 
-    private static HttpResponseMessage Unauthorized(string correlation)
-    {
-        var response = HttpJson.Error(401, "Auth.Unauthorized",
-            "Authentication is required.", correlation);
-        response.Headers.WwwAuthenticate.Add(new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer"));
-        return response;
-    }
-
     private static bool IsCookieEndpoint(string path)
     {
         var route = path.TrimEnd('/');
@@ -137,7 +126,7 @@ internal static class CoreApiBoundary
             route.Equals("/api/v1/auth/logout", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static HttpResponseMessage? CheckTransport(HttpContext context, WebHostOptions options, string correlation)
+    private static ApiError? CheckTransport(HttpContext context, WebHostOptions options, string correlation)
     {
         var request = context.Request;
         var originAuthority = new Uri(options.PublicOrigin).Authority;
@@ -145,8 +134,8 @@ internal static class CoreApiBoundary
             request.Headers.Keys.Any(key => key.Equals("Forwarded", StringComparison.OrdinalIgnoreCase) ||
                 key.StartsWith("X-Forwarded-", StringComparison.OrdinalIgnoreCase)))
         {
-            return HttpJson.Error(400, "Request.InvalidTransport",
-                "The request transport is invalid.", correlation);
+            return new ApiError((ApiStatusCode)400, "Request.InvalidTransport",
+                "The request transport is invalid.", correlationId: correlation);
         }
 
         var origins = HeaderValues(context, "Origin");
@@ -155,15 +144,15 @@ internal static class CoreApiBoundary
         if ((!safe && origins == null) ||
             origins != null && (origins.Count != 1 || origins[0] != options.PublicOrigin) ||
             !safe && sites != null && (sites.Count != 1 || sites[0] != "same-origin"))
-            return HttpJson.Error(403, "Auth.Forbidden", "Access is denied.",
-                correlation);
+            return new ApiError((ApiStatusCode)403, "Auth.Forbidden",
+                "Access is denied.", correlationId: correlation);
 
         if (HttpMethods.IsPost(request.Method) && IsCookieEndpoint(request.Path.Value ?? string.Empty))
         {
             var requested = HeaderValues(context, "X-Requested-With");
             if (requested == null || requested.Count != 1 || requested[0] != "XMLHttpRequest")
-                return HttpJson.Error(403, "Auth.Forbidden", "Access is denied.",
-                    correlation);
+                return new ApiError((ApiStatusCode)403, "Auth.Forbidden",
+                "Access is denied.", correlationId: correlation);
         }
         return null;
     }
@@ -209,9 +198,7 @@ internal static class CoreApiBoundary
 
     private static async Task TooLarge(HttpContext context, string correlation)
     {
-        using var response = HttpJson.Error(413, "Request.TooLarge",
-            "The request is too large.", correlation);
-        await Net10RouteTable.WriteAsync(context, response).ConfigureAwait(false);
+        await NativeHttpErrors.WriteAsync(context, 413, "Request.TooLarge", "The request is too large.", correlation).ConfigureAwait(false);
     }
 }
 

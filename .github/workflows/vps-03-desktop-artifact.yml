@@ -15,8 +15,17 @@ jobs:
     name: Windows net48 publish and dependency audit (not GUI/SQL E2E)
     runs-on: windows-2022
     timeout-minutes: 35
+    env:
+      VPS03_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.VPS03_SOURCE_SHA }}
+      - name: Require exact source HEAD for the paired Desktop artifact
+        shell: pwsh
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $actual -cne $env:VPS03_SOURCE_SHA) { throw 'VPS03.SourceShaMismatch' }
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.400'
@@ -40,7 +49,7 @@ jobs:
           $forbidden = '(?i)(^|[.])(SqlClient|MediatR|RepoDb|Dapper|linq2db)([.]|$)|(?i)mydmsvn[.]server|mydmsvn[.]desktop[.]infrastructure[.]local'
           $badDependencies = @($dependencies | Where-Object { $_ -match $forbidden })
           if ($badDependencies.Count -gt 0) { throw "VPS03.UnsafePackageGraph: $($badDependencies -join ',')" }
-          $files = @(Get-ChildItem -LiteralPath $root -Recurse -File)
+          $files = @(Get-ChildItem -LiteralPath $root -Recurse -File -Force)
           if ($files.Count -lt 3) { throw 'VPS03.PublishedPayloadEmpty' }
           $badFiles = @($files | Where-Object {
             $_.Name -match '(?i)^MyDmsVn[.]Server[.]' -or
@@ -58,3 +67,41 @@ jobs:
             }
           }
           Write-Host "PASS: $($dependencies.Count) lock graph entries, $($files.Count) published files; zero forbidden database/server/local runtime artifacts."
+      - name: Create and verify source-pinned x86 Desktop payload manifest
+        shell: pwsh
+        run: |
+          $root = "$env:RUNNER_TEMP\vps03-desktop"
+          $manifest = Join-Path $root 'vps03-desktop-manifest.json'
+          if (Test-Path -LiteralPath $manifest) { throw 'VPS03.ManifestAlreadyExists' }
+          $files = @(Get-ChildItem -LiteralPath $root -Recurse -File -Force)
+          $entries = @($files | ForEach-Object {
+            [ordered]@{
+              path = [System.IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/')
+              length = $_.Length
+              sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+          } | Sort-Object { $_.path } -CaseSensitive)
+          if ($entries.Count -ne $files.Count -or $entries.Count -lt 3) { throw 'VPS03.ManifestInventoryMismatch' }
+          [ordered]@{
+            sourceSha = $env:VPS03_SOURCE_SHA
+            targetFramework = 'net48'
+            platformTarget = 'x86'
+            files = $entries
+          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifest -Encoding utf8NoBOM
+          $receipt = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+          $payload = @(Get-ChildItem -LiteralPath $root -Recurse -File -Force | Where-Object { $_.FullName -ne $manifest })
+          if ($receipt.sourceSha -cne $env:VPS03_SOURCE_SHA -or @($receipt.files).Count -ne $payload.Count) { throw 'VPS03.ManifestReceiptMismatch' }
+          foreach ($entry in $receipt.files) {
+            $file = Get-Item -LiteralPath (Join-Path $root $entry.path) -ErrorAction Stop
+            if ($file.Length -ne $entry.length -or (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) {
+              throw 'VPS03.ManifestHashMismatch'
+            }
+          }
+          Write-Host "VPS03_ARTIFACT_VERIFY_PASS: source_sha=$env:VPS03_SOURCE_SHA; files=$($payload.Count); target=net48/x86"
+      - name: Preserve exact-source Desktop artifact for paired handoff (not physical acceptance)
+        uses: actions/upload-artifact@v4
+        with:
+          name: vps03-desktop-net48-x86-${{ env.VPS03_SOURCE_SHA }}
+          path: ${{ runner.temp }}/vps03-desktop/
+          if-no-files-found: error
+          include-hidden-files: true

@@ -22,6 +22,17 @@ internal static class V1OperationCanonicalizer
         _ => throw new V1BindingException()
     };
 
+    internal static WebOperationKind ParseKind(string value) => value switch
+    {
+        "Sales.Create" => WebOperationKind.SalesCreate,
+        "Sales.Update" => WebOperationKind.SalesUpdate,
+        "Sales.Post" => WebOperationKind.SalesPost,
+        "Receipt.Create" => WebOperationKind.ReceiptCreate,
+        "Receipt.Update" => WebOperationKind.ReceiptUpdate,
+        "Receipt.Post" => WebOperationKind.ReceiptPost,
+        _ => throw new V1BindingException()
+    };
+
     internal static string Canonicalize(WebOperationKind kind, long? targetId, JsonElement validatedSource)
     {
         var description = Describe(kind);
