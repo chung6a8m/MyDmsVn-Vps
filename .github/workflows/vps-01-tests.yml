@@ -93,6 +93,38 @@ jobs:
             throw "Discovered $($cases.Count) tests, below VPS-01 floor $env:MINIMUM_TESTS for $env:PROJECT"
           }
           Write-Host "Discovered test cases=$($cases.Count); minimum=$env:MINIMUM_TESTS (NOT an SQL/GUI execution PASS)"
+      - name: Execute VPS-10.3 Desktop numeric and date input regression
+        if: matrix.id == 'desktop'
+        shell: pwsh
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: |
+          $results = Join-Path $env:RUNNER_TEMP 'vps10-desktop-culture'
+          $filters = @{
+            'numeric' = 'FullyQualifiedName~ReceiptNumericInputTests'
+            'date' = 'FullyQualifiedName~DesktopDateInputIntegrationTests|FullyQualifiedName~DateInputCorrection_Goods_required_date_step_waits_for_admitted_save|FullyQualifiedName~Goods_required_date_native_characters_keep_model_until_enter|FullyQualifiedName~Required_date_keeps_raw_edit_through_state_and_blocks_save_post_and_back_until_valid|FullyQualifiedName~Required_date_error_clears_after_native_enter_then_successful_save|FullyQualifiedName~Goods_authoritative_date_change_cancels_old_pending_candidate'
+          }
+          foreach ($group in @('numeric', 'date')) {
+            dotnet test $env:PROJECT -c Release -f net48 --no-build --no-restore `
+              --filter $filters[$group] `
+              --logger "trx;LogFileName=vps10-$group.trx" --results-directory $results -v minimal
+            if ($LASTEXITCODE -ne 0) { throw "VPS-10.3 $group regression failed" }
+            [xml]$trx = Get-Content -LiteralPath (Join-Path $results "vps10-$group.trx") -Raw
+            $counts = $trx.TestRun.ResultSummary.Counters
+            if ([int]$counts.total -le 0 -or [int]$counts.executed -ne [int]$counts.total -or
+                [int]$counts.passed -ne [int]$counts.total -or [int]$counts.failed -ne 0 -or
+                [int]$counts.notExecuted -ne 0) {
+              throw "VPS-10.3 $group regression failed or not executed: $($counts.OuterXml)"
+            }
+            Write-Host "VPS-10.3 $group tests executed=$($counts.executed), passed=$($counts.passed); not attended physical GUI acceptance"
+          }
+      - name: Preserve VPS-10.3 Desktop culture TRX
+        if: always() && matrix.id == 'desktop'
+        uses: actions/upload-artifact@v6
+        with:
+          name: vps10-desktop-culture
+          path: ${{ runner.temp }}/vps10-desktop-culture/*.trx
+          if-no-files-found: warn
       - name: Execute SQL-free VPS-05C net48 permission-import JSON oracle
         if: matrix.id == 'sql-security'
         shell: pwsh

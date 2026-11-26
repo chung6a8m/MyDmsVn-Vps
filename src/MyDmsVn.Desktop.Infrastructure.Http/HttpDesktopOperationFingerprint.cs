@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
+using MyDmsVn.Desktop.Infrastructure.Http.Wire;
 
 namespace MyDmsVn.Desktop.Infrastructure.Http
 {
@@ -14,6 +15,13 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
     /// </summary>
     public static class HttpDesktopOperationFingerprint
     {
+        // The typed request and legacy DOM share exactly the existing canonicalizer.
+        public static string Compute(string kind, long? target, object source)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            return Compute(kind, target, V1WireMapper.CanonicalSource(source));
+        }
+
         public static string Compute(string kind, long? target, JObject source)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));

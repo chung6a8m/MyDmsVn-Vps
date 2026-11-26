@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using MyDmsVn.Contracts;
 using MyDmsVn.Contracts.Security;
 using MyDmsVn.Desktop.Application;
+using MyDmsVn.Desktop.Infrastructure.Http.Wire;
 
 namespace MyDmsVn.Desktop.Infrastructure.Http
 {
@@ -154,17 +155,17 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
         public Task<ApiResponse<SalesReceiptDto>> CreateDraftAsync(SaveSalesReceiptRequest request, CancellationToken token) =>
             _operations.SendAsync<SalesReceiptDto>("Sales.Create", null, HttpMethod.Post,
-                "/api/v1/sales-receipts", HttpDesktopWire.SalesSave(request), _expectedVersion, token);
+                "/api/v1/sales-receipts", V1WireMapper.SalesSave(request), _expectedVersion, token);
 
         public Task<ApiResponse<SalesReceiptDto>> UpdateDraftAsync(UpdateSalesReceiptDraftRequest request, CancellationToken token) =>
             _operations.SendAsync<SalesReceiptDto>("Sales.Update", request.SaleId, HttpMethod.Put,
                 "/api/v1/sales-receipts/" + Id(request.SaleId) + "/draft",
-                HttpDesktopWire.SalesUpdate(request), _expectedVersion, token);
+                V1WireMapper.SalesUpdate(request), _expectedVersion, token);
 
         public Task<ApiResponse<PostSalesReceiptResponse>> PostAsync(PostSalesReceiptRequest request, CancellationToken token) =>
             _operations.SendAsync<PostSalesReceiptResponse>("Sales.Post", request.SaleId, HttpMethod.Post,
                 "/api/v1/sales-receipts/" + Id(request.SaleId) + "/post",
-                HttpDesktopWire.ExpectedVersion(request.ExpectedVersion), _expectedVersion, token);
+                V1WireMapper.ExpectedVersion(request.ExpectedVersion), _expectedVersion, token);
 
         private static string Id(long id) => id.ToString(CultureInfo.InvariantCulture);
     }
@@ -178,17 +179,17 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
         public Task<ApiResponse<GoodsReceiptDto>> CreateDraftAsync(SaveGoodsReceiptRequest request, CancellationToken token) =>
             _operations.SendAsync<GoodsReceiptDto>("Receipt.Create", null, HttpMethod.Post,
-                "/api/v1/goods-receipts", HttpDesktopWire.ReceiptSave(request), null, token);
+                "/api/v1/goods-receipts", V1WireMapper.ReceiptSave(request), null, token);
 
         public Task<ApiResponse<GoodsReceiptDto>> UpdateDraftAsync(UpdateGoodsReceiptDraftRequest request, CancellationToken token) =>
             _operations.SendAsync<GoodsReceiptDto>("Receipt.Update", request.ReceiptId, HttpMethod.Put,
                 "/api/v1/goods-receipts/" + Id(request.ReceiptId) + "/draft",
-                HttpDesktopWire.ReceiptUpdate(request), null, token);
+                V1WireMapper.ReceiptUpdate(request), null, token);
 
         public Task<ApiResponse<PostGoodsReceiptResponse>> PostAsync(PostGoodsReceiptRequest request, CancellationToken token) =>
             _operations.SendAsync<PostGoodsReceiptResponse>("Receipt.Post", request.ReceiptId, HttpMethod.Post,
                 "/api/v1/goods-receipts/" + Id(request.ReceiptId) + "/post",
-                HttpDesktopWire.ExpectedVersion(request.ExpectedVersion), null, token);
+                V1WireMapper.ExpectedVersion(request.ExpectedVersion), null, token);
 
         public Task<ApiResponse<GoodsReceiptDto>> GetAsync(long id, CancellationToken token) =>
             _transport.SendAsync<GoodsReceiptDto>(HttpMethod.Get,

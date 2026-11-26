@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MyDmsVn.Contracts;
 using MyDmsVn.Desktop.Application;
 using MyDmsVn.Desktop.Infrastructure.Http;
+using MyDmsVn.Desktop.Infrastructure.Http.Wire;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -306,14 +308,218 @@ namespace MyDmsVn.Desktop.Session.Tests
         }
 
         [Fact]
-        public void Receipt_wire_rename_never_changes_a_calendar_date_or_bigint_string()
+        public void Receipt_wire_mapping_never_changes_a_calendar_date_or_bigint_string()
         {
-            var original = "{\"data\":{\"receiptId\":\"9007199254740993\",\"receiptDate\":\"2024-02-29\",\"lines\":[{\"receiptLineId\":\"9007199254740994\"}]}}";
-            var normalized = HttpDesktopWire.NormalizeResponse<GoodsReceiptDto>(original);
-            Assert.Contains("\"receiptDate\":\"2024-02-29\"", normalized);
-            Assert.Contains("\"id\":\"9007199254740993\"", normalized);
-            Assert.Contains("\"id\":\"9007199254740994\"", normalized);
-            Assert.DoesNotContain("receiptLineId", normalized);
+            var original = "{\"data\":{\"receiptId\":\"9007199254740993\",\"receiptDate\":\"2024-02-29\",\"receiptNumber\":\"GR1\",\"status\":\"Draft\",\"version\":\"AAAAAAAAAAE=\",\"lines\":[{\"receiptLineId\":\"9007199254740994\",\"quantity\":\"1.2500\",\"unitCost\":\"2.0000\"}]}}";
+            var response = V1WireMapper.DecodeResponse<GoodsReceiptDto>(original, ApiStatusCode.Ok, true);
+            Assert.True(response.IsSuccess);
+            Assert.Equal(9007199254740993L, response.Data!.Id);
+            Assert.Equal(9007199254740994L, Assert.Single(response.Data.Lines).Id);
+            Assert.Equal(new DateTime(2024, 2, 29), response.Data.ReceiptDate);
+            Assert.Equal(DateTimeKind.Unspecified, response.Data.ReceiptDate.Kind);
+        }
+
+        [Theory]
+        [InlineData(HttpDesktopOperationMode.LegacyWeb11, "sales-create")]
+        [InlineData(HttpDesktopOperationMode.LegacyWeb11, "sales-update")]
+        [InlineData(HttpDesktopOperationMode.LegacyWeb11, "sales-post")]
+        [InlineData(HttpDesktopOperationMode.LegacyWeb11, "receipt-create")]
+        [InlineData(HttpDesktopOperationMode.LegacyWeb11, "receipt-update")]
+        [InlineData(HttpDesktopOperationMode.LegacyWeb11, "receipt-post")]
+        [InlineData(HttpDesktopOperationMode.Web4, "sales-create")]
+        [InlineData(HttpDesktopOperationMode.Web4, "sales-update")]
+        [InlineData(HttpDesktopOperationMode.Web4, "sales-post")]
+        [InlineData(HttpDesktopOperationMode.Web4, "receipt-create")]
+        [InlineData(HttpDesktopOperationMode.Web4, "receipt-update")]
+        [InlineData(HttpDesktopOperationMode.Web4, "receipt-post")]
+        [InlineData(HttpDesktopOperationMode.Web5, "sales-create")]
+        [InlineData(HttpDesktopOperationMode.Web5, "sales-update")]
+        [InlineData(HttpDesktopOperationMode.Web5, "sales-post")]
+        [InlineData(HttpDesktopOperationMode.Web5, "receipt-create")]
+        [InlineData(HttpDesktopOperationMode.Web5, "receipt-update")]
+        [InlineData(HttpDesktopOperationMode.Web5, "receipt-post")]
+        public async Task Typed_feature_dispatch_matches_frozen_bytes_and_persisted_intent(
+            HttpDesktopOperationMode mode, string vectorName)
+        {
+            // Expected bytes/hash come from the independent frozen corpus, never from the production mapper.
+            var corpus = HttpDesktopWire.ParseObjectPreservingDates(
+                Vps10TypedWireTests.Read("web4-v1/fingerprint-vectors.json"));
+            var vector = corpus["vectors"]!.Single(item => (string?)item["name"] == vectorName);
+            var intent = (JObject)vector["intent"]!;
+            var expectedBody = intent["body"]!.ToString(Newtonsoft.Json.Formatting.None);
+            var kind = (string)intent["operationKind"]!;
+            var targetText = (string?)intent["requestTargetId"];
+            long? target = targetText == null ? (long?)null : long.Parse(targetText, CultureInfo.InvariantCulture);
+            var method = (string)intent["method"]!;
+            var route = ((string)intent["routeScope"]!)
+                .Replace("{saleId}", targetText ?? "")
+                .Replace("{receiptId}", targetText ?? "");
+            const string epoch = "11111111-2222-4333-8444-555555555555";
+            var protocol = mode == HttpDesktopOperationMode.Web5 ? "web5" :
+                mode == HttpDesktopOperationMode.Web4 ? "web4" : "legacy";
+            string expectedFingerprint;
+            if (protocol == "legacy")
+            {
+                using (var sha = SHA256.Create())
+                    expectedFingerprint = BitConverter.ToString(sha.ComputeHash(
+                        Encoding.UTF8.GetBytes(method + "\n" + route + "\n" + expectedBody)))
+                        .Replace("-", "").ToLowerInvariant();
+            }
+            else
+                expectedFingerprint = (string)vector["sha256"]!;
+
+            var store = new TestPendingWriteStore();
+            var writes = 0;
+            var contexts = 0;
+            using (var fixture = Create(request =>
+            {
+                if (request.RequestUri!.AbsolutePath == "/api/v1/auth/login")
+                    return Json(HttpStatusCode.OK, LoginJson);
+                if (request.RequestUri.AbsolutePath.EndsWith("/operations/context", StringComparison.Ordinal))
+                {
+                    contexts++;
+                    Assert.NotEqual("legacy", protocol);
+                    Assert.Equal(protocol == "web5" ? "/api/v2/operations/context" : "/api/v1/operations/context",
+                        request.RequestUri.AbsolutePath);
+                    Assert.Equal(HttpMethod.Get, request.Method);
+                    Assert.Null(store.Load());
+                    return Json(HttpStatusCode.OK, "{\"data\":{\"deploymentEpoch\":\"" + epoch +
+                        "\",\"actorUserId\":7,\"contractVersion\":\"" +
+                        (protocol == "web5" ? "web5-resolution-v1" : "web4-v1") +
+                        "\",\"sameKeyResendEnabled\":false}}");
+                }
+
+                writes++;
+                Assert.Equal(route, request.RequestUri.AbsolutePath);
+                Assert.Equal(method, request.Method.Method);
+                Assert.Equal(expectedBody, request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+                Assert.Equal("application/json", request.Content.Headers.ContentType!.MediaType);
+                Assert.Equal("example.jwt.value", request.Headers.Authorization!.Parameter);
+                var pending = store.Load();
+                Assert.NotNull(pending);
+                pending!.Validate();
+                Assert.Equal(kind, pending.Kind);
+                Assert.Equal(7, pending.ActorUserId);
+                Assert.Equal(route, pending.Route);
+                Assert.Equal(method, pending.Method);
+                Assert.Equal(protocol, pending.Protocol);
+                Assert.Equal(target, pending.TargetId);
+                Assert.Equal(expectedFingerprint, pending.Fingerprint);
+                if (protocol == "legacy")
+                {
+                    Assert.Null(pending.DeploymentEpoch);
+                    Assert.False(request.Headers.Contains("Idempotency-Key"));
+                    Assert.False(request.Headers.Contains("X-MyDmsVn-Deployment-Epoch"));
+                }
+                else
+                {
+                    Assert.Equal(epoch, pending.DeploymentEpoch);
+                    Assert.Equal(pending.OperationId, request.Headers.GetValues("Idempotency-Key").Single());
+                    Assert.Equal(epoch, request.Headers.GetValues("X-MyDmsVn-Deployment-Epoch").Single());
+                }
+
+                var family = vectorName.StartsWith("sales-", StringComparison.Ordinal) ? "web2-v1/" : "web3-v1/";
+                return Json(vectorName.EndsWith("-create", StringComparison.Ordinal) ? HttpStatusCode.Created : HttpStatusCode.OK,
+                    Vps10TypedWireTests.Read(family + vectorName + "-response.json"));
+            }))
+            {
+                Assert.True((await fixture.Transport.LoginAsync(
+                    new LoginRequest("operator", "secret"), CancellationToken.None)).IsSuccess);
+                var operations = new HttpDesktopOperations(fixture.Transport, fixture.Session,
+                    new HttpDesktopOperationSettings(mode), store);
+                var sales = new HttpSalesReceiptApiClient(fixture.Transport, operations);
+                var receipt = new HttpGoodsReceiptApiClient(fixture.Transport, operations);
+                var date = new DateTime(2024, 2, 29);
+                var saleCreateLines = new[]
+                {
+                    new SaveSalesReceiptLineRequest(0, 104, 1.2500m, 2.0000m, false),
+                    new SaveSalesReceiptLineRequest(0, 104, 0.0001m, 0.5000m, false),
+                    new SaveSalesReceiptLineRequest(0, 104, 2.0000m, 3.0000m, true),
+                };
+                var saleUpdateLines = new[]
+                {
+                    new SaveSalesReceiptLineRequest(9007199254740993L, 104, 1.2500m, 2.0000m, false),
+                    new SaveSalesReceiptLineRequest(9007199254740994L, 104, 0.0001m, 0.5000m, false),
+                    new SaveSalesReceiptLineRequest(long.MaxValue, 104, 2.0000m, 3.0000m, true),
+                };
+                switch (vectorName)
+                {
+                    case "sales-create":
+                    {
+                        var result = await sales.CreateDraftAsync(new SaveSalesReceiptRequest(date, 101, 102, 103,
+                            "Phiếu thử — hàng tặng và dòng trùng sản phẩm", saleCreateLines), CancellationToken.None);
+                        Assert.True(result.IsSuccess);
+                        Assert.Equal(long.MaxValue, result.Data!.SaleId);
+                        Assert.Equal(2.5001m, result.Data.TotalAmount);
+                        Assert.Equal("Draft", result.Data.Status);
+                        break;
+                    }
+                    case "sales-update":
+                    {
+                        var result = await sales.UpdateDraftAsync(new UpdateSalesReceiptDraftRequest(long.MaxValue,
+                            "AAAAAAAAAAE=", date, 101, 102, 103, "Đã cập nhật", saleUpdateLines), CancellationToken.None);
+                        Assert.True(result.IsSuccess);
+                        Assert.Equal(long.MaxValue, result.Data!.SaleId);
+                        Assert.Equal(long.MaxValue, result.Data.Lines[2].SaleLineId);
+                        Assert.Equal("AAAAAAAAAAI=", result.Data.Version);
+                        break;
+                    }
+                    case "sales-post":
+                    {
+                        var result = await sales.PostAsync(new PostSalesReceiptRequest(long.MaxValue, "AAAAAAAAAAI="),
+                            CancellationToken.None);
+                        Assert.True(result.IsSuccess);
+                        Assert.Equal(long.MaxValue, result.Data!.SaleId);
+                        Assert.Equal("Posted", result.Data.Status);
+                        Assert.Equal("AAAAAAAAAAM=", result.Data.Version);
+                        Assert.Equal(DateTimeKind.Utc, result.Data.PostedAtUtc.Kind);
+                        break;
+                    }
+                    case "receipt-create":
+                    {
+                        var result = await receipt.CreateDraftAsync(new SaveGoodsReceiptRequest(date, 1, 2, null,
+                            new[] { new SaveGoodsReceiptLineRequest(7, 1.2500m, 12.3456m),
+                                new SaveGoodsReceiptLineRequest(8, 2.0000m, 0.0000m) }), CancellationToken.None);
+                        Assert.True(result.IsSuccess);
+                        Assert.Equal(9007199254740993L, result.Data!.Id);
+                        Assert.Equal(9007199254740994L, result.Data.Lines[0].Id);
+                        Assert.Equal(12.3456m, result.Data.Lines[0].UnitCost);
+                        Assert.Null(result.Data.Note);
+                        break;
+                    }
+                    case "receipt-update":
+                    {
+                        var result = await receipt.UpdateDraftAsync(new UpdateGoodsReceiptDraftRequest(9007199254740993L,
+                            "AAAAAAAAAAE=", date, 1, 2, "Nhập hàng — đã kiểm đếm",
+                            new[] { new SaveGoodsReceiptLineRequest(8, 3.0000m, 0.0000m),
+                                new SaveGoodsReceiptLineRequest(7, 1.5000m, 12.3456m) }), CancellationToken.None);
+                        Assert.True(result.IsSuccess);
+                        Assert.Equal(9007199254740993L, result.Data!.Id);
+                        Assert.Equal(9007199254740996L, result.Data.Lines[0].Id);
+                        Assert.Equal("AAAAAAAAAAI=", result.Data.Version);
+                        break;
+                    }
+                    case "receipt-post":
+                    {
+                        var result = await receipt.PostAsync(new PostGoodsReceiptRequest(9007199254740993L, "AAAAAAAAAAI="),
+                            CancellationToken.None);
+                        Assert.True(result.IsSuccess);
+                        Assert.Equal(9007199254740993L, result.Data!.ReceiptId);
+                        Assert.Equal("Posted", result.Data.Status);
+                        Assert.Equal(new DateTime(2026, 11, 1, 2, 3, 4, DateTimeKind.Utc).AddTicks(1234567),
+                            result.Data.PostedAtUtc);
+                        Assert.Equal(DateTimeKind.Utc, result.Data.PostedAtUtc.Kind);
+                        break;
+                    }
+                    default:
+                        throw new InvalidOperationException("Unknown frozen vector.");
+                }
+
+                Assert.Equal(1, writes);
+                Assert.Equal(protocol == "legacy" ? 0 : 1, contexts);
+                Assert.Null(store.Load());
+                Assert.Null(operations.PendingOperationId);
+            }
         }
 
         private static Fixture Create(Func<HttpRequestMessage, HttpResponseMessage> handler) =>

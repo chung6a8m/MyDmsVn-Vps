@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MyDmsVn.Contracts;
 using MyDmsVn.Desktop.Application;
+using MyDmsVn.Desktop.Infrastructure.Http.Wire;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -56,7 +57,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
         public async Task<ApiResponse<T>> SendAsync<T>(
             string kind, long? target, HttpMethod method, string route,
-            JObject body, long? expectedVersion, CancellationToken cancellationToken)
+            object body, long? expectedVersion, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -185,8 +186,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 ApiResponse<T> decoded;
                 try
                 {
-                    var raw = HttpDesktopWire.NormalizeResponse<T>(outcome.ToString(Formatting.None));
-                    decoded = ApiJson.DeserializeResponse<T>(raw, ApiStatusCode.Ok);
+                    decoded = V1WireMapper.DecodeResponse<T>(outcome, ApiStatusCode.Ok);
                     if (!decoded.IsSuccess || !ValidResultId(record, outcome))
                         return Unknown<T>(record);
                 }
@@ -360,7 +360,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         private static string RequestFingerprint(HttpMethod method, string route, object body)
         {
             var value = method.Method + "\n" + route + "\n" +
-                JsonConvert.SerializeObject(body, ApiJson.CreateSerializerSettings());
+                V1WireMapper.SerializeRequest(body);
             using (var hash = SHA256.Create())
                 return BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(value)))
                     .Replace("-", "").ToLowerInvariant();
