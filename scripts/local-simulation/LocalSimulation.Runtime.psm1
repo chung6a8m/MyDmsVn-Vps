@@ -113,6 +113,11 @@ function New-ArtifactManifest {
 
 function Assert-ArtifactManifest {
     param([string] $Root, [string] $ExpectedHash)
+    $directory = Get-Item -LiteralPath $Root -Force -ErrorAction SilentlyContinue
+    if ($null -eq $directory -or -not $directory.PSIsContainer -or ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw [InvalidOperationException]::new('LocalSimulation.ArtifactIdentityMismatch')
+    }
+    $Root = $directory.FullName
     $manifest = Join-Path $Root 'artifact-manifest.txt'
     if (-not (Test-Path -LiteralPath $manifest -PathType Leaf) -or [bool]((Get-Item -LiteralPath $manifest -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactManifestMismatch') }
     if ((Get-FileSha256 $manifest) -ne $ExpectedHash) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactManifestMismatch') }

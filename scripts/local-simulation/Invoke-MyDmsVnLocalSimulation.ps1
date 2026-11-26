@@ -238,6 +238,7 @@ if ($Action -eq 'Preflight') {
 
     Add-Check 'DockerSqlMemory' $dockerSqlMemory 'The Docker Linux engine requires at least 2 GiB RAM to start SQL Server.'
 
+    $systemdReady = $false
     try {
         & wsl -d Ubuntu -- systemctl is-system-running --quiet 2>$null
         $systemdReady = $LASTEXITCODE -eq 0
@@ -246,6 +247,20 @@ if ($Action -eq 'Preflight') {
         Add-Check 'WslUbuntuSystemdSudo' ($systemdReady -and $sudoReady) 'Ubuntu must run systemd and allow noninteractive sudo.'
     }
     catch { Add-Check 'WslUbuntuSystemdSudo' $false 'Ubuntu/systemd/passwordless sudo is unavailable.' }
+
+    $wslLoopback = $false
+    if ($systemdReady) {
+        $probe = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+        try {
+            $probe.Start()
+            $probePort = ([Net.IPEndPoint]$probe.LocalEndpoint).Port
+            & wsl -d Ubuntu --exec timeout 5 bash -c 'echo >/dev/tcp/127.0.0.1/$1' _ $probePort 2>$null
+            $wslLoopback = $LASTEXITCODE -eq 0 -and $probe.Pending()
+        }
+        catch { $wslLoopback = $false }
+        finally { $probe.Stop() }
+    }
+    Add-Check 'WslWindowsLoopback' $wslLoopback 'Ubuntu must reach Windows IPv4 loopback, where Docker publishes the isolated SQL port.'
 
     try {
         $sdks = (& dotnet --list-sdks 2>$null) -join "`n"

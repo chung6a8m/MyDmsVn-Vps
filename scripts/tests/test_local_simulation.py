@@ -1,3 +1,4 @@
+import ctypes
 import hashlib
 import json
 import os
@@ -193,6 +194,25 @@ class LocalSimulationOperatorTests(unittest.TestCase):
                 self.assertEqual(expected, by_name["DockerSqlMemory"])
                 self.assertFalse(self.state.exists())
 
+    @unittest.skipUnless(os.name == "nt", "Windows-to-WSL loopback check")
+    def test_preflight_blocks_when_ubuntu_cannot_reach_windows_loopback(self):
+        fake_bin = self.outside / "loopback-probe"
+        fake_bin.mkdir()
+        (fake_bin / "wsl.cmd").write_text(
+            '@echo off\nif "%4"=="systemctl" exit /b 0\n'
+            'if "%4"=="sudo" exit /b 0\nexit /b 1\n',
+            encoding="utf-8",
+        )
+        self.process_env["PATH"] = str(fake_bin) + os.pathsep + self.process_env["PATH"]
+        result = self.run_operator("Preflight")
+        report = json.loads(result.stdout)
+        by_name = {check["name"]: check["passed"] for check in report["checks"]}
+        self.assertTrue(by_name["WslUbuntuSystemdSudo"])
+        self.assertIn("WslWindowsLoopback", by_name)
+        self.assertFalse(by_name["WslWindowsLoopback"])
+        self.assertEqual("BLOCKED", report["status"])
+        self.assertFalse(self.state.exists())
+
     def candidate_fixture(self, source="b" * 40, extra_path=None):
         candidate = self.outside / "candidate"
         candidate.mkdir()
@@ -301,12 +321,19 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         hash_expected = hashlib.sha256(("\n".join(rows) + "\n").encode("ascii")).hexdigest()
         destination = self.outside / "staged"
         destination.mkdir()
+        destination_arg = str(destination)
+        if os.name == "nt":
+            # Hosted Windows runners can expose TEMP using an 8.3 alias.
+            buffer = ctypes.create_unicode_buffer(32768)
+            length = ctypes.windll.kernel32.GetShortPathNameW(str(destination), buffer, len(buffer))
+            if 0 < length < len(buffer):
+                destination_arg = buffer.value
         command = (
             f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
             f"$pair = Get-LocalSimulationCandidate '{candidate}' '{'b' * 40}' '{digests[0]}' '{digests[1]}'; "
             f"& (Get-Module LocalSimulation.Runtime) {{ param($candidate,$dest) "
             "Copy-LocalSimulationCandidate $candidate $dest "
-            f"}} $pair '{destination}'"
+            f"}} $pair '{destination_arg}'"
         )
         result = subprocess.run(
             [powershell(), "-NoProfile", "-Command", command], env=self.process_env,

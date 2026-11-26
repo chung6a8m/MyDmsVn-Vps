@@ -6,7 +6,7 @@ This runbook operates a disposable MyDmsVn lab on one Windows workstation: SQL S
 
 ## Owned resources and prerequisites
 
-Run commands from the repository root in PowerShell 7 (`pwsh`). Preflight requires the local Docker Desktop `desktop-linux` named-pipe context with the Linux engine and at least 2 GiB of Docker engine RAM, WSL distribution `Ubuntu` with systemd and noninteractive sudo, .NET SDKs 8.0.428 and 10.0.404, the .NET Framework 4.8 targeting pack, ports 50443/5080/11433 free, and at least 15 GB free.
+Run commands from the repository root in PowerShell 7 (`pwsh`). Preflight requires the local Docker Desktop `desktop-linux` named-pipe context with the Linux engine and at least 2 GiB of Docker engine RAM, WSL distribution `Ubuntu` with systemd and noninteractive sudo, .NET SDKs 8.0.428 and 10.0.404, the .NET Framework 4.8 targeting pack, ports 50443/5080/11433 free, and at least 15 GB free. Ubuntu must be able to reach Windows IPv4 loopback for the Docker-published SQL port. On Windows 11 with WSL NAT, use mirrored networking in the workstation WSL settings and restart WSL before running Preflight again.
 
 The default instance state root is `TestResults/local-simulation/active`. When using a custom `-StateRoot`, select a dedicated child directory **inside** `TestResults/local-simulation` (not the parent itself), pass the same `-StateRoot` to every action, and adjust the example artifact/receipt paths below. The commands shown use the default root.
 
