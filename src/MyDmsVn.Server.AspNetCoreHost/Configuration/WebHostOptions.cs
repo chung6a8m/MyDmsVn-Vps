@@ -106,8 +106,7 @@ public sealed class WebHostOptions
     }
     public static WebHostOptions FromEnvironment() => Read(Environment.GetEnvironmentVariable);
 
-    // Share the exact parser with the net10 composition root; the legacy host
-    // continues to read only the process environment.
+    // Native-owned configuration parser. Keep the existing environment contract.
     internal static WebHostOptions Read(Func<string, string?> readSetting)
     {
         try

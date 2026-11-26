@@ -97,8 +97,13 @@ jobs:
         run: |
           dotnet restore MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -p:Vps06bMediator=true --locked-mode -v minimal
           dotnet build MyDmsVn.Server.AspNetCoreHost.csproj -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-restore -warnaserror -v minimal
-      - name: VPS-04B enforce Linux runtime dependency boundary
-        run: python3 scripts/verify-vps04b-runtime-boundary.py
+      - name: VPS-04B/VPS-10.7 enforce evaluated native source and Linux runtime boundary
+        run: |
+          python3 -m unittest discover -s scripts/tests -p test_vps10_bridge_boundary.py -v
+          cd src/MyDmsVn.Server.AspNetCoreHost
+          dotnet msbuild MyDmsVn.Server.AspNetCoreHost.csproj -nologo -p:Vps04Server=true -p:Vps06bMediator=true -p:Configuration=Release -p:TargetFramework=net10.0 -getItem:Compile > "$GITHUB_WORKSPACE/vps10-compile-inputs.json"
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/verify-vps04b-runtime-boundary.py --compile-inputs vps10-compile-inputs.json
       - name: Restore and execute net10 Server.Application xUnit v3 regressions
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
@@ -435,6 +440,25 @@ jobs:
           counts = {k: int(v) for k, v in counters.attrib.items() if k in ('total','executed','passed','failed','notExecuted')}
           assert counts == {'total':52,'executed':52,'passed':52,'failed':0,'notExecuted':0}, counts
           print(f'PASS VPS-10.6D Operations: {counts}')
+          PY
+      - name: Require VPS-10.7 bridge removal (11 cases)
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-build --no-restore -v minimal \
+            --filter FullyQualifiedName~Vps10BridgeRemovalTests \
+            --logger "trx;LogFileName=vps10-bridge-removal.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          path = Path(os.environ['GITHUB_WORKSPACE'])/'vps04a-trx/vps10-bridge-removal.trx'
+          counters = ET.parse(path).getroot().find('./t:ResultSummary/t:Counters', ns)
+          assert counters is not None, 'Missing VPS-10.7 TRX counters'
+          counts = {k: int(v) for k, v in counters.attrib.items() if k in ('total','executed','passed','failed','notExecuted')}
+          assert counts == {'total':11,'executed':11,'passed':11,'failed':0,'notExecuted':0}, counts
+          print(f'PASS VPS-10.7 bridge removal: {counts}')
           PY
       - name: Require VPS-10.4B Sales writes (43 cases)
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
