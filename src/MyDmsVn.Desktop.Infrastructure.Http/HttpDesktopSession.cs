@@ -197,7 +197,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 try
                 {
                     using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3)))
-                        revoke(cts.Token).ConfigureAwait(false).GetAwaiter().GetResult();
+                        // Start the HTTP pipeline off the UI context that is waiting for it.
+                        Task.Run(() => revoke(cts.Token), cts.Token).GetAwaiter().GetResult();
                 }
                 catch (Exception) { /* Local credentials are already invalidated. */ }
             }

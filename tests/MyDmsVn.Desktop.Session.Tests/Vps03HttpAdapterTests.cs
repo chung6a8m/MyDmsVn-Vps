@@ -115,6 +115,53 @@ namespace MyDmsVn.Desktop.Session.Tests
         }
 
         [Fact]
+        public async Task Sign_out_completes_server_logout_when_the_ui_thread_is_waiting()
+        {
+            var completed = false;
+            var session = new HttpDesktopSession(DesktopSessionOptions.Default, new Clock());
+            using (var transport = new HttpDesktopTransport(new HttpDesktopOptions(Origin), session,
+                new ReplyHandler(async (request, cancellationToken) =>
+                {
+                    if (request.RequestUri!.AbsolutePath == "/api/v1/auth/login")
+                        return Json(HttpStatusCode.OK, LoginJson);
+
+                    Assert.Equal("/api/v1/auth/logout", request.RequestUri.AbsolutePath);
+                    Assert.Equal(DesktopSessionState.LoggingOut, session.State);
+                    Assert.Null(session.CurrentUser);
+                    var responseReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    using (cancellationToken.Register(() => responseReady.TrySetCanceled()))
+                    {
+                        var context = SynchronizationContext.Current;
+                        if (context == null)
+                            responseReady.TrySetResult(true);
+                        else
+                            context.Post(_ => responseReady.TrySetResult(true), null);
+                        await responseReady.Task.ConfigureAwait(false);
+                    }
+                    completed = true;
+                    return Json(HttpStatusCode.OK, "{\"data\":{}}");
+                })))
+            {
+                var login = await transport.LoginAsync(new LoginRequest("operator", "secret"), CancellationToken.None);
+                Assert.True(login.IsSuccess);
+
+                var originalContext = SynchronizationContext.Current;
+                try
+                {
+                    SynchronizationContext.SetSynchronizationContext(new WaitingUiContext());
+                    session.SignOut();
+                }
+                finally
+                {
+                    SynchronizationContext.SetSynchronizationContext(originalContext);
+                }
+
+                Assert.True(completed, "The logout HTTP request must finish before SignOut returns.");
+                Assert.Equal(DesktopSessionState.Unauthenticated, session.State);
+            }
+        }
+
+        [Fact]
         public async Task In_flight_response_after_sign_out_cannot_repopulate_session()
         {
             var requestStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -570,12 +617,21 @@ namespace MyDmsVn.Desktop.Session.Tests
             public TimeSpan Elapsed => TimeSpan.Zero;
         }
 
+        private sealed class WaitingUiContext : SynchronizationContext
+        {
+            // The UI cannot dispatch posted work while its SignOut call is waiting.
+            public override void Post(SendOrPostCallback d, object? state) { }
+        }
+
         private sealed class ReplyHandler : HttpMessageHandler
         {
-            private readonly Func<HttpRequestMessage, Task<HttpResponseMessage>> _reply;
-            public ReplyHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> reply) { _reply = reply; }
+            private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _reply;
+            public ReplyHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> reply)
+                : this((request, _) => reply(request)) { }
+            public ReplyHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> reply)
+            { _reply = reply; }
             protected override Task<HttpResponseMessage> SendAsync(
-                HttpRequestMessage request, CancellationToken cancellationToken) => _reply(request);
+                HttpRequestMessage request, CancellationToken cancellationToken) => _reply(request, cancellationToken);
         }
     }
 }
