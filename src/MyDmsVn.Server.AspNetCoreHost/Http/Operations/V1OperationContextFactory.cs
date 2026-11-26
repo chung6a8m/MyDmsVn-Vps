@@ -50,7 +50,7 @@ internal sealed class V1OperationContextFactory : IV1OperationContextFactory
             !string.Equals(raw, path, StringComparison.Ordinal)) throw new V1BindingException();
 
         return ValueTask.FromResult<WebOperationContext?>(new WebOperationContext(operationId, epoch, session, kind,
-            targetId, SHA256.HashData(Utf8.GetBytes(canonical)), new WebOperationResultCodec()));
+            targetId, SHA256.HashData(Utf8.GetBytes(canonical)), new V1OperationResultCodec()));
     }
 
     private static Guid ReadGuid(HttpRequest request, string name, bool v4)

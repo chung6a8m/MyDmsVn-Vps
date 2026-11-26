@@ -1166,7 +1166,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 "epoch-mismatch" => throw new WebOperationException("Deployment.EpochMismatch"),
                 "fingerprint-mismatch" => throw new WebOperationException("Idempotency.FingerprintMismatch"),
                 _ when OperationFailure => throw new InvalidOperationException("secret SQL connection"),
-                _ => Task.FromResult<WebOperationStatus?>(OperationStatus()),
+                _ => Task.FromResult<WebOperationStatus?>(OperationStatus(OperationVariant)),
             };
         public Task<WebOperationResolution?> ReadResolutionAsync(int actorUserId, Guid sessionId,
             Guid deploymentEpoch, Guid operationId, byte[] expectedFingerprint, CancellationToken token) => OperationVariant switch
@@ -1176,7 +1176,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 "epoch-mismatch" => throw new WebOperationException("Deployment.EpochMismatch"),
                 "fingerprint-mismatch" => throw new WebOperationException("Idempotency.FingerprintMismatch"),
                 _ when OperationFailure => throw new InvalidOperationException("secret SQL connection"),
-                _ => Task.FromResult<WebOperationResolution?>(new WebOperationResolution(OperationStatus())),
+                _ => Task.FromResult<WebOperationResolution?>(OperationResolution(OperationVariant)),
             };
         public Task AuthorizeReceiptAsync(int actorUserId, Guid sessionId, Guid deploymentEpoch,
             WebOperationKind kind, CancellationToken token) => deploymentEpoch != Epoch
@@ -1192,18 +1192,43 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         private WebOperationResolution? Web6Resolution()
         {
             if (Web6ResolutionState == null) return null;
+            // New opt-in oracle states; the frozen differential variants keep
+            // their original input values and outputs.
+            if (Web6ResolutionState == "COMMITTED") return OperationResolution(null);
+            if (Web6ResolutionState == "NOT_EXECUTED") return OperationResolution("not-executed");
             var status = new WebOperationStatus(Operation, Epoch, WebOperationKind.SalesCreate, null,
                 Enumerable.Range(0, 32).Select(x => (byte)x).ToArray(), null,
                 new DateTime(2026, 10, 31, 8, 0, 0, DateTimeKind.Utc), Web6ResolutionState, null);
             return new WebOperationResolution(status);
         }
-        private static WebOperationStatus OperationStatus()
+        private static WebOperationStatus OperationStatus(string? variant)
         {
             var detail = CorpusData<SalesReceiptDto>("web2-v1/sales-create-response.json");
             var bytes = new WebOperationResultCodec().Encode(WebOperationKind.SalesCreate, detail);
+            var state = variant switch
+            {
+                "result-expired" => "RESULT_EXPIRED",
+                "result-unavailable" => "RESULT_UNAVAILABLE",
+                "not-executed" or "terminal-missing" or "terminal-invalid" => "NOT_EXECUTED",
+                "indeterminate" => "INDETERMINATE",
+                _ => "COMMITTED"
+            };
+            long? resultId = state is "NOT_EXECUTED" or "INDETERMINATE" ? null : detail.SaleId;
+            if (variant == "result-id-mismatch") resultId = detail.SaleId == long.MaxValue ? detail.SaleId - 1 : detail.SaleId + 1;
             return new WebOperationStatus(Operation, Epoch, WebOperationKind.SalesCreate,
-                null, Enumerable.Range(0, 32).Select(x => (byte)x).ToArray(), detail.SaleId,
-                new DateTime(2026, 10, 31, 9, 0, 0, DateTimeKind.Utc), "COMMITTED", bytes);
+                null, Enumerable.Range(0, 32).Select(x => (byte)x).ToArray(), resultId,
+                new DateTime(2026, 10, 31, 9, 0, 0, DateTimeKind.Utc), state,
+                state != "COMMITTED" ? null : variant == "result-corrupt" ? Encoding.UTF8.GetBytes("{}") : bytes);
+        }
+
+        private static WebOperationResolution OperationResolution(string? variant)
+        {
+            var status = OperationStatus(variant);
+            WebOperationTerminalDecision? terminal = variant is "not-executed" or "terminal-invalid"
+                ? new WebOperationTerminalDecision(Guid.Parse("11111111-2222-4333-8444-555555555555"),
+                    variant == "terminal-invalid" ? "invalid/case" : "CASE_01", status.CompletedAtUtc)
+                : null;
+            return new WebOperationResolution(status, terminal);
         }
 
         private sealed class TestUnitOfWork : IUnitOfWork

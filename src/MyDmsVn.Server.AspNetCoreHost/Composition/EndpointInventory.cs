@@ -16,6 +16,9 @@ using NativeInventory = MyDmsVn.Server.HttpHost.Features.Inventory.InventoryCont
 using NativeSecurity = MyDmsVn.Server.HttpHost.Features.Security.SecurityController;
 using NativeFoundation = MyDmsVn.Server.HttpHost.Features.Foundation.FoundationController;
 using NativeAuth = MyDmsVn.Server.HttpHost.Features.Auth.AuthController;
+using NativeOperations = MyDmsVn.Server.HttpHost.Features.Operations.OperationsController;
+using NativeResolution = MyDmsVn.Server.HttpHost.Features.Operations.ResolutionController;
+using NativeResend = MyDmsVn.Server.HttpHost.Features.Operations.ResendController;
 using NativeHealth = MyDmsVn.Server.HttpHost.Features.Auth.HealthController;
 
 namespace MyDmsVn.Server.HttpHost;
@@ -39,6 +42,9 @@ internal static class EndpointInventory
         route.Controller == typeof(FoundationParityController) ? typeof(NativeFoundation) :
         route.Controller == typeof(AuthController) ? typeof(NativeAuth) :
         route.Controller == typeof(HealthController) ? typeof(NativeHealth) :
+        route.Controller == typeof(OperationsController) ? typeof(NativeOperations) :
+        route.Controller == typeof(OperationResolutionController) ? typeof(NativeResolution) :
+        route.Controller == typeof(Web6ResendEligibilityController) ? typeof(NativeResend) :
         route.Verb == "GET" && route.Controller == typeof(InventoryController) ? typeof(NativeInventory) : null;
 
     internal static bool IsNative(Net10RouteTable.Route route) => NativeOwner(route) != null;

@@ -19,6 +19,9 @@ using MyDmsVn.Server.HttpHost.Features.Sales;
 using MyDmsVn.Server.HttpHost.Features.Inventory;
 using MyDmsVn.Server.HttpHost.Features.Security;
 using MyDmsVn.Server.HttpHost.Features.Auth;
+using MyDmsVn.Server.HttpHost.Features.Operations;
+using MyDmsVn.Server.Application.Identity;
+using MyDmsVn.Server.Application.Persistence;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -27,6 +30,8 @@ internal static class NativeApiRegistration
     internal static IServiceCollection AddVps10NativeApi(this IServiceCollection services)
     {
         services.AddScoped<IV1OperationContextFactory, V1OperationContextFactory>();
+        services.AddScoped(provider => new OperationReadBoundary(provider.GetRequiredService<RequestIdentityAdmission>(),
+            provider.GetRequiredService<IUnitOfWorkFactory>(), provider.GetRequiredService<WebHostOptions>(), provider.GetRequiredService<IUtcClock>()));
         services.AddSingleton<INativeAuthAttemptAdmission>(provider =>
             new NativeAuthAttemptAdmission(provider.GetRequiredService<AuthAttemptLimiter>()));
         services.AddControllers(options =>
@@ -129,8 +134,8 @@ internal static class NativeApiRegistration
             });
             options.AddDocumentTransformer((document, _, _) =>
             {
-                document.Info.Title = "MyDmsVn native v1 API";
-                document.Info.Description = "Partial native surface only. Legacy bridge endpoints are intentionally excluded. " +
+                document.Info.Title = "MyDmsVn native HTTP API (v1/v2/v3)";
+                document.Info.Description = "All 57 native business verb/path pairs; v1/v2/v3 compatibility contracts. " +
                     "Lookups require Bearer authentication with an active session. " +
                     "No request body; limit is a required canonical integer from 1 to 200. " +
                     "Search is optional (maximum 256 UTF-16 code units); duplicate and unknown query names are rejected. " +
@@ -149,7 +154,8 @@ internal static class NativeApiRegistration
                     "Security and Foundation require DesktopApiEnabled and an active Bearer session; exact query names and strict JSON allowlists. " +
                     "Security revisions are JSON integer/int64 tokens, never strings; the actor is taken only from the admitted session. " +
                     "Auth login accepts exactly username/password JSON strings; refresh and logout use the strict host-only cookie and same-origin AJAX admission. " +
-                    "Me and capabilities require an active bearer session. Health is anonymous unless a bearer is supplied; degraded audit returns 503.";
+                    "Me and capabilities require an active bearer session. Health is anonymous unless a bearer is supplied; degraded audit returns 503. " +
+                    "Operation routes require an active session, canonical paths and no query/body. Status/resolution require epoch and fingerprint headers; WEB6 also requires operation kind, target for non-create operations and receipt for eligibility. Unknown outcomes are not permission to resend.";
                 return Task.CompletedTask;
             });
         });
