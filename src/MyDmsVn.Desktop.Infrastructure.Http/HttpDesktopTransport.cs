@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using MyDmsVn.Contracts;
+using MyDmsVn.Desktop.Infrastructure.Http.Wire;
 using Newtonsoft.Json;
 
 namespace MyDmsVn.Desktop.Infrastructure.Http
@@ -256,8 +257,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 }
                 if (body != null)
                 {
-                    request.Content = new StringContent(JsonConvert.SerializeObject(
-                        body, ApiJson.CreateSerializerSettings()), Encoding.UTF8, "application/json");
+                    request.Content = new StringContent(V1WireMapper.SerializeRequest(body), Encoding.UTF8, "application/json");
                 }
 
                 try
@@ -274,28 +274,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                         ApiResponse<T> decoded;
                         try
                         {
-                            json = HttpDesktopWire.NormalizeResponse<T>(json);
-                            if (typeof(T) == typeof(Newtonsoft.Json.Linq.JObject) &&
-                                response.IsSuccessStatusCode)
-                            {
-                                var envelope = HttpDesktopWire.ParseObjectPreservingDates(json);
-                                if (envelope.Count != 1 ||
-                                    !(envelope["data"] is Newtonsoft.Json.Linq.JObject objectData))
-                                    return InvalidResponse<T>();
-                                decoded = (ApiResponse<T>)(object)
-                                    ApiResponse<Newtonsoft.Json.Linq.JObject>.Success(objectData);
-                            }
-                            else if (typeof(T) == typeof(UnitResponse))
-                            {
-                                var unit = ApiJson.DeserializeResponse<Newtonsoft.Json.Linq.JObject>(json, status);
-                                if (unit.IsSuccess && unit.Data!.Count != 0)
-                                    return InvalidResponse<T>();
-                                decoded = unit.IsSuccess
-                                    ? (ApiResponse<T>)(object)ApiResponse<UnitResponse>.Success(UnitResponse.Value)
-                                    : ApiResponse<T>.Failure(unit.Error!);
-                            }
-                            else
-                                decoded = ApiJson.DeserializeResponse<T>(json, status);
+                            decoded = V1WireMapper.DecodeResponse<T>(json, status, response.IsSuccessStatusCode);
                         }
                         catch (Exception error) when (error is JsonException ||
                             error is ArgumentException || error is FormatException ||

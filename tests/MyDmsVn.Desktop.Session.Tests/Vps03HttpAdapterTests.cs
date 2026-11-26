@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MyDmsVn.Contracts;
 using MyDmsVn.Desktop.Application;
 using MyDmsVn.Desktop.Infrastructure.Http;
+using MyDmsVn.Desktop.Infrastructure.Http.Wire;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -306,14 +307,15 @@ namespace MyDmsVn.Desktop.Session.Tests
         }
 
         [Fact]
-        public void Receipt_wire_rename_never_changes_a_calendar_date_or_bigint_string()
+        public void Receipt_wire_mapping_never_changes_a_calendar_date_or_bigint_string()
         {
-            var original = "{\"data\":{\"receiptId\":\"9007199254740993\",\"receiptDate\":\"2024-02-29\",\"lines\":[{\"receiptLineId\":\"9007199254740994\"}]}}";
-            var normalized = HttpDesktopWire.NormalizeResponse<GoodsReceiptDto>(original);
-            Assert.Contains("\"receiptDate\":\"2024-02-29\"", normalized);
-            Assert.Contains("\"id\":\"9007199254740993\"", normalized);
-            Assert.Contains("\"id\":\"9007199254740994\"", normalized);
-            Assert.DoesNotContain("receiptLineId", normalized);
+            var original = "{\"data\":{\"receiptId\":\"9007199254740993\",\"receiptDate\":\"2024-02-29\",\"receiptNumber\":\"GR1\",\"status\":\"Draft\",\"version\":\"AAAAAAAAAAE=\",\"lines\":[{\"receiptLineId\":\"9007199254740994\",\"quantity\":\"1.2500\",\"unitCost\":\"2.0000\"}]}}";
+            var response = V1WireMapper.DecodeResponse<GoodsReceiptDto>(original, ApiStatusCode.Ok, true);
+            Assert.True(response.IsSuccess);
+            Assert.Equal(9007199254740993L, response.Data!.Id);
+            Assert.Equal(9007199254740994L, Assert.Single(response.Data.Lines).Id);
+            Assert.Equal(new DateTime(2024, 2, 29), response.Data.ReceiptDate);
+            Assert.Equal(DateTimeKind.Unspecified, response.Data.ReceiptDate.Kind);
         }
 
         private static Fixture Create(Func<HttpRequestMessage, HttpResponseMessage> handler) =>

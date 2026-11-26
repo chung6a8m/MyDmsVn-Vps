@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using MyDmsVn.Contracts;
 using MyDmsVn.Desktop.Application;
 using MyDmsVn.Desktop.Infrastructure.Http;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -244,6 +245,65 @@ namespace MyDmsVn.Desktop.Session.Tests
 
             var error = Assert.Throws<InvalidOperationException>(() => record.Validate());
             Assert.Equal("Desktop.PendingIntentInvalid", error.Message);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Historical_receipt_outcome_recovers_typed_values_only_for_matching_id(bool wrongId)
+        {
+            var store = new PendingStore();
+            var record = PendingStore.Record();
+            record.Kind = "Receipt.Update";
+            record.Method = "PUT";
+            record.Route = "/api/v1/goods-receipts/9007199254740993/draft";
+            record.TargetId = 9007199254740993L;
+            store.Save(record);
+            var outcome = HttpDesktopWire.ParseObjectPreservingDates(
+                Vps10TypedWireTests.Read("web3-v1/receipt-get-posted-response.json"));
+            if (wrongId) outcome["data"]!["receiptId"] = "9007199254740994";
+            var envelope = new JObject
+            {
+                ["data"] = new JObject
+                {
+                    ["contractVersion"] = "web5-resolution-v1",
+                    ["actorUserId"] = record.ActorUserId,
+                    ["deploymentEpoch"] = record.DeploymentEpoch,
+                    ["operationId"] = record.OperationId,
+                    ["operationKind"] = record.Kind,
+                    ["method"] = record.Method,
+                    ["routeScope"] = "/api/v1/goods-receipts/{receiptId}/draft",
+                    ["requestTargetId"] = record.TargetId.Value.ToString(CultureInfo.InvariantCulture),
+                    ["requestFingerprint"] = record.Fingerprint,
+                    ["state"] = "COMMITTED",
+                    ["outcome"] = outcome,
+                    ["terminal"] = JValue.CreateNull(),
+                },
+            };
+            using (var restarted = new Fixture(store, (request, _) =>
+            {
+                if (IsLogin(request)) return Task.FromResult(Login(7));
+                if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath.EndsWith("/resolution", StringComparison.Ordinal))
+                    return Task.FromResult(Json(HttpStatusCode.OK, envelope.ToString(Formatting.None)));
+                throw new InvalidOperationException("No business write may be replayed.");
+            }))
+            {
+                await restarted.SignIn();
+                var result = await restarted.Operations.ResolvePendingAsync<GoodsReceiptDto>(CancellationToken.None);
+                if (wrongId)
+                {
+                    Assert.Equal("Operation.OutcomeUnknown", result.Error!.Code);
+                    Assert.NotNull(store.Load());
+                }
+                else
+                {
+                    Assert.True(result.IsSuccess);
+                    Assert.Equal(record.TargetId.Value, result.Data!.Id);
+                    Assert.Equal(9007199254740996L, result.Data.Lines[0].Id);
+                    Assert.Equal(12.3456m, result.Data.Lines[1].UnitCost);
+                    Assert.Null(store.Load());
+                }
+            }
         }
 
         private static bool IsLogin(HttpRequestMessage request) =>
