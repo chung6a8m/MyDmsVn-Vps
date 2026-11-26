@@ -774,6 +774,8 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         isolated_runtime = isolated_scripts / RUNTIME_MODULE.name
         shutil.copy2(SCRIPT, isolated_operator)
         shutil.copy2(RUNTIME_MODULE, isolated_runtime)
+        upgrade_script = RUNTIME_MODULE.with_name("LocalSimulation.Upgrade.ps1")
+        shutil.copy2(upgrade_script, isolated_scripts / upgrade_script.name)
         active_state = isolated_repo / "TestResults" / "local-simulation" / "active"
         sibling = active_state.parent / "evidence" / "keep.txt"
         sibling.parent.mkdir(parents=True)
