@@ -13,6 +13,8 @@ using NativeCustomers = MyDmsVn.Server.HttpHost.Features.Catalog.CustomersContro
 using NativeSales = MyDmsVn.Server.HttpHost.Features.Sales.SalesReceiptsController;
 using NativeReceipts = MyDmsVn.Server.HttpHost.Features.Receipts.GoodsReceiptsController;
 using NativeInventory = MyDmsVn.Server.HttpHost.Features.Inventory.InventoryController;
+using NativeSecurity = MyDmsVn.Server.HttpHost.Features.Security.SecurityController;
+using NativeFoundation = MyDmsVn.Server.HttpHost.Features.Foundation.FoundationController;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -31,6 +33,8 @@ internal static class EndpointInventory
         route.Controller == typeof(CustomersController) ? typeof(NativeCustomers) :
         route.Controller == typeof(SalesReceiptsController) ? typeof(NativeSales) :
         route.Controller == typeof(GoodsReceiptsController) ? typeof(NativeReceipts) :
+        route.Controller == typeof(SecurityParityController) ? typeof(NativeSecurity) :
+        route.Controller == typeof(FoundationParityController) ? typeof(NativeFoundation) :
         route.Verb == "GET" && route.Controller == typeof(InventoryController) ? typeof(NativeInventory) : null;
 
     internal static bool IsNative(Net10RouteTable.Route route) => NativeOwner(route) != null;
@@ -74,7 +78,9 @@ internal static class EndpointInventory
                         (route.Controller == typeof(ProductsController) ||
                          route.Controller == typeof(WarehousesController) ||
                          route.Controller == typeof(EmployeesController) ||
-                         route.Controller == typeof(CustomersController)))
+                         route.Controller == typeof(CustomersController) ||
+                         route.Controller == typeof(SecurityParityController) ||
+                         route.Controller == typeof(FoundationParityController)))
                     throw new InvalidOperationException("Native WEB2 ownership or feature gate drift.");
             }
             else if (bridge != route)

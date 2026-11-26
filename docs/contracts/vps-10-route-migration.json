@@ -464,7 +464,7 @@
       "order": 0,
       "baselineController": "FoundationParityController",
       "baselineAction": "Status",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6B",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -487,7 +487,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.FoundationParityController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Foundation.FoundationController",
       "actualAction": "Status"
     },
     {
@@ -774,7 +774,7 @@
       "order": 0,
       "baselineController": "SecurityParityController",
       "baselineAction": "PermissionCatalog",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6B",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -797,7 +797,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Security.SecurityController",
       "actualAction": "PermissionCatalog"
     },
     {
@@ -807,7 +807,7 @@
       "order": 0,
       "baselineController": "SecurityParityController",
       "baselineAction": "CheckPermission",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6B",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -830,7 +830,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Security.SecurityController",
       "actualAction": "CheckPermission"
     },
     {
@@ -840,7 +840,7 @@
       "order": 0,
       "baselineController": "SecurityParityController",
       "baselineAction": "ListRoles",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6B",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -863,7 +863,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Security.SecurityController",
       "actualAction": "ListRoles"
     },
     {
@@ -873,7 +873,7 @@
       "order": 0,
       "baselineController": "SecurityParityController",
       "baselineAction": "ListUsers",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6B",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -896,7 +896,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Security.SecurityController",
       "actualAction": "ListUsers"
     },
     {
@@ -1430,7 +1430,7 @@
       "order": 0,
       "baselineController": "SecurityParityController",
       "baselineAction": "ApplyImport",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6B",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1453,7 +1453,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Security.SecurityController",
       "actualAction": "ApplyImport"
     },
     {
@@ -1463,7 +1463,7 @@
       "order": 0,
       "baselineController": "SecurityParityController",
       "baselineAction": "PreviewImport",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6B",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1486,7 +1486,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Security.SecurityController",
       "actualAction": "PreviewImport"
     },
     {
@@ -1496,7 +1496,7 @@
       "order": 0,
       "baselineController": "SecurityParityController",
       "baselineAction": "Mutate",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6B",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1519,7 +1519,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Security.SecurityController",
       "actualAction": "Mutate"
     },
     {
