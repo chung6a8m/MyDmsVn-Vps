@@ -22,3 +22,7 @@ Base: main `deae0d104334b6907f6b015170c23066118b6ee8` (PR #37 merged). Prior fin
 | Independent review and required exact-HEAD CI/merge | REQUIRED / pending |
 
 The CI lane must require non-empty exact 43/43 and 8/8 targeted test receipts; keep existing frozen selectors/counts and independent SQL oracles. Review OpenAPI schema/runtime equivalence and replay byte equality before acceptance. All CI status and discovered/executed/passed/failed/skipped counts belong to the implementation PR; no predecessor PASS or source inspection is acceptance. VPS-08/09 remain unchanged.
+
+## Independent review correction
+
+Initial HEAD `e65e0c970ae84fc8079d8cd6d835d9065158289f`: [VPS-06A run 45762371582](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/45762371582) failed the frozen legacy lexical inventory (sender_calls expected 495, actual 498). Diff attribution: the native-only Sales controller was already excluded; the three newly counted calls are HTTP `Gateway.Send` in the two new disposable SQL restart facts, not MediatR dispatch. Move only these new facts and their helpers into an explicitly excluded native-only partial test file, keeping the original test class, method names, workflow filters, test assertions and all six frozen inventory counts unchanged. No production logic or protected gate changed. Require CI again on the corrected exact HEAD; the initial 10/11 successes are not final acceptance.
