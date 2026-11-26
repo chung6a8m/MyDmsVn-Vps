@@ -1,4 +1,4 @@
-# VPS-10.2 — Native catalog lookup pilot (draft implementation)
+# VPS-10.2 — Native catalog lookup pilot (implementation and independent review)
 
 - Base main: `a20ce5f3114ddba990ec0f3a097a7907eea83116` (PR #34 merged).
 - Four Catalog lookup actions use native MVC typed binding and STJ envelopes; remaining 53 routes retain bridge ownership. Inventory reads actual EndpointDataSource; compatibility controller/action identity stays separate.
@@ -20,7 +20,7 @@ These are metadata provenance only, not a build dependency, and **not locally ge
 
 This editing environment has no .NET SDK and cannot clone/restore via direct network. Source is submitted through GitHub API. Compile, targeted tests, live differential, Windows build and SQL gates are NOT RUN locally. Inspect the actual final PR HEAD's CI and any findings before independent review and merge.
 
-Required next: successful locked restore, 34/34 new targeted cases, 37/37 characterization, 26/26 composition, 293/293 frozen live differential, 57 actual routes with exactly 4 native and 53 bridge, unchanged Windows and SQL gates, all 11 required workflows on final HEAD, independent review. VPS-08/09 protected deployment and production acceptance remain NOT VERIFIED. No merge or release is authorized by this draft.
+Required next: successful locked restore, 34/34 new targeted cases, 37/37 characterization, 26/26 composition, 293/293 frozen live differential, 57 actual routes with exactly 4 native and 53 bridge, unchanged Windows and SQL gates, all 11 required workflows on final HEAD, independent review. VPS-08/09 protected deployment and production acceptance remain NOT VERIFIED. The initial draft did not authorize merge. The Owner subsequently requested independent review, fixes and merge only after all final-HEAD CI gates pass; no release or deployment is authorized.
 
 ## CI finding (initial source HEAD)
 
