@@ -168,15 +168,96 @@ jobs:
             -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-build --no-restore -v minimal \
             --filter FullyQualifiedName~Vps10ContractCharacterizationTests \
             --logger "trx;LogFileName=vps10-characterization.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+          git -C "$GITHUB_WORKSPACE" fetch --no-tags --depth=1 origin 58111f95f8dbb708fbd7c9ce8480b3f952dbaad3
           python3 - <<'PY'
-          import json, os, subprocess
+          import copy, json, os, re, subprocess
           import xml.etree.ElementTree as ET
           from pathlib import Path
           root = Path(os.environ['GITHUB_WORKSPACE'])
+          baseline = '58111f95f8dbb708fbd7c9ce8480b3f952dbaad3'
+          required_pins = {
+              'docs/contracts/vps-01-route-inventory.json',
+              'docs/contracts/vps-02-route-additions.json',
+              'docs/contracts/vps-05c-desktop-route-net48.json',
+              'docs/contracts/vps-02-desktop-method-matrix.json',
+              'docs/contracts/web4-v1/fingerprint-vectors.json',
+              'docs/evidence/vps-04a-live-route-parity.md',
+          }
+          def git(*args):
+              return subprocess.check_output(['git', *args], cwd=root, text=True)
+          def frozen(path):
+              return git('show', baseline + ':' + path)
+          def representative_cases(source):
+              # Read only the three original representative TheoryData tables.
+              source = source.split('public async Task LegacyControlRouteMatchesLiveNet48', 1)[0]
+              rows = re.findall(r'\{\s*"(VPS0[12]-[^"]+)",\s*"([A-Z]+)",\s*"([^"]+)"', source)
+              cases = {case: (verb, path.split('?', 1)[0]) for case, verb, path in rows}
+              assert len(rows) == len(cases) == 57, 'Representative oracle IDs must remain unique'
+              return cases
+          case_source = 'tests/MyDmsVn.Server.AspNetCoreHost.Tests/Vps05cDesktopRouteLiveParityTests.cs'
+          cases = representative_cases(frozen(case_source))
+          assert representative_cases((root/case_source).read_text(encoding='utf-8-sig')) == cases
+          ledger_rows = re.findall(r'^\| (?:WEB[2-6]|VPS-02) \| \x60([^\x60]+)\x60 \| \x60[^\x60]+\x60 \| \x60([^\x60]+)\x60 \|',
+                                   frozen('docs/evidence/vps-04a-live-route-parity.md'), re.M)
+          ledger = dict(ledger_rows)
+          assert len(ledger_rows) == len(ledger) == 57
+          vector_path = 'web4-v1/fingerprint-vectors.json'
+          vectors = json.loads(frozen('docs/contracts/' + vector_path).lstrip('\ufeff'))['vectors']
+          canonical_scopes = {v['intent']['method'] + ' ' + v['intent']['routeScope'] for v in vectors}
+          assert len(canonical_scopes) == 6
+          parameters = {
+              '{id:int}': r'[0-9]+',
+              '{saleId}': r'[0-9]+',
+              '{receiptId}': r'[0-9]+',
+              '{operationId}': r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
+          }
+          def verify(manifest):
+              assert manifest['baselineCommit'] == baseline
+              assert set(manifest['sourcePins']) == required_pins, 'Required frozen pins missing or changed'
+              for path, expected in manifest['sourcePins'].items():
+                  pinned = git('rev-parse', baseline + ':' + path).strip()
+                  actual = git('rev-parse', 'HEAD:' + path).strip()
+                  assert pinned == expected == actual, (path, pinned, expected, actual)
+              rows = manifest['routes']
+              assert len(rows) == len({row['id'] for row in rows}) == 57
+              assert {row['id'] for row in rows} == set(ledger)
+              assert {row['coverage']['rawHttpCaseId'] for row in rows} == set(cases)
+              for row in rows:
+                  coverage = row['coverage']
+                  verb, sample = cases[coverage['rawHttpCaseId']]
+                  assert row['id'] == row['httpMethod'] + ' ' + row['path']
+                  assert (verb, sample) == (row['httpMethod'], coverage['rawHttpSamplePath']), row['id']
+                  template = '/'.join(parameters.get(part, re.escape(part)) for part in row['path'].split('/'))
+                  assert re.fullmatch(template, sample), (row['id'], sample)
+                  assert coverage['historicalSqlLedger'] == ledger[row['id']], row['id']
+                  expected_vectors = vector_path if row['id'] in canonical_scopes else None
+                  assert coverage['canonicalBytes'] == expected_vectors, row['id']
           manifest = json.loads((root/'docs/contracts/vps-10-route-migration.json').read_text(encoding='utf-8-sig'))
-          for path, expected in manifest['sourcePins'].items():
-              actual = subprocess.check_output(['git', 'rev-parse', 'HEAD:' + path], cwd=root, text=True).strip()
-              assert actual == expected, (path, actual, expected)
+          verify(manifest)
+          # Negative controls: mutations preserving route/variant counts must fail.
+          def require_rejected(mutated, label):
+              try:
+                  verify(mutated)
+              except AssertionError:
+                  return
+              raise AssertionError('Manifest accepted invalid ' + label)
+          swapped = copy.deepcopy(manifest)
+          a, b = (next(row for row in swapped['routes'] if row['id'] == key)
+                  for key in ('GET /api/v1/catalog/products/lookup', 'GET /api/v1/catalog/customers/lookup'))
+          for key in ('rawHttpCaseId', 'rawHttpSamplePath'):
+              a['coverage'][key], b['coverage'][key] = b['coverage'][key], a['coverage'][key]
+          a['requiredPositiveNegativeCases'], b['requiredPositiveNegativeCases'] = b['requiredPositiveNegativeCases'], a['requiredPositiveNegativeCases']
+          require_rejected(swapped, 'route/case swap')
+          missing_pin = copy.deepcopy(manifest)
+          missing_pin['sourcePins'].pop('docs/contracts/vps-05c-desktop-route-net48.json')
+          require_rejected(missing_pin, 'missing source pin')
+          wrong_sql = copy.deepcopy(manifest)
+          wrong_sql['routes'][0]['coverage']['historicalSqlLedger'] = 'ROUTE_ONLY'
+          require_rejected(wrong_sql, 'SQL ledger reassignment')
+          wrong_canonical = copy.deepcopy(manifest)
+          next(row for row in wrong_canonical['routes'] if row['coverage']['canonicalBytes'] is not None)['coverage']['canonicalBytes'] = None
+          require_rejected(wrong_canonical, 'missing canonical scope')
+          print('PASS VPS-10 route/case links 57/57, SQL ledger 57/57, canonical scopes 6/6, frozen pins 6/6, negative controls 4/4')
           ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
           counters = ET.parse(root/'vps04a-trx/vps10-characterization.trx').getroot().find('./t:ResultSummary/t:Counters', ns)
           assert counters is not None, 'Missing VPS-10 characterization TRX counters'
