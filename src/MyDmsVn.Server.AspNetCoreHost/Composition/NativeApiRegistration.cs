@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -11,6 +12,8 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.OpenApi;
+using MyDmsVn.Contracts;
 using MyDmsVn.Server.HttpHost.Features.Catalog;
 
 namespace MyDmsVn.Server.HttpHost;
@@ -46,6 +49,22 @@ internal static class NativeApiRegistration
         {
             options.ShouldInclude = description => description.ActionDescriptor is ControllerActionDescriptor action &&
                 typeof(ControllerBase).IsAssignableFrom(action.ControllerTypeInfo.AsType());
+            // The successful Catalog lookup always contains a non-null array.
+            // OpenAPI 3.1 can infer a nullable generic property; narrow only this
+            // response schema, not the global serializer or unrelated DTOs.
+            options.AddSchemaTransformer((schema, context, _) =>
+            {
+                if (context.JsonTypeInfo.Type == typeof(V1SuccessEnvelope<IReadOnlyList<CatalogLookupDto>>))
+                {
+                    schema.Required ??= new HashSet<string>(StringComparer.Ordinal);
+                    schema.Required.Add("data");
+                }
+                if (context.JsonTypeInfo.Type == typeof(IReadOnlyList<CatalogLookupDto>) &&
+                    context.JsonPropertyInfo?.Name == "data" &&
+                    schema.Type == (JsonSchemaType.Array | JsonSchemaType.Null))
+                    schema.Type = JsonSchemaType.Array;
+                return Task.CompletedTask;
+            });
             options.AddDocumentTransformer((document, _, _) =>
             {
                 document.Info.Title = "MyDmsVn native v1 API";

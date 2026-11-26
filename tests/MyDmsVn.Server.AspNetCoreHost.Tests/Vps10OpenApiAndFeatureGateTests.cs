@@ -65,7 +65,14 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             var responses = operation.GetProperty("responses");
             var success = Resolve(document, ResponseSchema(responses, "200"));
             var data = Resolve(document, success.GetProperty("properties").GetProperty("data"));
-            Assert.Equal("array", data.GetProperty("type").GetString());
+            var dataType = data.GetProperty("type");
+            // OpenAPI 3.1 permits a string or an array of type names, but the
+            // lookup contract does not permit null or another type here.
+            var dataTypes = dataType.ValueKind == JsonValueKind.Array
+                ? dataType.EnumerateArray().Select(type => type.GetString()).ToArray()
+                : new[] { dataType.GetString() };
+            Assert.Equal(new[] { "array" }, dataTypes);
+            Assert.Contains("data", success.GetProperty("required").EnumerateArray().Select(p => p.GetString()));
             Assert.False(success.GetProperty("properties").TryGetProperty("error", out _));
             var error = Resolve(document, ResponseSchema(responses, "400"));
             Assert.True(error.GetProperty("properties").TryGetProperty("error", out _));

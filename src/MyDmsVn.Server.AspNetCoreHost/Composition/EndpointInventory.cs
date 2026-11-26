@@ -25,7 +25,17 @@ internal static class EndpointInventory
         var rows = new List<Row>();
         foreach (var endpoint in endpoints.OfType<RouteEndpoint>())
         {
-            if (endpoint.Order >= int.MaxValue - 1) continue; // dedicated method-miss / fallback
+            // Only our explicitly marked auxiliary routes are exempt. A high
+            // Order alone must never hide an additional business endpoint.
+            if (endpoint.Metadata.GetMetadata<Net10RouteTable.AuxiliaryRoute>() != null)
+            {
+                if (endpoint.Order < int.MaxValue - 1 ||
+                    endpoint.Metadata.GetMetadata<Net10RouteTable.Route>() != null ||
+                    endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() != null ||
+                    endpoint.Metadata.GetMetadata<IHttpMethodMetadata>() != null)
+                    throw new InvalidOperationException("Invalid auxiliary route metadata.");
+                continue;
+            }
             var path = "/" + (endpoint.RoutePattern.RawText ?? "").TrimStart('/');
             var verbs = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods;
             if (verbs == null || verbs.Count != 1)

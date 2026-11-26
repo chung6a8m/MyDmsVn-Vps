@@ -22,6 +22,7 @@ namespace MyDmsVn.Server.HttpHost;
 internal static class Net10RouteTable
 {
     internal sealed record Route(string Verb, string Path, int Order, Type Controller, MethodInfo Action);
+    internal sealed class AuxiliaryRoute { }
     private static readonly IReadOnlyList<Route> Routes = Discover();
 
     internal static string ToInventoryJson()
@@ -63,7 +64,7 @@ internal static class Net10RouteTable
             var accepted = group.Select(route => route.Verb)
                 .Distinct(StringComparer.Ordinal).OrderBy(verb => verb, StringComparer.Ordinal).ToArray();
             app.Map(group.Key, (HttpContext context) => MethodNotAllowedAsync(context, accepted))
-                .WithOrder(int.MaxValue - 1);
+                .WithOrder(int.MaxValue - 1).WithMetadata(new AuxiliaryRoute());
         }
 
         // Refuse startup if native/bridge dispatch metadata is inconsistent.
@@ -82,7 +83,8 @@ internal static class Net10RouteTable
     {
         // The default MapFallback pattern excludes paths containing a filename.
         // Every unknown /api path, including dotted segments, needs the WEB2 JSON 404 envelope.
-        app.MapFallback("{**path}", (HttpContext context) => FallbackAsync(context));
+        app.MapFallback("{**path}", (HttpContext context) => FallbackAsync(context))
+            .WithMetadata(new AuxiliaryRoute());
     }
 
     internal static async Task FallbackAsync(HttpContext context)

@@ -46,6 +46,7 @@ public sealed class Vps10EndpointInventoryTests
     [Theory]
     [InlineData("missing")]
     [InlineData("duplicate")]
+    [InlineData("late-duplicate")]
     [InlineData("order")]
     [InlineData("verb")]
     [InlineData("owner")]
@@ -57,7 +58,7 @@ public sealed class Vps10EndpointInventoryTests
             e.Metadata.GetMetadata<ControllerActionDescriptor>()?.MethodInfo.Name == "Products");
         var remaining = endpoints.Where(endpoint => !ReferenceEquals(endpoint, target));
         var builder = new RouteEndpointBuilder(target.RequestDelegate!, target.RoutePattern,
-            mutation == "order" ? 1 : target.Order);
+            mutation == "order" ? 1 : mutation == "late-duplicate" ? int.MaxValue - 1 : target.Order);
         foreach (var item in target.Metadata)
         {
             if (mutation == "owner" && item is ControllerActionDescriptor) continue;
@@ -69,6 +70,7 @@ public sealed class Vps10EndpointInventoryTests
         {
             "missing" => remaining,
             "duplicate" => endpoints.Append(target),
+            "late-duplicate" => endpoints.Append(builder.Build()),
             _ => remaining.Append(builder.Build())
         };
         Assert.Throws<InvalidOperationException>(() => Net10RouteTable.ReadInventory(mutated));
