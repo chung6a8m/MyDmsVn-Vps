@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http;
@@ -12,6 +11,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -21,22 +22,38 @@ namespace MyDmsVn.Server.HttpHost;
 internal static class Net10RouteTable
 {
     internal sealed record Route(string Verb, string Path, int Order, Type Controller, MethodInfo Action);
+    internal sealed class AuxiliaryRoute { }
     private static readonly IReadOnlyList<Route> Routes = Discover();
 
-    internal static string ToInventoryJson() =>
-        JsonSerializer.Serialize(Routes.Select(r => new
+    internal static string ToInventoryJson()
+    {
+        // SQL-free: construct actual endpoint data sources without startup checks
+        // or deployment configuration, then inspect their runtime metadata.
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
-            httpMethod = r.Verb, path = r.Path, controller = r.Controller.Name,
-            action = r.Action.Name, order = r.Order
-        }).ToArray());
+            ApplicationName = typeof(Program).Assembly.GetName().Name,
+            EnvironmentName = "Production",
+            Args = Array.Empty<string>()
+        });
+        builder.Logging.ClearProviders();
+        builder.Services.AddVps10NativeApi();
+        using var app = builder.Build();
+        Map(app);
+        return EndpointInventory.ToJson(ReadInventory(((IEndpointRouteBuilder)app).DataSources
+            .SelectMany(source => source.Endpoints)));
+    }
+
+    internal static IReadOnlyList<EndpointInventory.Row> ReadInventory(IEnumerable<Endpoint> endpoints) =>
+        EndpointInventory.Read(endpoints, Routes);
 
     internal static void Map(WebApplication app)
     {
-        foreach (var route in Routes)
+        app.MapControllers();
+        foreach (var route in Routes.Where(route => !EndpointInventory.IsNative(route)))
         {
             // Preserve Web API 2 Route.Order as well as template precedence.
             app.MapMethods(route.Path, new[] { route.Verb },
-                context => Dispatch(context, route)).WithOrder(route.Order);
+                context => Dispatch(context, route)).WithOrder(route.Order).WithMetadata(route);
         }
 
         // A global catch-all route otherwise turns a known path with an unsupported HTTP
@@ -47,8 +64,11 @@ internal static class Net10RouteTable
             var accepted = group.Select(route => route.Verb)
                 .Distinct(StringComparer.Ordinal).OrderBy(verb => verb, StringComparer.Ordinal).ToArray();
             app.Map(group.Key, (HttpContext context) => MethodNotAllowedAsync(context, accepted))
-                .WithOrder(int.MaxValue - 1);
+                .WithOrder(int.MaxValue - 1).WithMetadata(new AuxiliaryRoute());
         }
+
+        // Refuse startup if native/bridge dispatch metadata is inconsistent.
+        ReadInventory(((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints));
     }
 
     internal static async Task MethodNotAllowedAsync(HttpContext context, IReadOnlyList<string> allowed)
@@ -63,7 +83,8 @@ internal static class Net10RouteTable
     {
         // The default MapFallback pattern excludes paths containing a filename.
         // Every unknown /api path, including dotted segments, needs the WEB2 JSON 404 envelope.
-        app.MapFallback("{**path}", (HttpContext context) => FallbackAsync(context));
+        app.MapFallback("{**path}", (HttpContext context) => FallbackAsync(context))
+            .WithMetadata(new AuxiliaryRoute());
     }
 
     internal static async Task FallbackAsync(HttpContext context)

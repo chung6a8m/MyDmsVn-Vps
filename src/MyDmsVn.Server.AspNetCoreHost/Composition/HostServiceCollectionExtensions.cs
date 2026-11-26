@@ -60,6 +60,7 @@ internal static class HostServiceCollectionExtensions
             requireResolution: options.Web5Enabled,
             requireDesktopApi: options.DesktopApiEnabled));
         services.AddSingleton<ISuperuserBindingValidator, SqlSuperuserBindingValidator>();
+        services.AddVps10NativeApi();
         return services;
     }
 }
