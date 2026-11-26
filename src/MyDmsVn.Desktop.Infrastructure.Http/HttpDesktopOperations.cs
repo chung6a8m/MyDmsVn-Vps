@@ -55,9 +55,14 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             }
         }
 
-        public async Task<ApiResponse<T>> SendAsync<T>(
+        public Task<ApiResponse<T>> SendAsync<T>(
             string kind, long? target, HttpMethod method, string route,
-            object body, long? expectedVersion, CancellationToken cancellationToken)
+            object body, long? expectedVersion, CancellationToken cancellationToken) =>
+            SendAsync<T>(kind, target, method, route, body, expectedVersion, cancellationToken, null);
+
+        internal async Task<ApiResponse<T>> SendAsync<T>(
+            string kind, long? target, HttpMethod method, string route,
+            object body, long? expectedVersion, CancellationToken cancellationToken, Action? preserveDraft)
         {
             cancellationToken.ThrowIfCancellationRequested();
             await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -80,7 +85,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     var web5 = protocol == "web5";
                     var context = await _transport.SendAsync<JObject>(HttpMethod.Get,
                         web5 ? "/api/v2/operations/context" : "/api/v1/operations/context",
-                        null, cancellationToken, generation).ConfigureAwait(false);
+                        null, cancellationToken, generation, null, preserveDraft).ConfigureAwait(false);
                     if (!context.IsSuccess) return ApiResponse<T>.Failure(context.Error!);
                     epoch = (string?)context.Data!["deploymentEpoch"];
                     var contract = (string?)context.Data["contractVersion"];
@@ -112,7 +117,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                         ["Idempotency-Key"] = record.OperationId,
                         ["X-MyDmsVn-Deployment-Epoch"] = epoch!,
                     };
-                return await DispatchAsync<T>(record, method, route, body, generation, headers, cancellationToken)
+                return await DispatchAsync<T>(record, method, route, body, generation, headers, cancellationToken, preserveDraft)
                     .ConfigureAwait(false);
             }
             finally { _gate.Release(); }
@@ -152,13 +157,22 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         /// </summary>
         private async Task<ApiResponse<T>> DispatchAsync<T>(
             HttpPendingWriteRecord record, HttpMethod method, string route, object body,
-            long generation, IReadOnlyDictionary<string, string>? headers, CancellationToken token)
+            long generation, IReadOnlyDictionary<string, string>? headers, CancellationToken token,
+            Action? preserveDraft = null)
         {
             ApiResponse<T> result;
+            var notDispatched = false;
+            Action? beforeReauthentication = preserveDraft == null ? null : () =>
+            {
+                // Refresh failed before the transport attempted this request.
+                Clear(record);
+                notDispatched = true;
+                preserveDraft();
+            };
             try
             {
                 result = await _transport.SendAsync<T>(method, route, body, token,
-                    generation, headers).ConfigureAwait(false);
+                    generation, headers, beforeReauthentication).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
@@ -166,6 +180,11 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 throw; // commit could have happened before cancellation
             }
 
+            if (notDispatched)
+            {
+                HttpDesktopOperationDiagnostics.RecordDisposition(record.OperationId, "NotDispatched");
+                return result;
+            }
             if (!result.IsSuccess)
             {
                 HttpDesktopOperationDiagnostics.RecordDisposition(record.OperationId, "Unknown");

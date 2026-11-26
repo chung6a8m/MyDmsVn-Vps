@@ -60,7 +60,8 @@ public sealed class SalesReceiptControl : UserControl, IActivatableDesktopContro
     private IReadOnlyList<long> _saleIds = Array.Empty<long>();
 
     public SalesReceiptControl(ISalesReceiptApiClient api, IDesktopSession session, IUiDispatcher ui,
-        ISalesReceiptPreviewCalculator calculator, Func<CatalogKind, CatalogLookupViewModel> lookupFactory, IPermissionApiClient permissions, IProductApiClient productApi)
+        ISalesReceiptPreviewCalculator calculator, Func<CatalogKind, CatalogLookupViewModel> lookupFactory,
+        IPermissionApiClient permissions, IProductApiClient productApi, SalesDraftRecovery? draftRecovery = null)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session)); _sessionVersion = session.Version;
         FeedbackScope = new WorkspaceFeedbackScope(_sessionVersion);
@@ -68,7 +69,7 @@ public sealed class SalesReceiptControl : UserControl, IActivatableDesktopContro
         _productApi = productApi ?? throw new ArgumentNullException(nameof(productApi));
         if (lookupFactory == null) throw new ArgumentNullException(nameof(lookupFactory));
         _uiThread = Thread.CurrentThread.ManagedThreadId;
-        Editor = new SalesReceiptEditorViewModel(api, session, ui, calculator, this);
+        Editor = new SalesReceiptEditorViewModel(api, session, ui, calculator, this, draftRecovery);
         _list = new SalesReceiptListViewModel(api, session, ui);
         _products = lookupFactory(CatalogKind.Product);
         Dock = DockStyle.Fill; AutoScaleMode = AutoScaleMode.Dpi; Padding = new Padding(16);
@@ -203,7 +204,15 @@ public sealed class SalesReceiptControl : UserControl, IActivatableDesktopContro
         if (!Current || linked.IsCancellationRequested || generation != _boundary || activation != _activation) return;
         _read = read.IsSuccess && read.Data!.IsAllowed; _write = write.IsSuccess && write.Data!.IsAllowed; _post = post.IsSuccess && post.Data!.IsAllowed;
         if (!_read) { DenyProtectedState(); return; }
-        Editor.SetAccess(_read, _write, _post); _list.SetAccess(true); ApplyState();
+        Editor.SetAccess(_read, _write, _post); _list.SetAccess(true);
+        if (!_hasDetail && Editor.TryRestoreDraft())
+        {
+            BeginSaleDateSession();
+            _hasDetail = true;
+            WorkspaceMode = ReceiptWorkspaceMode.Detail;
+            _message = "Draft restored. Review the details and click Save to submit.";
+        }
+        ApplyState();
         // Existing Detail activation refreshes permissions without admitting a document/query boundary.
         if (WorkspaceMode == ReceiptWorkspaceMode.Detail) return;
         await Task.WhenAll(_lookups.Select(binding => binding.ViewModel.ActivateAsync(linked.Token)).Concat(new[] { _products.ActivateAsync(linked.Token), _list.RefreshAsync(linked.Token) }));
@@ -309,7 +318,11 @@ public sealed class SalesReceiptControl : UserControl, IActivatableDesktopContro
                 // Do not overwrite independent operation feedback with a second error copy.
                 if (!result) _inline.FocusActiveEdit();
                 if (result) InvalidateProductRequests();
-                if (result && intent == SalesCommandIntent.Save) _saveSubmittedBufferRevision = _closeBufferRevision;
+                if (result && intent == SalesCommandIntent.Save)
+                {
+                    _saveSubmittedBufferRevision = _closeBufferRevision;
+                    _message = null;
+                }
                 ApplyState();
             }, token);
             return result;

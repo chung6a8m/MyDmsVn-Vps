@@ -116,7 +116,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     expectedCatalogDigest = request.ExpectedCatalogDigest }, _expectedVersion, token);
     }
 
-    public sealed class HttpSalesReceiptApiClient : ISalesReceiptApiClient
+    public sealed class HttpSalesReceiptApiClient : ISalesReceiptApiClient, ISalesDraftSaveRecovery
     {
         private readonly HttpDesktopTransport _transport;
         private readonly HttpDesktopOperations _operations;
@@ -154,13 +154,28 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 "/api/v1/sales-receipts/" + Id(id), null, token, _expectedVersion);
 
         public Task<ApiResponse<SalesReceiptDto>> CreateDraftAsync(SaveSalesReceiptRequest request, CancellationToken token) =>
-            _operations.SendAsync<SalesReceiptDto>("Sales.Create", null, HttpMethod.Post,
-                "/api/v1/sales-receipts", V1WireMapper.SalesSave(request), _expectedVersion, token);
+            CreateDraftAsync(request, token, null);
 
         public Task<ApiResponse<SalesReceiptDto>> UpdateDraftAsync(UpdateSalesReceiptDraftRequest request, CancellationToken token) =>
+            UpdateDraftAsync(request, token, null);
+
+        Task<ApiResponse<SalesReceiptDto>> ISalesDraftSaveRecovery.SaveDraftAsync(long saleId, string version,
+            SaveSalesReceiptRequest request, Action preserveDraft, CancellationToken token) =>
+            saleId == 0 ? CreateDraftAsync(request, token, preserveDraft) :
+                UpdateDraftAsync(new UpdateSalesReceiptDraftRequest(saleId, version, request.SaleDate,
+                    request.CustomerId, request.WarehouseId, request.EmployeeId, request.Note, request.Lines),
+                    token, preserveDraft);
+
+        private Task<ApiResponse<SalesReceiptDto>> CreateDraftAsync(SaveSalesReceiptRequest request,
+            CancellationToken token, Action? preserveDraft) =>
+            _operations.SendAsync<SalesReceiptDto>("Sales.Create", null, HttpMethod.Post,
+                "/api/v1/sales-receipts", V1WireMapper.SalesSave(request), _expectedVersion, token, preserveDraft);
+
+        private Task<ApiResponse<SalesReceiptDto>> UpdateDraftAsync(UpdateSalesReceiptDraftRequest request,
+            CancellationToken token, Action? preserveDraft) =>
             _operations.SendAsync<SalesReceiptDto>("Sales.Update", request.SaleId, HttpMethod.Put,
                 "/api/v1/sales-receipts/" + Id(request.SaleId) + "/draft",
-                V1WireMapper.SalesUpdate(request), _expectedVersion, token);
+                V1WireMapper.SalesUpdate(request), _expectedVersion, token, preserveDraft);
 
         public Task<ApiResponse<PostSalesReceiptResponse>> PostAsync(PostSalesReceiptRequest request, CancellationToken token) =>
             _operations.SendAsync<PostSalesReceiptResponse>("Sales.Post", request.SaleId, HttpMethod.Post,

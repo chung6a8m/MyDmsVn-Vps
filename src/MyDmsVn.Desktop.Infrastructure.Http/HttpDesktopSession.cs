@@ -141,7 +141,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             }
         }
 
-        internal void RequireReauthentication(long generation)
+        internal void RequireReauthentication(long generation, Action? beforeNotification = null)
         {
             var changed = false;
             lock (_sync)
@@ -155,7 +155,9 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 }
             }
 
-            if (changed) SessionChanged?.Invoke(this, EventArgs.Empty);
+            if (!changed) return;
+            try { beforeNotification?.Invoke(); }
+            finally { SessionChanged?.Invoke(this, EventArgs.Empty); }
         }
 
         public void RecordUserActivity()

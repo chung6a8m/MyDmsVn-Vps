@@ -212,6 +212,91 @@ namespace MyDmsVn.Desktop.Session.Tests
             }
         }
 
+        [Theory]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        [InlineData(true, false)]
+        public async Task Failed_refresh_preserves_unsent_sales_draft_for_manual_save_after_login(bool web5, bool sameActor)
+        {
+            var logins = 0;
+            var writes = 0;
+            using var fixture = Create(request =>
+            {
+                switch (request.RequestUri!.AbsolutePath)
+                {
+                    case "/api/v1/auth/login":
+                        return Json(HttpStatusCode.OK, ++logins == 1
+                            ? LoginJson.Replace("2099-01-01T00:00:00Z",
+                                DateTime.UtcNow.AddSeconds(20).ToString("O", CultureInfo.InvariantCulture))
+                            : sameActor ? LoginJson : LoginJson.Replace("\"userId\":7", "\"userId\":8"));
+                    case "/api/v1/auth/refresh":
+                        throw new HttpRequestException("Connection unavailable");
+                    case "/api/v2/operations/context":
+                        return Json(HttpStatusCode.OK, "{\"data\":{\"deploymentEpoch\":\"35f336a2-af15-4da2-aa43-9ff46828ffad\","
+                            + "\"contractVersion\":\"web5-resolution-v1\",\"sameKeyResendEnabled\":false,\"actorUserId\":7}}");
+                    case "/api/v1/sales-receipts":
+                        writes++;
+                        return Json(HttpStatusCode.BadRequest, "{\"error\":{\"code\":\"ValidationError\",\"message\":\"Test response\"}}");
+                    default:
+                        throw new InvalidOperationException("Unexpected request");
+                }
+            });
+            var credentials = new LoginRequest("operator", "secret");
+            Assert.True((await fixture.Transport.LoginAsync(credentials, CancellationToken.None)).IsSuccess);
+            using var recovery = new SalesDraftRecovery(fixture.Session);
+            var store = new TestPendingWriteStore();
+            var operations = new HttpDesktopOperations(fixture.Transport, fixture.Session,
+                new HttpDesktopOperationSettings(web5 ? HttpDesktopOperationMode.Web5 : HttpDesktopOperationMode.LegacyWeb11), store);
+            var sales = new HttpSalesReceiptApiClient(fixture.Transport, operations);
+            SalesReceiptEditorViewModel OpenEditor()
+            {
+                var vm = new SalesReceiptEditorViewModel(sales, fixture.Session, new ImmediateUiDispatcher(),
+                    new HttpDesktopPreviewCalculator(), new MyDmsVn.Desktop.Tests.SalesBuffers(), recovery);
+                vm.SetAccess(true, true, true);
+                return vm;
+            }
+
+            using (var vm = OpenEditor())
+            {
+                vm.CustomerId = 1; vm.WarehouseId = 2; vm.EmployeeId = 3; vm.Note = "unsent sales draft";
+                var line = vm.AddLine()!;
+                line.ProductId = 4; line.Quantity = 2m; line.UnitPrice = 12.3456m;
+                await vm.SaveAsync();
+                Assert.Equal(DesktopSessionState.Expired, fixture.Session.State);
+                Assert.Equal(0, writes);
+                Assert.Null(store.Load());
+                Assert.True(recovery.HasDraft);
+            }
+
+            Assert.True((await fixture.Transport.LoginAsync(credentials, CancellationToken.None)).IsSuccess);
+            using var reopened = OpenEditor();
+            if (!sameActor)
+            {
+                Assert.False(recovery.HasDraft);
+                Assert.False(reopened.TryRestoreDraft());
+                Assert.Empty(reopened.Lines);
+                Assert.Null(reopened.Note);
+                Assert.Equal(0, writes);
+                return;
+            }
+            reopened.SetAccess(true, false, false);
+            Assert.False(reopened.TryRestoreDraft());
+            reopened.SetAccess(true, true, true);
+            Assert.True(reopened.TryRestoreDraft());
+            Assert.True(reopened.IsDirty);
+            Assert.Equal("unsent sales draft", reopened.Note);
+            Assert.Equal(1, reopened.CustomerId);
+            Assert.Equal(2, reopened.WarehouseId);
+            Assert.Equal(3, reopened.EmployeeId);
+            var restoredLine = Assert.Single(reopened.Lines);
+            Assert.Equal(4, restoredLine.ProductId);
+            Assert.Equal(2m, restoredLine.Quantity);
+            Assert.Equal(12.3456m, restoredLine.UnitPrice);
+            Assert.Equal(0, writes);
+            await reopened.SaveAsync();
+            Assert.Equal(1, writes);
+        }
+
         [Fact]
         public async Task In_flight_response_after_sign_out_cannot_repopulate_session()
         {

@@ -20,16 +20,20 @@ internal sealed class SalesReceiptControlFactory : ISalesReceiptControlFactory
     private readonly IDesktopNotificationService _notifications;
     private readonly IDesktopExceptionReporter _reporter;
     private readonly IAsyncDelay _delay;
+    private readonly SalesDraftRecovery _draftRecovery;
     public SalesReceiptControlFactory(ISalesReceiptApiClient sales, IDesktopSession session, IUiDispatcher ui,
         ISalesReceiptPreviewCalculator calculator, IPermissionApiClient permissions, ICustomerApiClient customers,
         IWarehouseApiClient warehouses, IEmployeeApiClient employees, IProductApiClient products, IMessenger messenger,
-        IDesktopNotificationService notifications, IDesktopExceptionReporter reporter, IAsyncDelay delay)
+        IDesktopNotificationService notifications, IDesktopExceptionReporter reporter, IAsyncDelay delay,
+        SalesDraftRecovery draftRecovery)
     {
         _sales = sales; _session = session; _ui = ui; _calculator = calculator; _permissions = permissions;
         _customers = customers; _warehouses = warehouses; _employees = employees; _products = products;
         _messenger = messenger; _notifications = notifications; _reporter = reporter; _delay = delay;
+        _draftRecovery = draftRecovery;
     }
-    public Control Create() => new SalesReceiptControl(_sales, _session, _ui, _calculator, Lookup, _permissions, _products);
+    public Control Create() => new SalesReceiptControl(_sales, _session, _ui, _calculator, Lookup,
+        _permissions, _products, _draftRecovery);
     private CatalogLookupViewModel Lookup(CatalogKind kind)
     {
         ICatalogLookupSource source;

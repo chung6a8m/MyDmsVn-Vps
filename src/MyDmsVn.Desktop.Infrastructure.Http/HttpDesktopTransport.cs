@@ -107,10 +107,16 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             }
         }
 
-        public async Task<ApiResponse<T>> SendAsync<T>(
+        public Task<ApiResponse<T>> SendAsync<T>(
             HttpMethod method, string route, object? body, CancellationToken cancellationToken,
             long? expectedSessionVersion = null,
-            IReadOnlyDictionary<string, string>? additionalHeaders = null)
+            IReadOnlyDictionary<string, string>? additionalHeaders = null) =>
+            SendAsync<T>(method, route, body, cancellationToken, expectedSessionVersion, additionalHeaders, null);
+
+        internal async Task<ApiResponse<T>> SendAsync<T>(
+            HttpMethod method, string route, object? body, CancellationToken cancellationToken,
+            long? expectedSessionVersion, IReadOnlyDictionary<string, string>? additionalHeaders,
+            Action? beforeConnectionReauthentication)
         {
             if (method == null) throw new ArgumentNullException(nameof(method));
             cancellationToken.ThrowIfCancellationRequested();
@@ -120,7 +126,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
             if (expiresUtc <= DateTime.UtcNow.AddSeconds(30))
             {
-                if (!await RefreshAsync(generation, cancellationToken).ConfigureAwait(false))
+                if (!await RefreshAsync(generation, cancellationToken, beforeConnectionReauthentication).ConfigureAwait(false))
                     return SessionChanged<T>();
                 if (!_session.TryCapture(generation, out _, out token, out _))
                     return SessionChanged<T>();
@@ -144,7 +150,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             SendAsync<CurrentUserDto>(HttpMethod.Get, "/api/v1/auth/me",
                 null, cancellationToken);
 
-        private async Task<bool> RefreshAsync(long generation, CancellationToken cancellationToken)
+        private async Task<bool> RefreshAsync(long generation, CancellationToken cancellationToken,
+            Action? beforeConnectionReauthentication)
         {
             await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             RefreshAttempt? attempt = null;
@@ -173,7 +180,9 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     errorCode = valid ? "Auth.SessionChanged" : "Auth.InvalidRefreshTicket";
                 }
 
-                DiscardRefresh(generation);
+                var connectionFailed = attempt.HttpStatus == null &&
+                    (errorCode == "Http.Unavailable" || errorCode == "Http.Timeout");
+                DiscardRefresh(generation, connectionFailed ? beforeConnectionReauthentication : null);
                 attempt.Record("Failed", errorCode);
                 return false;
             }
@@ -197,12 +206,15 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             }
         }
 
-        private void DiscardRefresh(long generation)
+        private void DiscardRefresh(long generation, Action? beforeNotification = null)
         {
-            _session.RequireReauthentication(generation);
-            // Logout needs a refresh cookie from this family after rotation settles.
-            if (_session.State != DesktopSessionState.LoggingOut)
-                ClearRefreshCookie();
+            try { _session.RequireReauthentication(generation, beforeNotification); }
+            finally
+            {
+                // Logout needs a refresh cookie from this family after rotation settles.
+                if (_session.State != DesktopSessionState.LoggingOut)
+                    ClearRefreshCookie();
+            }
         }
 
         private Task<ApiResponse<AuthTicket>> AuthAsync(
