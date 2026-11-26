@@ -1,0 +1,1742 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "58111f95f8dbb708fbd7c9ce8480b3f952dbaad3",
+  "description": "VPS-10.0 characterization baseline. Logical verb/path identity is immutable in wave 1; activeOwner describes the currently mapped implementation, not future acceptance. Required variants are independently frozen VPS-05C net48 observations. Historical SQL ledger is bounded historical classification, not exhaustive or current route-level SQL acceptance.",
+  "sourcePins": {
+    "docs/contracts/vps-01-route-inventory.json": "85c6f8d1b63cabcf54030009cd03e42cb729ae4c",
+    "docs/contracts/vps-02-route-additions.json": "b969c0a0d810a328eb7ecce44651dfd5659c8436",
+    "docs/contracts/vps-05c-desktop-route-net48.json": "33b3b76c963e76393532e878c31305e62887ad40",
+    "docs/contracts/vps-02-desktop-method-matrix.json": "3cb0036d0d2f374fad50940bbf5b81f716924c41",
+    "docs/contracts/web4-v1/fingerprint-vectors.json": "ec459546038ee3848788f1ceeb82901c4a8d9e61",
+    "docs/evidence/vps-04a-live-route-parity.md": "b5a4c175a72450a83619551c5702c1a0f408ed49"
+  },
+  "routes": [
+    {
+      "id": "GET /api/v1/auth/capabilities",
+      "httpMethod": "GET",
+      "path": "/api/v1/auth/capabilities",
+      "order": 0,
+      "baselineController": "AuthController",
+      "baselineAction": "Capabilities",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6C",
+      "contractFamily": "web2-v1",
+      "authentication": "bearer",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-AUTH-CAPABILITIES",
+        "rawHttpSamplePath": "/api/v1/auth/capabilities",
+        "canonicalBytes": null,
+        "desktopMethods": [],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/auth/me",
+      "httpMethod": "GET",
+      "path": "/api/v1/auth/me",
+      "order": 0,
+      "baselineController": "AuthController",
+      "baselineAction": "Me",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6C",
+      "contractFamily": "web2-v1",
+      "authentication": "bearer",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-AUTH-ME",
+        "rawHttpSamplePath": "/api/v1/auth/me",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IIdentityApiClient.GetCurrentUserAsync"
+        ],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/catalog/customers",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/customers",
+      "order": 0,
+      "baselineController": "CustomersController",
+      "baselineAction": "List",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-CUSTOMER-LIST",
+        "rawHttpSamplePath": "/api/v1/catalog/customers",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "ICustomerApiClient.ListAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "GET /api/v1/catalog/customers/lookup",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/customers/lookup",
+      "order": 0,
+      "baselineController": "CatalogLookupController",
+      "baselineAction": "Customers",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.2",
+      "contractFamily": "web2-v1",
+      "authentication": "bearer",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-LOOKUP-CUSTOMERS",
+        "rawHttpSamplePath": "/api/v1/catalog/customers/lookup",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "ICustomerApiClient.LookupAsync"
+        ],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/catalog/customers/{id:int}",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/customers/{id:int}",
+      "order": 0,
+      "baselineController": "CustomersController",
+      "baselineAction": "Get",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-CUSTOMER-GET",
+        "rawHttpSamplePath": "/api/v1/catalog/customers/1",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "ICustomerApiClient.GetAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "GET /api/v1/catalog/employees",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/employees",
+      "order": 0,
+      "baselineController": "EmployeesController",
+      "baselineAction": "List",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-EMPLOYEE-LIST",
+        "rawHttpSamplePath": "/api/v1/catalog/employees",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IEmployeeApiClient.ListAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "GET /api/v1/catalog/employees/lookup",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/employees/lookup",
+      "order": 0,
+      "baselineController": "CatalogLookupController",
+      "baselineAction": "Employees",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.2",
+      "contractFamily": "web2-v1",
+      "authentication": "bearer",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-LOOKUP-EMPLOYEES",
+        "rawHttpSamplePath": "/api/v1/catalog/employees/lookup",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IEmployeeApiClient.LookupAsync"
+        ],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/catalog/employees/{id:int}",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/employees/{id:int}",
+      "order": 0,
+      "baselineController": "EmployeesController",
+      "baselineAction": "Get",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-EMPLOYEE-GET",
+        "rawHttpSamplePath": "/api/v1/catalog/employees/1",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IEmployeeApiClient.GetAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "GET /api/v1/catalog/products",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/products",
+      "order": 0,
+      "baselineController": "ProductsController",
+      "baselineAction": "List",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-PRODUCT-LIST",
+        "rawHttpSamplePath": "/api/v1/catalog/products",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IProductApiClient.ListAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "GET /api/v1/catalog/products/lookup",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/products/lookup",
+      "order": 0,
+      "baselineController": "CatalogLookupController",
+      "baselineAction": "Products",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.2",
+      "contractFamily": "web2-v1",
+      "authentication": "bearer",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-LOOKUP-PRODUCTS",
+        "rawHttpSamplePath": "/api/v1/catalog/products/lookup",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IProductApiClient.LookupAsync"
+        ],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/catalog/products/{id:int}",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/products/{id:int}",
+      "order": 0,
+      "baselineController": "ProductsController",
+      "baselineAction": "Get",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-PRODUCT-GET",
+        "rawHttpSamplePath": "/api/v1/catalog/products/1",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IProductApiClient.GetAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "GET /api/v1/catalog/warehouses",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/warehouses",
+      "order": 0,
+      "baselineController": "WarehousesController",
+      "baselineAction": "List",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-WAREHOUSE-LIST",
+        "rawHttpSamplePath": "/api/v1/catalog/warehouses",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IWarehouseApiClient.ListAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "GET /api/v1/catalog/warehouses/lookup",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/warehouses/lookup",
+      "order": 0,
+      "baselineController": "CatalogLookupController",
+      "baselineAction": "Warehouses",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.2",
+      "contractFamily": "web2-v1",
+      "authentication": "bearer",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-LOOKUP-WAREHOUSES",
+        "rawHttpSamplePath": "/api/v1/catalog/warehouses/lookup",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IWarehouseApiClient.LookupAsync"
+        ],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/catalog/warehouses/{id:int}",
+      "httpMethod": "GET",
+      "path": "/api/v1/catalog/warehouses/{id:int}",
+      "order": 0,
+      "baselineController": "WarehousesController",
+      "baselineAction": "Get",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-WAREHOUSE-GET",
+        "rawHttpSamplePath": "/api/v1/catalog/warehouses/1",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IWarehouseApiClient.GetAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "GET /api/v1/foundation/status",
+      "httpMethod": "GET",
+      "path": "/api/v1/foundation/status",
+      "order": 0,
+      "baselineController": "FoundationParityController",
+      "baselineAction": "Status",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6B",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-FOUNDATION",
+        "rawHttpSamplePath": "/api/v1/foundation/status",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IFoundationApiClient.GetStatusAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "GET /api/v1/goods-receipts",
+      "httpMethod": "GET",
+      "path": "/api/v1/goods-receipts",
+      "order": 0,
+      "baselineController": "GoodsReceiptsController",
+      "baselineAction": "List",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.5A",
+      "contractFamily": "web3-v1",
+      "authentication": "bearer",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-RECEIPT-LIST",
+        "rawHttpSamplePath": "/api/v1/goods-receipts",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IGoodsReceiptApiClient.ListAsync"
+        ],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/goods-receipts/{receiptId}",
+      "httpMethod": "GET",
+      "path": "/api/v1/goods-receipts/{receiptId}",
+      "order": 0,
+      "baselineController": "GoodsReceiptsController",
+      "baselineAction": "Get",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.5A",
+      "contractFamily": "web3-v1",
+      "authentication": "bearer",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-RECEIPT-GET",
+        "rawHttpSamplePath": "/api/v1/goods-receipts/9007199254740993",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IGoodsReceiptApiClient.GetAsync"
+        ],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/health",
+      "httpMethod": "GET",
+      "path": "/api/v1/health",
+      "order": 0,
+      "baselineController": "HealthController",
+      "baselineAction": "Get",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6C",
+      "contractFamily": "web2-health",
+      "authentication": "anonymous",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "success"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-HEALTH",
+        "rawHttpSamplePath": "/api/v1/health",
+        "canonicalBytes": null,
+        "desktopMethods": [],
+        "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
+      }
+    },
+    {
+      "id": "GET /api/v1/inventory/balances",
+      "httpMethod": "GET",
+      "path": "/api/v1/inventory/balances",
+      "order": 0,
+      "baselineController": "InventoryController",
+      "baselineAction": "Balances",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.5A",
+      "contractFamily": "web3-v1",
+      "authentication": "bearer",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-INVENTORY-BALANCES",
+        "rawHttpSamplePath": "/api/v1/inventory/balances",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IInventoryApiClient.GetStockBalancesAsync"
+        ],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/inventory/stock-card",
+      "httpMethod": "GET",
+      "path": "/api/v1/inventory/stock-card",
+      "order": 0,
+      "baselineController": "InventoryController",
+      "baselineAction": "StockCard",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.5A",
+      "contractFamily": "web3-v1",
+      "authentication": "bearer",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-INVENTORY-STOCK-CARD",
+        "rawHttpSamplePath": "/api/v1/inventory/stock-card",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IInventoryApiClient.GetStockCardAsync"
+        ],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/operations/context",
+      "httpMethod": "GET",
+      "path": "/api/v1/operations/context",
+      "order": 0,
+      "baselineController": "OperationsController",
+      "baselineAction": "Context",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6D",
+      "contractFamily": "web4-v1",
+      "authentication": "bearer",
+      "featureFlags": [
+        "Web4Enabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "disabled",
+        "enabled",
+        "failure",
+        "invalid",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-OPERATIONS-CONTEXT",
+        "rawHttpSamplePath": "/api/v1/operations/context",
+        "canonicalBytes": null,
+        "desktopMethods": [],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/operations/{operationId}",
+      "httpMethod": "GET",
+      "path": "/api/v1/operations/{operationId}",
+      "order": 1,
+      "baselineController": "OperationsController",
+      "baselineAction": "Status",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6D",
+      "contractFamily": "web4-v1",
+      "authentication": "bearer",
+      "featureFlags": [
+        "Web4Enabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "disabled",
+        "enabled",
+        "epoch-mismatch",
+        "failure",
+        "fingerprint-mismatch",
+        "invalid",
+        "not-observed",
+        "permission",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-OPERATIONS-STATUS",
+        "rawHttpSamplePath": "/api/v1/operations/11111111-1111-4111-8111-111111111111",
+        "canonicalBytes": null,
+        "desktopMethods": [],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/sales-receipts",
+      "httpMethod": "GET",
+      "path": "/api/v1/sales-receipts",
+      "order": 0,
+      "baselineController": "SalesReceiptsController",
+      "baselineAction": "List",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.4A",
+      "contractFamily": "web2-v1",
+      "authentication": "bearer",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-SALES-LIST",
+        "rawHttpSamplePath": "/api/v1/sales-receipts",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "ISalesReceiptApiClient.ListAsync"
+        ],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/sales-receipts/{saleId}",
+      "httpMethod": "GET",
+      "path": "/api/v1/sales-receipts/{saleId}",
+      "order": 0,
+      "baselineController": "SalesReceiptsController",
+      "baselineAction": "Get",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.4A",
+      "contractFamily": "web2-v1",
+      "authentication": "bearer",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-SALES-GET",
+        "rawHttpSamplePath": "/api/v1/sales-receipts/9223372036854775807",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "ISalesReceiptApiClient.GetAsync"
+        ],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v1/security/permissions/catalog",
+      "httpMethod": "GET",
+      "path": "/api/v1/security/permissions/catalog",
+      "order": 0,
+      "baselineController": "SecurityParityController",
+      "baselineAction": "PermissionCatalog",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6B",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-PERMISSION-CATALOG",
+        "rawHttpSamplePath": "/api/v1/security/permissions/catalog",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IPermissionCatalogApiClient.GetCatalogAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "GET /api/v1/security/permissions/check",
+      "httpMethod": "GET",
+      "path": "/api/v1/security/permissions/check",
+      "order": 0,
+      "baselineController": "SecurityParityController",
+      "baselineAction": "CheckPermission",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6B",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-PERMISSION-CHECK",
+        "rawHttpSamplePath": "/api/v1/security/permissions/check",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IPermissionApiClient.CheckAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "GET /api/v1/security/roles",
+      "httpMethod": "GET",
+      "path": "/api/v1/security/roles",
+      "order": 0,
+      "baselineController": "SecurityParityController",
+      "baselineAction": "ListRoles",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6B",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-ROLES",
+        "rawHttpSamplePath": "/api/v1/security/roles",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "ISecurityAdministrationApiClient.ListRolesAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "GET /api/v1/security/users",
+      "httpMethod": "GET",
+      "path": "/api/v1/security/users",
+      "order": 0,
+      "baselineController": "SecurityParityController",
+      "baselineAction": "ListUsers",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6B",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-USERS",
+        "rawHttpSamplePath": "/api/v1/security/users",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "ISecurityAdministrationApiClient.ListUsersAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "GET /api/v2/operations/context",
+      "httpMethod": "GET",
+      "path": "/api/v2/operations/context",
+      "order": 0,
+      "baselineController": "OperationResolutionController",
+      "baselineAction": "Context",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6D",
+      "contractFamily": "web5-resolution-v1",
+      "authentication": "bearer",
+      "featureFlags": [
+        "Web5Enabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "disabled",
+        "enabled",
+        "failure",
+        "invalid",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-RESOLUTION-CONTEXT",
+        "rawHttpSamplePath": "/api/v2/operations/context",
+        "canonicalBytes": null,
+        "desktopMethods": [],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v2/operations/{operationId}/resolution",
+      "httpMethod": "GET",
+      "path": "/api/v2/operations/{operationId}/resolution",
+      "order": 1,
+      "baselineController": "OperationResolutionController",
+      "baselineAction": "Resolution",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6D",
+      "contractFamily": "web5-resolution-v1",
+      "authentication": "bearer",
+      "featureFlags": [
+        "Web5Enabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "disabled",
+        "enabled",
+        "epoch-mismatch",
+        "failure",
+        "fingerprint-mismatch",
+        "invalid",
+        "not-observed",
+        "permission",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-RESOLUTION-STATUS",
+        "rawHttpSamplePath": "/api/v2/operations/11111111-1111-4111-8111-111111111111/resolution",
+        "canonicalBytes": null,
+        "desktopMethods": [],
+        "historicalSqlLedger": "GROUP_EAD_SQL"
+      }
+    },
+    {
+      "id": "GET /api/v3/operations/resend-context",
+      "httpMethod": "GET",
+      "path": "/api/v3/operations/resend-context",
+      "order": 0,
+      "baselineController": "Web6ResendEligibilityController",
+      "baselineAction": "Context",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6D",
+      "contractFamily": "web6-resend-eligibility-v1",
+      "authentication": "bearer",
+      "featureFlags": [
+        "Web5Enabled:required",
+        "Web6ResendEligibilityEnabled:required",
+        "Web6CandidateId:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "disabled",
+        "enabled",
+        "failure",
+        "invalid",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-RESEND-CONTEXT",
+        "rawHttpSamplePath": "/api/v3/operations/resend-context",
+        "canonicalBytes": null,
+        "desktopMethods": [],
+        "historicalSqlLedger": "DISABLED_404"
+      }
+    },
+    {
+      "id": "GET /api/v3/operations/{operationId}/resend-eligibility",
+      "httpMethod": "GET",
+      "path": "/api/v3/operations/{operationId}/resend-eligibility",
+      "order": 2,
+      "baselineController": "Web6ResendEligibilityController",
+      "baselineAction": "Eligibility",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6D",
+      "contractFamily": "web6-resend-eligibility-v1",
+      "authentication": "bearer",
+      "featureFlags": [
+        "Web5Enabled:required",
+        "Web6ResendEligibilityEnabled:required",
+        "Web6CandidateId:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "deny-decision",
+        "disabled",
+        "enabled",
+        "epoch-mismatch",
+        "failure",
+        "fingerprint-mismatch",
+        "indeterminate",
+        "invalid",
+        "key-mismatch",
+        "permission",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-RESEND-ELIGIBILITY",
+        "rawHttpSamplePath": "/api/v3/operations/11111111-1111-4111-8111-111111111111/resend-eligibility",
+        "canonicalBytes": null,
+        "desktopMethods": [],
+        "historicalSqlLedger": "DISABLED_404"
+      }
+    },
+    {
+      "id": "GET /api/v3/operations/{operationId}/resend-receipt",
+      "httpMethod": "GET",
+      "path": "/api/v3/operations/{operationId}/resend-receipt",
+      "order": 1,
+      "baselineController": "Web6ResendEligibilityController",
+      "baselineAction": "Receipt",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6D",
+      "contractFamily": "web6-resend-eligibility-v1",
+      "authentication": "bearer",
+      "featureFlags": [
+        "Web5Enabled:required",
+        "Web6ResendEligibilityEnabled:required",
+        "Web6CandidateId:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "disabled",
+        "enabled",
+        "epoch-mismatch",
+        "failure",
+        "invalid",
+        "permission",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-RESEND-RECEIPT",
+        "rawHttpSamplePath": "/api/v3/operations/11111111-1111-4111-8111-111111111111/resend-receipt",
+        "canonicalBytes": null,
+        "desktopMethods": [],
+        "historicalSqlLedger": "DISABLED_404"
+      }
+    },
+    {
+      "id": "POST /api/v1/auth/login",
+      "httpMethod": "POST",
+      "path": "/api/v1/auth/login",
+      "order": 0,
+      "baselineController": "AuthController",
+      "baselineAction": "Login",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6C",
+      "contractFamily": "web2-v1",
+      "authentication": "cookie-endpoint",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "rate-limited",
+        "success",
+        "wrong-credentials"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-AUTH-LOGIN",
+        "rawHttpSamplePath": "/api/v1/auth/login",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IIdentityApiClient.LoginAsync"
+        ],
+        "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
+      }
+    },
+    {
+      "id": "POST /api/v1/auth/logout",
+      "httpMethod": "POST",
+      "path": "/api/v1/auth/logout",
+      "order": 0,
+      "baselineController": "AuthController",
+      "baselineAction": "Logout",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6C",
+      "contractFamily": "web2-v1",
+      "authentication": "cookie-endpoint",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "success"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-AUTH-LOGOUT",
+        "rawHttpSamplePath": "/api/v1/auth/logout",
+        "canonicalBytes": null,
+        "desktopMethods": [],
+        "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
+      }
+    },
+    {
+      "id": "POST /api/v1/auth/refresh",
+      "httpMethod": "POST",
+      "path": "/api/v1/auth/refresh",
+      "order": 0,
+      "baselineController": "AuthController",
+      "baselineAction": "Refresh",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6C",
+      "contractFamily": "web2-v1",
+      "authentication": "cookie-endpoint",
+      "featureFlags": [],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "rate-limited",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-AUTH-REFRESH",
+        "rawHttpSamplePath": "/api/v1/auth/refresh",
+        "canonicalBytes": null,
+        "desktopMethods": [],
+        "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
+      }
+    },
+    {
+      "id": "POST /api/v1/catalog/customers",
+      "httpMethod": "POST",
+      "path": "/api/v1/catalog/customers",
+      "order": 0,
+      "baselineController": "CustomersController",
+      "baselineAction": "Create",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-CUSTOMER-CREATE",
+        "rawHttpSamplePath": "/api/v1/catalog/customers",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "ICustomerApiClient.CreateAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "POST /api/v1/catalog/employees",
+      "httpMethod": "POST",
+      "path": "/api/v1/catalog/employees",
+      "order": 0,
+      "baselineController": "EmployeesController",
+      "baselineAction": "Create",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-EMPLOYEE-CREATE",
+        "rawHttpSamplePath": "/api/v1/catalog/employees",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IEmployeeApiClient.CreateAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "POST /api/v1/catalog/products",
+      "httpMethod": "POST",
+      "path": "/api/v1/catalog/products",
+      "order": 0,
+      "baselineController": "ProductsController",
+      "baselineAction": "Create",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-PRODUCT-CREATE",
+        "rawHttpSamplePath": "/api/v1/catalog/products",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IProductApiClient.CreateAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "POST /api/v1/catalog/warehouses",
+      "httpMethod": "POST",
+      "path": "/api/v1/catalog/warehouses",
+      "order": 0,
+      "baselineController": "WarehousesController",
+      "baselineAction": "Create",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-WAREHOUSE-CREATE",
+        "rawHttpSamplePath": "/api/v1/catalog/warehouses",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IWarehouseApiClient.CreateAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "POST /api/v1/goods-receipts",
+      "httpMethod": "POST",
+      "path": "/api/v1/goods-receipts",
+      "order": 0,
+      "baselineController": "GoodsReceiptsController",
+      "baselineAction": "Create",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.5B",
+      "contractFamily": "web3-v1",
+      "authentication": "bearer",
+      "featureFlags": [
+        "Web4Enabled:optional-operation-context"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-RECEIPT-CREATE",
+        "rawHttpSamplePath": "/api/v1/goods-receipts",
+        "canonicalBytes": "web4-v1/fingerprint-vectors.json",
+        "desktopMethods": [
+          "IGoodsReceiptApiClient.CreateDraftAsync"
+        ],
+        "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
+      }
+    },
+    {
+      "id": "POST /api/v1/goods-receipts/{receiptId}/post",
+      "httpMethod": "POST",
+      "path": "/api/v1/goods-receipts/{receiptId}/post",
+      "order": 0,
+      "baselineController": "GoodsReceiptsController",
+      "baselineAction": "Post",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.5B",
+      "contractFamily": "web3-v1",
+      "authentication": "bearer",
+      "featureFlags": [
+        "Web4Enabled:optional-operation-context"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-RECEIPT-POST",
+        "rawHttpSamplePath": "/api/v1/goods-receipts/9007199254740993/post",
+        "canonicalBytes": "web4-v1/fingerprint-vectors.json",
+        "desktopMethods": [
+          "IGoodsReceiptApiClient.PostAsync"
+        ],
+        "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
+      }
+    },
+    {
+      "id": "POST /api/v1/sales-receipts",
+      "httpMethod": "POST",
+      "path": "/api/v1/sales-receipts",
+      "order": 0,
+      "baselineController": "SalesReceiptsController",
+      "baselineAction": "Create",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.4B",
+      "contractFamily": "web2-v1",
+      "authentication": "bearer",
+      "featureFlags": [
+        "Web4Enabled:optional-operation-context"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-SALES-CREATE",
+        "rawHttpSamplePath": "/api/v1/sales-receipts",
+        "canonicalBytes": "web4-v1/fingerprint-vectors.json",
+        "desktopMethods": [
+          "ISalesReceiptApiClient.CreateDraftAsync"
+        ],
+        "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
+      }
+    },
+    {
+      "id": "POST /api/v1/sales-receipts/{saleId}/post",
+      "httpMethod": "POST",
+      "path": "/api/v1/sales-receipts/{saleId}/post",
+      "order": 0,
+      "baselineController": "SalesReceiptsController",
+      "baselineAction": "Post",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.4B",
+      "contractFamily": "web2-v1",
+      "authentication": "bearer",
+      "featureFlags": [
+        "Web4Enabled:optional-operation-context"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-SALES-POST",
+        "rawHttpSamplePath": "/api/v1/sales-receipts/9223372036854775807/post",
+        "canonicalBytes": "web4-v1/fingerprint-vectors.json",
+        "desktopMethods": [
+          "ISalesReceiptApiClient.PostAsync"
+        ],
+        "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
+      }
+    },
+    {
+      "id": "POST /api/v1/security/import/apply",
+      "httpMethod": "POST",
+      "path": "/api/v1/security/import/apply",
+      "order": 0,
+      "baselineController": "SecurityParityController",
+      "baselineAction": "ApplyImport",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6B",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-IMPORT-APPLY",
+        "rawHttpSamplePath": "/api/v1/security/import/apply",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "ISecurityAdministrationApiClient.ApplyPermissionImportAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "POST /api/v1/security/import/preview",
+      "httpMethod": "POST",
+      "path": "/api/v1/security/import/preview",
+      "order": 0,
+      "baselineController": "SecurityParityController",
+      "baselineAction": "PreviewImport",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6B",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-IMPORT-PREVIEW",
+        "rawHttpSamplePath": "/api/v1/security/import/preview",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "ISecurityAdministrationApiClient.PreviewPermissionImportAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "POST /api/v1/security/mutations",
+      "httpMethod": "POST",
+      "path": "/api/v1/security/mutations",
+      "order": 0,
+      "baselineController": "SecurityParityController",
+      "baselineAction": "Mutate",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6B",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-SECURITY-MUTATION",
+        "rawHttpSamplePath": "/api/v1/security/mutations",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "ISecurityAdministrationApiClient.MutateAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "PUT /api/v1/catalog/customers/{id:int}",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/customers/{id:int}",
+      "order": 0,
+      "baselineController": "CustomersController",
+      "baselineAction": "Update",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-CUSTOMER-UPDATE",
+        "rawHttpSamplePath": "/api/v1/catalog/customers/1",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "ICustomerApiClient.UpdateAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "PUT /api/v1/catalog/customers/{id:int}/active",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/customers/{id:int}/active",
+      "order": 0,
+      "baselineController": "CustomersController",
+      "baselineAction": "SetActive",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-CUSTOMER-ACTIVE",
+        "rawHttpSamplePath": "/api/v1/catalog/customers/1/active",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "ICustomerApiClient.SetActiveAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "PUT /api/v1/catalog/employees/{id:int}",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/employees/{id:int}",
+      "order": 0,
+      "baselineController": "EmployeesController",
+      "baselineAction": "Update",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-EMPLOYEE-UPDATE",
+        "rawHttpSamplePath": "/api/v1/catalog/employees/1",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IEmployeeApiClient.UpdateAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "PUT /api/v1/catalog/employees/{id:int}/active",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/employees/{id:int}/active",
+      "order": 0,
+      "baselineController": "EmployeesController",
+      "baselineAction": "SetActive",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-EMPLOYEE-ACTIVE",
+        "rawHttpSamplePath": "/api/v1/catalog/employees/1/active",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IEmployeeApiClient.SetActiveAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "PUT /api/v1/catalog/products/{id:int}",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/products/{id:int}",
+      "order": 0,
+      "baselineController": "ProductsController",
+      "baselineAction": "Update",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-PRODUCT-UPDATE",
+        "rawHttpSamplePath": "/api/v1/catalog/products/1",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IProductApiClient.UpdateAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "PUT /api/v1/catalog/products/{id:int}/active",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/products/{id:int}/active",
+      "order": 0,
+      "baselineController": "ProductsController",
+      "baselineAction": "SetActive",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-PRODUCT-ACTIVE",
+        "rawHttpSamplePath": "/api/v1/catalog/products/1/active",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IProductApiClient.SetActiveAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "PUT /api/v1/catalog/warehouses/{id:int}",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/warehouses/{id:int}",
+      "order": 0,
+      "baselineController": "WarehousesController",
+      "baselineAction": "Update",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-WAREHOUSE-UPDATE",
+        "rawHttpSamplePath": "/api/v1/catalog/warehouses/1",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IWarehouseApiClient.UpdateAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "PUT /api/v1/catalog/warehouses/{id:int}/active",
+      "httpMethod": "PUT",
+      "path": "/api/v1/catalog/warehouses/{id:int}/active",
+      "order": 0,
+      "baselineController": "WarehousesController",
+      "baselineAction": "SetActive",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.6A",
+      "contractFamily": "vps-02-desktop",
+      "authentication": "bearer",
+      "featureFlags": [
+        "DesktopApiEnabled:required"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS02-WAREHOUSE-ACTIVE",
+        "rawHttpSamplePath": "/api/v1/catalog/warehouses/1/active",
+        "canonicalBytes": null,
+        "desktopMethods": [
+          "IWarehouseApiClient.SetActiveAsync"
+        ],
+        "historicalSqlLedger": "ROUTE_ONLY"
+      }
+    },
+    {
+      "id": "PUT /api/v1/goods-receipts/{receiptId}/draft",
+      "httpMethod": "PUT",
+      "path": "/api/v1/goods-receipts/{receiptId}/draft",
+      "order": 0,
+      "baselineController": "GoodsReceiptsController",
+      "baselineAction": "Update",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.5B",
+      "contractFamily": "web3-v1",
+      "authentication": "bearer",
+      "featureFlags": [
+        "Web4Enabled:optional-operation-context"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-RECEIPT-UPDATE",
+        "rawHttpSamplePath": "/api/v1/goods-receipts/9007199254740993/draft",
+        "canonicalBytes": "web4-v1/fingerprint-vectors.json",
+        "desktopMethods": [
+          "IGoodsReceiptApiClient.UpdateDraftAsync"
+        ],
+        "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
+      }
+    },
+    {
+      "id": "PUT /api/v1/sales-receipts/{saleId}/draft",
+      "httpMethod": "PUT",
+      "path": "/api/v1/sales-receipts/{saleId}/draft",
+      "order": 0,
+      "baselineController": "SalesReceiptsController",
+      "baselineAction": "Update",
+      "activeOwner": "bridge",
+      "owningIncrement": "VPS-10.4B",
+      "contractFamily": "web2-v1",
+      "authentication": "bearer",
+      "featureFlags": [
+        "Web4Enabled:optional-operation-context"
+      ],
+      "requiredPositiveNegativeCases": [
+        "failure",
+        "invalid",
+        "permission",
+        "success",
+        "unauthenticated"
+      ],
+      "coverage": {
+        "rawHttpCaseId": "VPS01-SALES-UPDATE",
+        "rawHttpSamplePath": "/api/v1/sales-receipts/9223372036854775807/draft",
+        "canonicalBytes": "web4-v1/fingerprint-vectors.json",
+        "desktopMethods": [
+          "ISalesReceiptApiClient.UpdateDraftAsync"
+        ],
+        "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
+      }
+    }
+  ]
+}
