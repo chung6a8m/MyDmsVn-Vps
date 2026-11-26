@@ -18,6 +18,7 @@ using MyDmsVn.Server.HttpHost.Features.Catalog;
 using MyDmsVn.Server.HttpHost.Features.Sales;
 using MyDmsVn.Server.HttpHost.Features.Inventory;
 using MyDmsVn.Server.HttpHost.Features.Security;
+using MyDmsVn.Server.HttpHost.Features.Auth;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -26,9 +27,12 @@ internal static class NativeApiRegistration
     internal static IServiceCollection AddVps10NativeApi(this IServiceCollection services)
     {
         services.AddScoped<IV1OperationContextFactory, V1OperationContextFactory>();
+        services.AddSingleton<INativeAuthAttemptAdmission>(provider =>
+            new NativeAuthAttemptAdmission(provider.GetRequiredService<AuthAttemptLimiter>()));
         services.AddControllers(options =>
             {
                 options.InputFormatters.Insert(0, new V1MutationRequestFormatter());
+                options.InputFormatters.Insert(0, new AuthLoginFormatter());
                 options.ModelBinderProviders.Insert(0, new CatalogLookupQueryBinderProvider());
                 options.ModelBinderProviders.Insert(0, new CatalogCrudQueryBinderProvider());
                 options.ModelBinderProviders.Insert(0, new SecurityQueryBinderProvider());
@@ -94,6 +98,23 @@ internal static class NativeApiRegistration
                 DescribeSalesResponse(schema, context.JsonTypeInfo.Type);
                 DescribeSalesRequest(schema, context.JsonTypeInfo.Type);
                 DescribeSecurityRequest(schema, context.JsonTypeInfo.Type);
+                if (context.JsonTypeInfo.Type == typeof(LoginBody) && schema.Properties != null)
+                {
+                    schema.Required = new HashSet<string>(new[] { "username", "password" }, StringComparer.Ordinal);
+                    if (schema.Properties.TryGetValue("username", out var username) && username is OpenApiSchema usernameSchema)
+                    {
+                        usernameSchema.Type = JsonSchemaType.String;
+                        usernameSchema.MaxLength = 256;
+                        usernameSchema.MinLength = 1;
+                    }
+                    if (schema.Properties.TryGetValue("password", out var password) && password is OpenApiSchema passwordSchema)
+                    {
+                        passwordSchema.Type = JsonSchemaType.String;
+                        passwordSchema.MinLength = 1;
+                        passwordSchema.MaxLength = 72;
+                        passwordSchema.Description = "Maximum 72 UTF-8 bytes.";
+                    }
+                }
                 // A URL segment is text. Avoid advertising a JSON integer that
                 // JavaScript clients could round before formatting the path.
                 if ((context.ParameterDescription?.Name is "saleId" or "receiptId") && context.JsonTypeInfo.Type == typeof(long))
@@ -126,7 +147,9 @@ internal static class NativeApiRegistration
                     "CRUD IDs are canonical positive Int32 path segments; mutations accept strict JSON with per-entity allowlists and no query. " +
                     "Catalog writes are not journalled; no automatic resend. " +
                     "Security and Foundation require DesktopApiEnabled and an active Bearer session; exact query names and strict JSON allowlists. " +
-                    "Security revisions are JSON integer/int64 tokens, never strings; the actor is taken only from the admitted session.";
+                    "Security revisions are JSON integer/int64 tokens, never strings; the actor is taken only from the admitted session. " +
+                    "Auth login accepts exactly username/password JSON strings; refresh and logout use the strict host-only cookie and same-origin AJAX admission. " +
+                    "Me and capabilities require an active bearer session. Health is anonymous unless a bearer is supplied; degraded audit returns 503.";
                 return Task.CompletedTask;
             });
         });

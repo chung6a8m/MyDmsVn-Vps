@@ -768,6 +768,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         public object? LastRequest => _state.Calls.LastOrDefault();
         public string? LastRequestCulture => _state.LastRequestCulture;
         public IReadOnlyList<string> PermissionChecks => _state.PermissionChecks;
+        public int SessionValidationCalls => Volatile.Read(ref _state.SessionValidationCalls);
 
         public static async Task<DesktopLiveFixture> StartAsync(
             bool denyPermissions = false, bool throwHandlers = false,
@@ -916,7 +917,8 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         }
 
         public async Task<HttpResponseMessage> SendControlAsync(string method, string path, string? body,
-            bool authenticated, bool cookie)
+            bool authenticated, bool cookie, string? extraHeader = null, string[]? extraValues = null,
+            string contentType = "application/json")
         {
             using var request = new HttpRequestMessage(new HttpMethod(method), path);
             request.Headers.Add("X-Correlation-ID", Correlation);
@@ -929,7 +931,12 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 request.Headers.Add("X-Requested-With", "XMLHttpRequest");
             }
             if (cookie) request.Headers.Add("Cookie", "__Host-mydmsvn-rt=22222222-2222-4222-8222-222222222222");
-            if (body != null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+            if (extraHeader != null) request.Headers.TryAddWithoutValidation(extraHeader, extraValues!);
+            if (body != null)
+            {
+                request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+                request.Content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
+            }
             return await _client.SendAsync(request);
         }
 
@@ -1108,9 +1115,13 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         public bool Web6Denied { get; set; }
         public string? Web6ResolutionState { get; set; }
         public bool Revoked { get; private set; }
-        public Task<CurrentUser?> GetActiveUserAsync(Guid sessionId, int userId, CancellationToken token) =>
-            Task.FromResult<CurrentUser?>(!Revoked && sessionId == Guid.Parse("11111111-1111-4111-8111-111111111111") && userId == 1
+        public int SessionValidationCalls;
+        public Task<CurrentUser?> GetActiveUserAsync(Guid sessionId, int userId, CancellationToken token)
+        {
+            Interlocked.Increment(ref SessionValidationCalls);
+            return Task.FromResult<CurrentUser?>(!Revoked && sessionId == Guid.Parse("11111111-1111-4111-8111-111111111111") && userId == 1
                 ? CurrentUser.Authenticated(1, "authoritative-alice", "Authoritative Alice", true) : null);
+        }
         public Task<WebAuthSessionToken?> IssueAsync(int userId, CancellationToken token) =>
             ControlFailure == "VPS01-AUTH-LOGIN" ? throw new InvalidOperationException("secret SQL connection") :
                 Task.FromResult<WebAuthSessionToken?>(Token("22222222-2222-4222-8222-222222222222"));

@@ -23,6 +23,10 @@ internal static class V1ModelStateErrors
         }
         var correlation = context.HttpContext.RequestServices
             .GetRequiredService<RequestIdentityAdmission>().CorrelationId;
+        // Auth's frozen validation envelope has no field detail.
+        if (context.ActionDescriptor is Microsoft.AspNetCore.Mvc.Controllers.ControllerActionDescriptor action &&
+            action.ControllerTypeInfo.AsType() == typeof(Features.Auth.AuthController))
+            return V1ApiResults.Error(400, "ValidationError", "The request is invalid.", correlation);
         return V1ApiResults.Invalid(field, correlation);
     }
 }

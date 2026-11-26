@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
 using MyDmsVn.Server.Application.Identity;
 using MyDmsVn.Server.HttpHost;
@@ -22,9 +23,11 @@ namespace MyDmsVn.Server.AspNetCoreHost.Tests;
 
 public sealed class CoreApiBoundaryTests
 {
-    private static DefaultHttpContext NewRequest(string method = "GET", string path = "/api/v1/health")
+    private static DefaultHttpContext NewRequest(string method = "GET", string path = "/api/v1/health",
+        ILoggerFactory? loggerFactory = null)
     {
         var services = new ServiceCollection();
+        if (loggerFactory != null) services.AddSingleton<ILoggerFactory>(loggerFactory);
         services.AddSingleton(new WebHostOptions(
             publicOrigin: "https://localhost",
             issuer: "https://localhost",
@@ -181,7 +184,8 @@ public sealed class CoreApiBoundaryTests
     [Fact]
     public async Task FailureBeforeResponseStartsCannotCommitStaleCookiesOrHeaders()
     {
-        var context = NewRequest();
+        using var logs = new AdmissionLogRecorder();
+        var context = NewRequest(loggerFactory: logs);
         context.Request.Headers["X-Correlation-ID"] = "failure_01";
         await CoreApiBoundary.HandleAsync(context, () =>
         {
@@ -203,6 +207,28 @@ public sealed class CoreApiBoundaryTests
         Assert.Contains("InternalError", body);
         Assert.DoesNotContain("secret-sql-cause", body);
         Assert.DoesNotContain("unadmitted", body);
+        var entry = Assert.Single(logs.Entries);
+        Assert.Equal("MyDmsVn.HttpAdmission", entry.Category);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Equal("API request failed before response start. CorrelationId: failure_01", entry.Message);
+        Assert.Null(entry.Exception);
+    }
+
+    private sealed class AdmissionLogRecorder : ILoggerFactory
+    {
+        public List<(string Category, LogLevel Level, string Message, Exception? Exception)> Entries { get; } = new();
+        public ILogger CreateLogger(string categoryName) => new RecordingLogger(this, categoryName);
+        public void AddProvider(ILoggerProvider provider) => throw new NotSupportedException();
+        public void Dispose() { }
+
+        private sealed class RecordingLogger(AdmissionLogRecorder owner, string category) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(LogLevel logLevel) => true;
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter) =>
+                owner.Entries.Add((category, logLevel, formatter(state, exception), exception));
+        }
     }
 
 

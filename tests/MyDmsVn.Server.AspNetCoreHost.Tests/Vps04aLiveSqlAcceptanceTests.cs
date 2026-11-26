@@ -161,6 +161,10 @@ public sealed class Vps04aLiveSqlAcceptanceTests
         using (var body = await AssertJsonAsync(health, 200))
             Assert.Equal("ok", body.RootElement.GetProperty("data").GetProperty("status").GetString());
 
+        using (var badHealth = await gateway.SendAsync(HttpMethod.Get, "/api/v1/health", bearer: "invalid"))
+        using (var body = await AssertJsonAsync(badHealth, 401))
+            Assert.Equal("Auth.Unauthorized", body.RootElement.GetProperty("error").GetProperty("code").GetString());
+
         using (var denied = await gateway.SendAsync(HttpMethod.Get, "/api/v1/auth/me"))
         using (var body = await AssertJsonAsync(denied, 401))
             Assert.Equal("Auth.Unauthorized", body.RootElement.GetProperty("error").GetProperty("code").GetString());
@@ -175,6 +179,14 @@ public sealed class Vps04aLiveSqlAcceptanceTests
         using (var me = await gateway.SendAsync(HttpMethod.Get, "/api/v1/auth/me", bearer: session.AccessToken))
         using (var body = await AssertJsonAsync(me, 200))
             Assert.Equal(session.UserId, body.RootElement.GetProperty("data").GetProperty("userId").GetInt32());
+
+        using (var duplicate = await gateway.SendAsync(HttpMethod.Post, "/api/v1/auth/refresh",
+            cookie: session.Cookie + "; " + session.Cookie))
+        using (var body = await AssertJsonAsync(duplicate, 401))
+        {
+            Assert.Equal("Auth.Unauthorized", body.RootElement.GetProperty("error").GetProperty("code").GetString());
+            Assert.False(duplicate.Headers.Contains("Set-Cookie"));
+        }
 
         using var refresh = await gateway.SendAsync(HttpMethod.Post, "/api/v1/auth/refresh", cookie: session.Cookie);
         using var refreshedBody = await AssertJsonAsync(refresh, 200);
@@ -192,6 +204,10 @@ public sealed class Vps04aLiveSqlAcceptanceTests
 
         using (var revoked = await gateway.SendAsync(HttpMethod.Get, "/api/v1/auth/me", bearer: rotatedToken))
         using (var body = await AssertJsonAsync(revoked, 401))
+            Assert.Equal("Auth.Unauthorized", body.RootElement.GetProperty("error").GetProperty("code").GetString());
+
+        using (var revokedHealth = await gateway.SendAsync(HttpMethod.Get, "/api/v1/health", bearer: rotatedToken))
+        using (var body = await AssertJsonAsync(revokedHealth, 401))
             Assert.Equal("Auth.Unauthorized", body.RootElement.GetProperty("error").GetProperty("code").GetString());
 
         Assert.Equal(1, await CountAsync("SELECT COUNT(*) FROM dbo.WebAuthSessions WHERE SessionId=@id AND RevokedAtUtc IS NOT NULL",
