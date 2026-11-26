@@ -162,7 +162,7 @@ public sealed class Vps10NativeAuthTests
         using var refresh = await fixture.SendControlAsync("POST", "/api/v1/auth/refresh", null, false, true);
         Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
         var cookie = Assert.Single(refresh.Headers.GetValues("Set-Cookie"));
-        Assert.True(cookie.StartsWith("__Host-mydmsvn-rt=33333333-3333-4333-8333-333333333333; Max-Age=", StringComparison.Ordinal));
+        Assert.StartsWith("__Host-mydmsvn-rt=33333333-3333-4333-8333-333333333333; Max-Age=", cookie, StringComparison.Ordinal);
         Assert.EndsWith("; Path=/; Secure; HttpOnly; SameSite=Strict", cookie, StringComparison.Ordinal);
         using var logout = await fixture.SendControlAsync("POST", "/api/v1/auth/logout", null, false, true);
         Assert.Equal(HttpStatusCode.OK, logout.StatusCode);
@@ -182,7 +182,7 @@ public sealed class Vps10NativeAuthTests
         Assert.True(data.TryGetProperty("accessToken", out _));
         Assert.False(data.TryGetProperty("refreshToken", out _));
         Assert.Equal(1, data.GetProperty("user").GetProperty("userId").GetInt32());
-        Assert.True(Assert.Single(login.Headers.GetValues("Set-Cookie")).StartsWith(Cookie + "; Max-Age=", StringComparison.Ordinal));
+        Assert.StartsWith(Cookie + "; Max-Age=", Assert.Single(login.Headers.GetValues("Set-Cookie")), StringComparison.Ordinal);
     }
 
     // Direct deterministic post-commit fault oracle: cancellation is triggered
