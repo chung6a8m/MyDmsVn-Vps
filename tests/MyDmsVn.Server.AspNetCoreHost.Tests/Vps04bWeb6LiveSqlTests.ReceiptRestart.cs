@@ -183,7 +183,7 @@ WHERE l.DocumentType='GoodsReceipt' AND l.DocumentId=@id;", "@id", id));
         await AssertReceiptPostedOnce(intent);
         using var json = JsonDocument.Parse(row.Result);
         Assert.Equal("Posted", json.RootElement.GetProperty("data").GetProperty("status").GetString());
-        SaveReceiptIntent(intent with { ResultHash = Hash(row.Result), Fingerprint = row.Fingerprint }, FileMode.Truncate);
+        SaveReceiptIntent(intent with { ResultHash = Hash(row.Result), Fingerprint = row.Fingerprint }, FileMode.Create);
     }
 
     [Fact]

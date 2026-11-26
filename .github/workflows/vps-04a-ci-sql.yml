@@ -180,7 +180,7 @@ jobs:
           cleanup() {
             if [ "$fault_armed" = "1" ]; then
               (cd src/MyDmsVn.Server.AspNetCoreHost &&
-                dotnet run --project ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj
+                dotnet run --project ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
                 -p:Vps04Server=true -c Release -f net10.0 --no-build --no-restore -- disarm-ledger-fault) >/dev/null 2>&1 || true
             fi
             if [ -n "$server_pid" ]; then
