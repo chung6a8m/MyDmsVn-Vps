@@ -137,6 +137,9 @@ public sealed class Vps10CatalogCrudSqlTests
             const string initial = "Danh mục Đặng";
             const string changed = "Đã cập nhật Hải Phòng";
             var body = Body(table, code, initial);
+            // Count all rows, not just the valid code: a rejected overlong code
+            // could otherwise be silently truncated and inserted unnoticed.
+            var rowsBeforeRejectedRequests = await CountAsync("SELECT COUNT(*) FROM dbo." + table + ";");
             using (var forbidRead = await first.RequestAsync(HttpMethod.Get, path, writer.Token))
                 Assert.Equal(403, forbidRead.Status);
             using (var forbidWrite = await first.RequestAsync(HttpMethod.Post, path, reader.Token, body))
@@ -146,6 +149,7 @@ public sealed class Vps10CatalogCrudSqlTests
             using (var tooLong = await first.RequestAsync(HttpMethod.Post, path, writer.Token,
                        Body(table, new string('X', 33), initial)))
                 Assert.Equal(400, tooLong.Status);
+            Assert.Equal(rowsBeforeRejectedRequests, await CountAsync("SELECT COUNT(*) FROM dbo." + table + ";"));
             Assert.Equal(0, await CountAsync("SELECT COUNT(*) FROM dbo." + table + " WHERE Code=@code;", code));
 
             // Two different HTTP clients, one committed row, one real unique-code conflict.
