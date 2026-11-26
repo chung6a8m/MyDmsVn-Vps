@@ -354,6 +354,8 @@ jobs:
             cases=value['cases']
             assert len(cases)>=minimum, (group, len(cases))
             assert len({case['id'] for case in cases})==len(cases)
+            if group=='WEB3':
+              assert {'receipts-list','receipt-get-posted','inventory-balance','inventory-stock-card','receipt-get-not-found'} <= {case['id'] for case in cases}, 'VPS-10.5A native read SQL oracle incomplete'
             for case in cases:
               assert all(key in case for key in ('expected','actual','diff','sqlOracle','fixture','route'))
               assert not case['diff'], (group,case['id'],case['diff'])

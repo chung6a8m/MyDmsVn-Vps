@@ -89,6 +89,39 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             Assert.True(responses.TryGetProperty("403", out _));
             Assert.True(responses.TryGetProperty("413", out _));
         }
+        // WEB3 reads are native; receipt writes remain on the bridge.
+        var receiptListPath = paths.GetProperty("/api/v1/goods-receipts");
+        Assert.False(receiptListPath.TryGetProperty("post", out _));
+        var receiptDetail = paths.GetProperty("/api/v1/goods-receipts/{receiptId}").GetProperty("get");
+        var receiptId = Assert.Single(receiptDetail.GetProperty("parameters").EnumerateArray());
+        Assert.Equal("receiptId", receiptId.GetProperty("name").GetString());
+        Assert.Equal("string", Resolve(document, receiptId.GetProperty("schema")).GetProperty("type").GetString());
+        var receiptData = RequiredObjectData(document, Resolve(document, ResponseSchema(receiptDetail.GetProperty("responses"), "200")));
+        var receiptProperties = receiptData.GetProperty("properties");
+        foreach (var field in new[] { "note", "postedAtUtc", "warehouseDisplayName", "employeeDisplayName", "lines", "receiptId" })
+            Assert.Contains(field, receiptData.GetProperty("required").EnumerateArray().Select(p => p.GetString()));
+        Assert.Equal("date", Resolve(document, receiptProperties.GetProperty("receiptDate")).GetProperty("format").GetString());
+        var receiptList = receiptListPath.GetProperty("get");
+        var receiptParams = receiptList.GetProperty("parameters").EnumerateArray().ToArray();
+        Assert.Equal(5, receiptParams.Length);
+        foreach (var name in new[] { "pageNumber", "pageSize" })
+            Assert.True(Assert.Single(receiptParams, p => p.GetProperty("name").GetString() == name).GetProperty("required").GetBoolean());
+        var balances = paths.GetProperty("/api/v1/inventory/balances").GetProperty("get");
+        var balanceData = RequiredObjectData(document, Resolve(document, ResponseSchema(balances.GetProperty("responses"), "200")));
+        Assert.Contains("totalCount", balanceData.GetProperty("required").EnumerateArray().Select(p => p.GetString()));
+        Assert.Equal("string", Resolve(document, balanceData.GetProperty("properties").GetProperty("totalCount")).GetProperty("type").GetString());
+        var balanceRow = Resolve(document, Resolve(document, balanceData.GetProperty("properties").GetProperty("items")).GetProperty("items"));
+        Assert.Contains("averageUnitCost", balanceRow.GetProperty("required").EnumerateArray().Select(p => p.GetString()));
+        var card = paths.GetProperty("/api/v1/inventory/stock-card").GetProperty("get");
+        var cardParams = card.GetProperty("parameters").EnumerateArray().ToArray();
+        Assert.Equal(6, cardParams.Length);
+        foreach (var name in new[] { "pageNumber", "pageSize", "warehouseId", "productId" })
+            Assert.True(Assert.Single(cardParams, p => p.GetProperty("name").GetString() == name).GetProperty("required").GetBoolean());
+        foreach (var name in new[] { "fromUtc", "toUtc" })
+        {
+            var parameter = Assert.Single(cardParams, p => p.GetProperty("name").GetString() == name);
+            Assert.Equal("date-time", Resolve(document, parameter.GetProperty("schema")).GetProperty("format").GetString());
+        }
         var list = paths.GetProperty("/api/v1/sales-receipts").GetProperty("get");
         var detail = paths.GetProperty("/api/v1/sales-receipts/{saleId}").GetProperty("get");
         var create = paths.GetProperty("/api/v1/sales-receipts").GetProperty("post");

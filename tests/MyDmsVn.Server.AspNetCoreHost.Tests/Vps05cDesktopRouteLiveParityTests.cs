@@ -777,7 +777,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             bool web6Failure = false, bool web6ContextFailure = false,
             bool web6ReceiptFailure = false, string? operationVariant = null,
             string web6CandidateId = "candidate-1", bool desktopApiEnabled = true,
-            string? requestCultureName = null)
+            string? requestCultureName = null, bool web3ReadEdgeCases = false)
         {
             var clock = new FrozenClock();
             var options = new WebHostOptions("https://web2.mydmsvn.test", "https://web2.mydmsvn.test", "auth-tests",
@@ -791,6 +791,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             var state = new DesktopState
             {
                 DenyPermissions = denyPermissions,
+                Web3ReadEdgeCases = web3ReadEdgeCases,
                 ThrowHandlers = throwHandlers,
                 ThrowPermissionStore = throwPermissionStore,
                 AuthControlProfile = authControlProfile,
@@ -1040,11 +1041,17 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                     (int)data["pageNumber"]!, (int)data["pageSize"]!,
                     long.Parse((string)data["totalCount"]!, CultureInfo.InvariantCulture));
             });
-            Add<GetGoodsReceiptByIdQuery, GoodsReceiptDto>(services, state, _ => ReceiptDetail("web3-v1/receipt-get-posted-response.json"));
+            Add<GetGoodsReceiptByIdQuery, GoodsReceiptDto>(services, state, _ => state.Web3ReadEdgeCases
+                ? new GoodsReceiptDto(1, "GR0000000042", new DateTime(2024, 2, 29), 1, 2, "Draft", null, null,
+                    "AAAAAAAAAAI=", new[] { new GoodsReceiptLineDto(2, 1, 7, 1m, 0m, null, false) })
+                : ReceiptDetail("web3-v1/receipt-get-posted-response.json"));
             Add<CreateGoodsReceiptDraftCommand, GoodsReceiptDto>(services, state, _ => ReceiptDetail("web3-v1/receipt-create-response.json"));
             Add<UpdateGoodsReceiptDraftCommand, GoodsReceiptDto>(services, state, _ => ReceiptDetail("web3-v1/receipt-update-response.json"));
             Add<PostGoodsReceiptCommand, PostGoodsReceiptResponse>(services, state, _ => CorpusData<PostGoodsReceiptResponse>("web3-v1/receipt-post-response.json"));
-            Add<GetStockBalancesQuery, PagedResult<StockBalanceRow>>(services, state, _ => CorpusData<PagedResult<StockBalanceRow>>("web3-v1/balances-response.json"));
+            Add<GetStockBalancesQuery, PagedResult<StockBalanceRow>>(services, state, _ => state.Web3ReadEdgeCases
+                ? new PagedResult<StockBalanceRow>(new[] { new StockBalanceRow(1, "W", "Warehouse", false,
+                    7, "P", "Product", false, 0m, 0m, null) }, 1, 25, 0)
+                : CorpusData<PagedResult<StockBalanceRow>>("web3-v1/balances-response.json"));
             Add<GetStockCardQuery, PagedResult<StockCardRow>>(services, state, _ => CorpusData<PagedResult<StockCardRow>>("web3-v1/stock-card-response.json"));
         }
 
@@ -1088,6 +1095,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         public string? LastRequestCulture { get; set; }
         public List<string> PermissionChecks { get; } = new();
         public bool DenyPermissions { get; init; }
+        public bool Web3ReadEdgeCases { get; init; }
         public bool ThrowHandlers { get; init; }
         public bool ThrowPermissionStore { get; init; }
         public bool AuthControlProfile { get; init; }
