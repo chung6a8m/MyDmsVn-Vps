@@ -17,6 +17,8 @@ internal static class CoreRequestServices
 {
     internal static IServiceCollection AddHttpRequestIdentity(this IServiceCollection services)
     {
+        // Called after AddServerApplication: replace its identity, correlation
+        // and audit-writer defaults within one admitted HTTP request scope.
         services.AddScoped<RequestIdentityAdmission>();
         var writer = services.LastOrDefault(d => d.ServiceType == typeof(ISecurityAuditWriter));
         if (writer?.ImplementationType != null)

@@ -13,6 +13,7 @@ internal static class GeneratedMediatorRegistration
         services.AddMediator((MediatorOptions options) =>
         {
             options.Assemblies = [typeof(GetFoundationStatusQuery)];
+            // One mediator per request, sharing the admitted identity and SQL scope.
             options.ServiceLifetime = ServiceLifetime.Scoped;
             // Generated registration preserves the original three-layer ordering.
             options.PipelineBehaviors =
