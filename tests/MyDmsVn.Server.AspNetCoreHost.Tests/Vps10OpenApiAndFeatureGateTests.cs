@@ -22,7 +22,7 @@ public sealed class Vps10OpenApiAndFeatureGateTests
     [Theory]
     [InlineData("Development", 200)]
     [InlineData("Production", 404)]
-    public async Task Native_document_is_partial_and_development_only_without_SQL(string environment, int status)
+    public async Task Native_document_covers_all_paths_and_is_development_only_without_SQL(string environment, int status)
     {
         var builder = NewBuilder(environment);
         builder.Services.AddVps10NativeApi();
@@ -70,6 +70,8 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             "/api/v1/health",
             "/api/v1/inventory/balances",
             "/api/v1/inventory/stock-card",
+            "/api/v1/operations/context",
+            "/api/v1/operations/{operationId}",
             "/api/v1/sales-receipts",
             "/api/v1/sales-receipts/{saleId}",
             "/api/v1/sales-receipts/{saleId}/draft",
@@ -80,7 +82,12 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             "/api/v1/security/permissions/catalog",
             "/api/v1/security/permissions/check",
             "/api/v1/security/roles",
-            "/api/v1/security/users"
+            "/api/v1/security/users",
+            "/api/v2/operations/context",
+            "/api/v2/operations/{operationId}/resolution",
+            "/api/v3/operations/resend-context",
+            "/api/v3/operations/{operationId}/resend-eligibility",
+            "/api/v3/operations/{operationId}/resend-receipt"
         }, paths.EnumerateObject().Select(p => p.Name).OrderBy(p => p, StringComparer.Ordinal).ToArray());
         var login = paths.GetProperty("/api/v1/auth/login").GetProperty("post");
         var loginSchema = Resolve(document, login.GetProperty("requestBody").GetProperty("content")

@@ -417,6 +417,25 @@ jobs:
           assert counts == {'total':44,'executed':44,'passed':44,'failed':0,'notExecuted':0}, counts
           print(f'PASS VPS-10.6C Auth/Health: {counts}')
           PY
+      - name: Require VPS-10.6D native Operations (24 cases)
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-build --no-restore -v minimal \
+            --filter FullyQualifiedName~Vps10OperationRecoveryTests \
+            --logger "trx;LogFileName=vps10-operations.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          path = Path(os.environ['GITHUB_WORKSPACE'])/'vps04a-trx/vps10-operations.trx'
+          counters = ET.parse(path).getroot().find('./t:ResultSummary/t:Counters', ns)
+          assert counters is not None, 'Missing VPS-10.6D TRX counters'
+          counts = {k: int(v) for k, v in counters.attrib.items() if k in ('total','executed','passed','failed','notExecuted')}
+          assert counts == {'total':24,'executed':24,'passed':24,'failed':0,'notExecuted':0}, counts
+          print(f'PASS VPS-10.6D Operations: {counts}')
+          PY
       - name: Require VPS-10.4B Sales writes (43 cases)
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |

@@ -646,7 +646,7 @@
       "order": 0,
       "baselineController": "OperationsController",
       "baselineAction": "Context",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6D",
       "contractFamily": "web4-v1",
       "authentication": "bearer",
@@ -667,7 +667,7 @@
         "desktopMethods": [],
         "historicalSqlLedger": "GROUP_EAD_SQL"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.OperationsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Operations.OperationsController",
       "actualAction": "Context"
     },
     {
@@ -677,7 +677,7 @@
       "order": 1,
       "baselineController": "OperationsController",
       "baselineAction": "Status",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6D",
       "contractFamily": "web4-v1",
       "authentication": "bearer",
@@ -702,7 +702,7 @@
         "desktopMethods": [],
         "historicalSqlLedger": "GROUP_EAD_SQL"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.OperationsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Operations.OperationsController",
       "actualAction": "Status"
     },
     {
@@ -906,7 +906,7 @@
       "order": 0,
       "baselineController": "OperationResolutionController",
       "baselineAction": "Context",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6D",
       "contractFamily": "web5-resolution-v1",
       "authentication": "bearer",
@@ -927,7 +927,7 @@
         "desktopMethods": [],
         "historicalSqlLedger": "GROUP_EAD_SQL"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.OperationResolutionController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Operations.ResolutionController",
       "actualAction": "Context"
     },
     {
@@ -937,7 +937,7 @@
       "order": 1,
       "baselineController": "OperationResolutionController",
       "baselineAction": "Resolution",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6D",
       "contractFamily": "web5-resolution-v1",
       "authentication": "bearer",
@@ -962,7 +962,7 @@
         "desktopMethods": [],
         "historicalSqlLedger": "GROUP_EAD_SQL"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.OperationResolutionController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Operations.ResolutionController",
       "actualAction": "Resolution"
     },
     {
@@ -972,7 +972,7 @@
       "order": 0,
       "baselineController": "Web6ResendEligibilityController",
       "baselineAction": "Context",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6D",
       "contractFamily": "web6-resend-eligibility-v1",
       "authentication": "bearer",
@@ -995,7 +995,7 @@
         "desktopMethods": [],
         "historicalSqlLedger": "DISABLED_404"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.Web6ResendEligibilityController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Operations.ResendController",
       "actualAction": "Context"
     },
     {
@@ -1005,7 +1005,7 @@
       "order": 2,
       "baselineController": "Web6ResendEligibilityController",
       "baselineAction": "Eligibility",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6D",
       "contractFamily": "web6-resend-eligibility-v1",
       "authentication": "bearer",
@@ -1034,7 +1034,7 @@
         "desktopMethods": [],
         "historicalSqlLedger": "DISABLED_404"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.Web6ResendEligibilityController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Operations.ResendController",
       "actualAction": "Eligibility"
     },
     {
@@ -1044,7 +1044,7 @@
       "order": 1,
       "baselineController": "Web6ResendEligibilityController",
       "baselineAction": "Receipt",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6D",
       "contractFamily": "web6-resend-eligibility-v1",
       "authentication": "bearer",
@@ -1069,7 +1069,7 @@
         "desktopMethods": [],
         "historicalSqlLedger": "DISABLED_404"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.Web6ResendEligibilityController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Operations.ResendController",
       "actualAction": "Receipt"
     },
     {
