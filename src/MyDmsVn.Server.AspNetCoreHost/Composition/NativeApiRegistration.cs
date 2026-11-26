@@ -15,6 +15,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi;
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.HttpHost.Features.Catalog;
+using MyDmsVn.Server.HttpHost.Features.Sales;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -25,6 +26,7 @@ internal static class NativeApiRegistration
         services.AddControllers(options =>
             {
                 options.ModelBinderProviders.Insert(0, new CatalogLookupQueryBinderProvider());
+                options.ModelBinderProviders.Insert(0, new V1SalesReadBinderProvider());
                 options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
                 options.Filters.Add(new V1UnsupportedContentTypeFilter());
             })
@@ -63,6 +65,14 @@ internal static class NativeApiRegistration
                     context.JsonPropertyInfo?.Name == "data" &&
                     schema.Type == (JsonSchemaType.Array | JsonSchemaType.Null))
                     schema.Type = JsonSchemaType.Array;
+                if (context.JsonTypeInfo.Type == typeof(V1SuccessEnvelope<SalesDetailResponse>) ||
+                    context.JsonTypeInfo.Type == typeof(V1SuccessEnvelope<SalesListPageResponse>))
+                {
+                    schema.Required ??= new HashSet<string>(StringComparer.Ordinal);
+                    schema.Required.Add("data");
+                }
+                if (context.JsonTypeInfo.Type == typeof(string) && context.JsonPropertyInfo?.Name == "postedAtUtc")
+                    schema.Format = "date-time";
                 return Task.CompletedTask;
             });
             options.AddDocumentTransformer((document, _, _) =>
@@ -71,7 +81,9 @@ internal static class NativeApiRegistration
                 document.Info.Description = "Partial native surface only. Legacy bridge endpoints are intentionally excluded. " +
                     "Lookups require Bearer authentication with an active session. " +
                     "No request body; limit is a required canonical integer from 1 to 200. " +
-                    "Search is optional (maximum 256 UTF-16 code units); duplicate and unknown query names are rejected.";
+                    "Search is optional (maximum 256 UTF-16 code units); duplicate and unknown query names are rejected. " +
+                    "Sales reads require an active Bearer session; list pageSize defaults to 25 (1–200), dates are calendar-only, " +
+                    "search is limited after trimming, cursor is bound to filters/pageSize, detail accepts a positive canonical Int64 path and no query/body.";
                 return Task.CompletedTask;
             });
         });

@@ -26,19 +26,22 @@ public sealed class Vps10EndpointInventoryTests
         ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints).ToArray();
 
     [Fact]
-    public void Actual_endpoints_have_four_MVC_and_53_bridge_owners()
+    public void Actual_endpoints_have_six_MVC_and_51_bridge_owners()
     {
         using var app = Build();
         var endpoints = Endpoints(app);
         var inventory = Net10RouteTable.ReadInventory(endpoints);
         Assert.Equal(57, inventory.Count);
-        Assert.Equal(4, inventory.Count(row => row.ActiveOwner == "native"));
-        Assert.Equal(53, inventory.Count(row => row.ActiveOwner == "bridge"));
-        Assert.Equal(4, endpoints.Count(endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() != null));
+        Assert.Equal(6, inventory.Count(row => row.ActiveOwner == "native"));
+        Assert.Equal(51, inventory.Count(row => row.ActiveOwner == "bridge"));
+        Assert.Equal(6, endpoints.Count(endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() != null));
         Assert.All(inventory.Where(row => row.ActiveOwner == "native"), row =>
         {
-            Assert.Equal("CatalogLookupController", row.Controller);
-            Assert.Equal("MyDmsVn.Server.HttpHost.Features.Catalog.CatalogLookupController", row.ActualController);
+            var expected = row.Path.StartsWith("/api/v1/catalog/", StringComparison.Ordinal)
+                ? "MyDmsVn.Server.HttpHost.Features.Catalog.CatalogLookupController"
+                : "MyDmsVn.Server.HttpHost.Features.Sales.SalesReceiptsController";
+            Assert.Equal(expected, row.ActualController);
+            Assert.Equal(expected.Split('.').Last(), row.Controller);
             Assert.Equal(row.Action, row.ActualAction);
         });
     }
