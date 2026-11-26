@@ -406,6 +406,59 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertEqual("https://localhost:50443", report["resources"]["origin"])
         self.assertFalse(self.state.exists())
 
+    def test_plan_upgrade_refuses_mismatched_instance_before_observing_pending_store(self):
+        candidate, digests = self.candidate_fixture()
+        receipt = self.write_receipt()
+        self.write_binding(receipt)
+        result = self.run_operator(
+            "PlanUpgrade", "-DryRun", "-ConfirmInstanceId", "00000000-2222-4333-8444-555555555555",
+            "-CandidateRoot", str(candidate), "-CandidateSourceSha", "b" * 40,
+            "-DesktopManifestSha256", digests[0], "-HostManifestSha256", digests[1],
+        )
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        self.assertEqual("LocalSimulation.InstanceConfirmationMismatch", json.loads(result.stdout)["code"])
+
+    def test_upgrade_refuses_missing_expected_epoch_and_fence_hash(self):
+        candidate, digests = self.candidate_fixture()
+        result = self.run_operator(
+            "Upgrade", "-CandidateRoot", str(candidate), "-CandidateSourceSha", "b" * 40,
+            "-DesktopManifestSha256", digests[0], "-HostManifestSha256", digests[1],
+        )
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        self.assertEqual("LocalSimulation.UpgradeArgumentsInvalid", json.loads(result.stdout)["code"])
+        self.assertFalse(self.state.exists())
+
+    def test_reset_refuses_an_interrupted_upgrade_without_touching_bound_state(self):
+        receipt = self.write_receipt(phase="upgrade-pending")
+        self.write_binding(receipt)
+        marker = self.state / "keep.txt"
+        marker.write_text("retain", encoding="utf-8")
+        result = self.run_operator("Reset", "-ConfirmInstanceId", receipt["instanceId"])
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        self.assertEqual("LocalSimulation.UpgradeFenceRetained", json.loads(result.stdout)["code"])
+        self.assertEqual("retain", marker.read_text(encoding="utf-8"))
+
+    def test_upgrade_sql_identity_comparison_rejects_database_or_epoch_changes(self):
+        command = (
+            "$ErrorActionPreference='Stop'; "
+            f"Import-Module '{RUNTIME_MODULE}' -Force -DisableNameChecking; "
+            "& (Get-Module LocalSimulation.Runtime) { "
+            "$original=@{databaseSchema=13;database='MyDmsVnVps_LocalSimulation';"
+            "instanceId='instance';databaseGuid='one';deploymentEpoch='epoch'};"
+            "Assert-LocalSimulationDatabaseContinuity $original $original;"
+            "foreach($property in 'databaseGuid','deploymentEpoch','instanceId','databaseSchema') {"
+            "$changed=$original.Clone();$changed[$property]='wrong';"
+            "try { Assert-LocalSimulationDatabaseContinuity $changed $original; throw 'unexpected pass' } "
+            "catch { if ($_.Exception.Message -ne 'LocalSimulation.UpgradeDatabaseMismatch') { throw }; $property }"
+            "} }"
+        )
+        result = subprocess.run(
+            [powershell(), "-NoProfile", "-Command", command], env=self.process_env,
+            text=True, capture_output=True,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(["databaseGuid", "deploymentEpoch", "instanceId", "databaseSchema"], result.stdout.split())
+
     def test_reset_dry_run_is_refused_before_any_mutation(self):
         result = self.run_operator("Reset", "-DryRun")
 

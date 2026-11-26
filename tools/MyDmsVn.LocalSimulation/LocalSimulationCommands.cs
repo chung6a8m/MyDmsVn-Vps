@@ -12,6 +12,7 @@ public static class LocalSimulationCommands
         "provision",
         "verify",
         "verify-exercise",
+        "observe-upgrade",
         "reset-admission",
     };
 

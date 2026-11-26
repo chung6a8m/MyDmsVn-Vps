@@ -66,6 +66,31 @@ $env:MYDMSVN_DESKTOP_OPERATION_MODE = 'web5'
 
 Confirm the login and representative read/write workflow using only the generated local synthetic credentials under `TestResults/local-simulation/active/secrets`. This is an attended checkpoint: record it separately as PASS/FAIL with the exact HEAD; never infer GUI PASS from publish or automated Verify. Do not copy these credentials to staging or production.
 
+## In-place prebuilt upgrade
+
+Use an initialized prebuilt pair on the same tooling checkout. Close the lab Desktop and recovery client after observing the durable pending operation. Keep the original Windows user and origin. Obtain the expected deployment epoch from the independent SQL observation and the expected pending ciphertext hash from the local pre-upgrade observation. Use the exact owned instance ID and the verified new pair arguments from Initialize.
+
+```powershell
+$upgrade = @{
+    ConfirmInstanceId = $instanceId
+    ExpectedDeploymentEpoch = $observedEpoch
+    ExpectedPendingSha256 = $observedPendingHash
+}
+.\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action PlanUpgrade -DryRun -ConfirmInstanceId $instanceId -OutputFormat Json @pair
+.\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action Upgrade -OutputFormat Json @upgrade @pair
+.\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action VerifyUpgrade -OutputFormat Json @upgrade
+```
+
+Plan reports the active and target pair, Host PID, deployment epoch and protected pending file hash. Upgrade takes a read lease on the existing pending file. It retains the previous pair and stages the verified target pair alongside it. It checks SQL and audit identity around the service switch and requires verified HTTPS before recording the new active pair. Launch the returned Desktop executable normally, using the existing lab origin and operation mode, after verifying the upgrade receipt. Observe and reconcile the pending operation before running the separate write exercises.
+
+If interrupted, keep the bound instance and rerun Upgrade with the same expected inputs. To explicitly return to the retained pair while the same fence is present, run:
+
+```powershell
+.\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action RollbackUpgrade -OutputFormat Json @upgrade
+```
+
+Keep the lab and diagnostics if an identity check fails. The pending upgrade phase blocks normal lifecycle actions and reset until the cutover is verified or safely rolled back.
+
 ## Reset
 
 Read the instance ID, review it, and pass the exact value:

@@ -90,6 +90,33 @@ SELECT
         }
     }
 
+    // Administrative metadata admission for the owned local database. Business
+    // observations remain separate and use the independent read-only principal.
+    internal async Task<(Guid DatabaseGuid, Guid DeploymentEpoch)> ObserveUpgradeDatabaseAsync()
+    {
+        await using var database = new SqlConnection(DatabaseAdminConnection());
+        await database.OpenAsync().ConfigureAwait(false);
+        if (await ReadMarkerAsync(database, InstanceMarker).ConfigureAwait(false) != _settings.InstanceId.ToString("D"))
+            throw new LocalSimulationBlockedException("LocalSimulation.DatabaseOwnershipMismatch");
+
+        await using var command = new SqlCommand(@"
+SELECT recovery.database_guid, deployment.DeploymentEpoch
+FROM sys.database_recovery_status recovery
+CROSS JOIN dbo.WebDeploymentState deployment
+WHERE recovery.database_id=DB_ID() AND deployment.Id=1
+  AND EXISTS (SELECT 1 FROM dbo.FluentMigratorVersionInfo
+              HAVING COUNT_BIG(*)=13 AND COUNT(DISTINCT Version)=13
+                 AND MIN(Version)=1 AND MAX(Version)=13);", database);
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        if (!await reader.ReadAsync().ConfigureAwait(false) || reader.IsDBNull(0) || reader.IsDBNull(1))
+            throw new LocalSimulationBlockedException("LocalSimulation.UpgradeDatabaseIdentityUnavailable");
+        var databaseGuid = reader.GetGuid(0);
+        var epoch = reader.GetGuid(1);
+        if (databaseGuid == Guid.Empty || epoch == Guid.Empty || await reader.ReadAsync().ConfigureAwait(false))
+            throw new LocalSimulationBlockedException("LocalSimulation.UpgradeDatabaseIdentityUnavailable");
+        return (databaseGuid, epoch);
+    }
+
     private async Task VerifyExerciseAsync()
     {
         await VerifyMarkerAsync().ConfigureAwait(false);

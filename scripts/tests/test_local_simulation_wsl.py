@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import pathlib
@@ -146,6 +147,7 @@ reload_nginx_after_reset
         self.publish = self.base / "publish"
         for path in (self.state / "secrets", self.state / "tls", self.publish):
             path.mkdir(parents=True, exist_ok=True)
+        self.release_roots = []
         self.instance_id = "11111111-2222-4333-8444-555555555555"
         (self.state / "instance.env").write_text(
             "\n".join(
@@ -170,6 +172,12 @@ reload_nginx_after_reset
         (self.publish / "MyDmsVn.Server.AspNetCoreHost.dll").write_text("fixture", encoding="utf-8")
 
     def tearDown(self):
+        for root in self.release_roots:
+            self.run_release_shell(
+                '[[ "$1" == /tmp/mydmsvn-vps108-release.* && "$(realpath "$1")" == "$1" ]] '
+                '&& rm -rf --one-file-system -- "$1"',
+                root,
+            )
         shutil.rmtree(self.base, ignore_errors=True)
 
     def test_render_produces_hardened_local_service_and_proxy_without_secrets(self):
@@ -218,6 +226,100 @@ reload_nginx_after_reset
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertFalse(owned.exists())
         self.assertEqual("keep", (sibling / "keep").read_text(encoding="utf-8"))
+
+    def run_release_shell(self, code, *args):
+        driver = self.base / "release-driver.sh"
+        driver.write_text('source "$1"\nshift\n' + code + "\n", encoding="utf-8", newline="\n")
+        command = ["bash", linux_path(driver), linux_path(HELPER)]
+        command.extend(linux_path(arg) if isinstance(arg, pathlib.Path) else str(arg) for arg in args)
+        if os.name == "nt":
+            command = ["wsl", "-d", "Ubuntu", "--", *command]
+        return subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
+
+    def make_release_pair(self):
+        created = self.run_release_shell('mktemp -d /tmp/mydmsvn-vps108-release.XXXXXXXX')
+        self.assertEqual(0, created.returncode, created.stderr)
+        root = created.stdout.strip()
+        self.release_roots.append(root)
+        old, new = "a" * 40, "b" * 40
+        setup = self.run_release_shell(
+            'for release in "$2" "$3"; do '
+            '  mkdir -p "$1/releases/$release"; '
+            '  printf %s "$release" >"$1/releases/$release/host.dll"; '
+            '  (cd "$1/releases/$release" && sha256sum host.dll >artifact-manifest.txt); '
+            'done; ln -s "releases/$2" "$1/current"',
+            root, old, new,
+        )
+        self.assertEqual(0, setup.returncode, setup.stderr)
+        hashes = [
+            hashlib.sha256(f"{hashlib.sha256(release.encode()).hexdigest()}  host.dll\n".encode()).hexdigest()
+            for release in (old, new)
+        ]
+        return root, old, new, hashes
+
+    def switch_release(self, root, old, new, old_hash, new_hash):
+        return self.run_release_shell('switch_candidate_release "$@"', root, old, new, old_hash, new_hash)
+
+    def test_release_pointer_switch_is_retriable_and_rolls_back_to_verified_previous_release(self):
+        root, old, new, hashes = self.make_release_pair()
+        before = self.run_release_shell('readlink "$1/current"', root)
+        self.assertEqual("releases/" + old, before.stdout.strip())
+        first = self.switch_release(root, old, new, *hashes)
+        self.assertEqual(0, first.returncode, first.stderr)
+        self.assertEqual("SWITCHED", first.stdout.strip())
+        self.assertEqual("releases/" + new, self.run_release_shell('readlink "$1/current"', root).stdout.strip())
+        repeated = self.switch_release(root, old, new, *hashes)
+        self.assertEqual(0, repeated.returncode, repeated.stderr)
+        self.assertEqual("ALREADY_ACTIVE", repeated.stdout.strip())
+        rollback = self.switch_release(root, new, old, hashes[1], hashes[0])
+        self.assertEqual(0, rollback.returncode, rollback.stderr)
+        self.assertEqual("releases/" + old, self.run_release_shell('readlink "$1/current"', root).stdout.strip())
+        retained = self.run_release_shell('cat "$1/releases/$2/host.dll"', root, new)
+        self.assertEqual(new, retained.stdout)
+
+    def test_rollback_cancels_a_delayed_upgrade_worker_for_the_same_request(self):
+        root, old, new, hashes = self.make_release_pair()
+        arguments = (root, "a" * 32, old + ":" + hashes[0], new + ":" + hashes[1])
+        ready = self.run_release_shell('record_upgrade_intent "$1" "$2" Upgrade "$3" "$4"', *arguments)
+        self.assertEqual(0, ready.returncode, ready.stderr)
+        rollback = self.run_release_shell('record_upgrade_intent "$1" "$2" RollbackUpgrade "$3" "$4"', *arguments)
+        self.assertEqual(0, rollback.returncode, rollback.stderr)
+        delayed = self.run_release_shell('record_upgrade_intent "$1" "$2" Upgrade "$3" "$4"', *arguments)
+        self.assertEqual(2, delayed.returncode, delayed.stderr)
+        self.assertIn("LocalSimulation.UpgradeIntentCancelled", delayed.stderr)
+        self.assertEqual("releases/" + old, self.run_release_shell('readlink "$1/current"', root).stdout.strip())
+
+    def test_release_pointer_retains_old_release_when_candidate_content_drifts(self):
+        root, old, new, hashes = self.make_release_pair()
+        changed = self.run_release_shell('printf changed >"$1/releases/$2/host.dll"', root, new)
+        self.assertEqual(0, changed.returncode, changed.stderr)
+        result = self.switch_release(root, old, new, *hashes)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("LocalSimulation.ArtifactIdentityMismatch", result.stderr)
+        self.assertEqual("releases/" + old, self.run_release_shell('readlink "$1/current"', root).stdout.strip())
+
+    def test_release_pointer_refuses_a_foreign_active_target(self):
+        root, old, new, hashes = self.make_release_pair()
+        target = "releases/" + "c" * 40
+        setup = self.run_release_shell('ln -sfnT "$2" "$1/current"', root, target)
+        self.assertEqual(0, setup.returncode, setup.stderr)
+        result = self.switch_release(root, old, new, *hashes)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("LocalSimulation.ReleaseIdentityMismatch", result.stderr)
+        self.assertEqual(target, self.run_release_shell('readlink "$1/current"', root).stdout.strip())
+
+    def test_release_pointer_refuses_unsafe_manifest_path_even_when_hash_matches(self):
+        root, old, new, hashes = self.make_release_pair()
+        manifest = ("0" * 64 + "  ../host.dll\n").encode("ascii")
+        changed = self.run_release_shell(
+            'printf "%s\n" "$3" >"$1/releases/$2/artifact-manifest.txt"',
+            root, new, manifest.decode("ascii").strip(),
+        )
+        self.assertEqual(0, changed.returncode, changed.stderr)
+        result = self.switch_release(root, old, new, hashes[0], hashlib.sha256(manifest).hexdigest())
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("LocalSimulation.ArtifactIdentityMismatch", result.stderr)
+        self.assertEqual("releases/" + old, self.run_release_shell('readlink "$1/current"', root).stdout.strip())
 
     def test_recovery_result_fails_when_service_or_https_did_not_recover(self):
         passed = run_helper("recovery-result", "1", "1")

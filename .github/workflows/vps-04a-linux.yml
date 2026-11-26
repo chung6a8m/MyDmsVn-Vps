@@ -18,7 +18,7 @@ concurrency:
 jobs:
 
   local-simulation-linux-safety:
-    name: Linux local simulation shell safety (13 tests, no skips)
+    name: Linux local simulation shell safety (18 tests, no skips)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -27,7 +27,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import unittest
-          expected = 13
+          expected = 18
           suite = unittest.defaultTestLoader.loadTestsFromName('scripts.tests.test_local_simulation_wsl')
           assert suite.countTestCases() == expected, (suite.countTestCases(), expected)
           result = unittest.TextTestRunner(verbosity=2).run(suite)
@@ -36,7 +36,7 @@ jobs:
           PY
 
   local-simulation-windows-safety:
-    name: Windows local simulation operator safety (40 tests, no skips)
+    name: Windows local simulation operator safety (44 tests, no skips)
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
@@ -51,7 +51,7 @@ jobs:
         run: |
           @'
           import unittest
-          expected = 40
+          expected = 44
           suite = unittest.defaultTestLoader.loadTestsFromName('scripts.tests.test_local_simulation')
           assert suite.countTestCases() == expected, (suite.countTestCases(), expected)
           result = unittest.TextTestRunner(verbosity=2).run(suite)

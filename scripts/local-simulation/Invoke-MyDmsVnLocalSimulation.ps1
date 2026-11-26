@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Preflight', 'Initialize', 'Start', 'Verify', 'Stop', 'Reset')]
+    [ValidateSet('Preflight', 'Initialize', 'Start', 'Verify', 'Stop', 'Reset', 'PlanUpgrade', 'Upgrade', 'VerifyUpgrade', 'RollbackUpgrade')]
     [string] $Action,
 
     [string] $StateRoot,
@@ -15,6 +15,8 @@ param(
     [string] $CandidateSourceSha,
     [string] $DesktopManifestSha256,
     [string] $HostManifestSha256,
+    [string] $ExpectedDeploymentEpoch,
+    [string] $ExpectedPendingSha256,
 
     [switch] $DryRun
 )
@@ -28,6 +30,8 @@ if ([string]::IsNullOrWhiteSpace($StateRoot)) {
     $StateRoot = Join-Path $allowedStateParent 'active'
 }
 $resolvedStateRoot = [IO.Path]::GetFullPath($StateRoot)
+$operationMutex = $null
+$operationLocked = $false
 
 function Write-Outcome {
     param(
@@ -46,6 +50,8 @@ function Write-Outcome {
         }
         [Console]::Out.WriteLine($Value.notice)
     }
+    if ($operationLocked) { $operationMutex.ReleaseMutex() }
+    if ($null -ne $operationMutex) { $operationMutex.Dispose() }
     exit $ExitCode
 }
 
@@ -152,7 +158,7 @@ if (-not (Test-PathWithinAllowedStateParent)) {
 if (Test-ReparsePointInStatePath) {
     Refuse 'LocalSimulation.ReparsePointRefused'
 }
-if ($DryRun -and $Action -ne 'Initialize') {
+if ($DryRun -and $Action -notin @('Initialize', 'PlanUpgrade')) {
     Refuse 'LocalSimulation.DryRunUnsupported'
 }
 
@@ -171,7 +177,7 @@ $candidateInputs = @($CandidateRoot, $CandidateSourceSha, $DesktopManifestSha256
 $providedCandidateInputs = @($candidateInputs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 $candidateOptionNames = @('CandidateRoot', 'CandidateSourceSha', 'DesktopManifestSha256', 'HostManifestSha256')
 if (@($candidateOptionNames | Where-Object { $PSBoundParameters.ContainsKey($_) }).Count -gt 0) {
-    if ($Action -ne 'Initialize' -or $providedCandidateInputs.Count -ne $candidateInputs.Count) {
+    if ($Action -notin @('Initialize', 'PlanUpgrade', 'Upgrade') -or $providedCandidateInputs.Count -ne $candidateInputs.Count) {
         Refuse 'LocalSimulation.CandidateArgumentsInvalid'
     }
     Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
@@ -300,6 +306,43 @@ if ($Action -eq 'Preflight') {
     } -ExitCode $(if ($blocked) { 2 } else { 0 })
 }
 
+$lockedActions = @('Initialize', 'Start', 'Verify', 'Stop', 'Reset', 'PlanUpgrade', 'Upgrade', 'VerifyUpgrade', 'RollbackUpgrade')
+if ($Action -in $lockedActions) {
+    $bindingPath = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'MyDmsVn\LocalSimulation')).ToUpperInvariant()
+    $hash = [Security.Cryptography.SHA256]::Create()
+    try { $key = [BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($bindingPath))).Replace('-', '') }
+    finally { $hash.Dispose() }
+    try {
+        $operationMutex = [Threading.Mutex]::new($false, "Global\MyDmsVn.LocalSimulation.$key")
+        try { $operationLocked = $operationMutex.WaitOne(0) }
+        catch [Threading.AbandonedMutexException] { $operationLocked = $true }
+    }
+    catch { Refuse 'LocalSimulation.OperationLockUnavailable' }
+    if (-not $operationLocked) { Refuse 'LocalSimulation.ConcurrentOperation' }
+}
+
+trap {
+    if ($operationLocked) { $operationMutex.ReleaseMutex() }
+    if ($null -ne $operationMutex) { $operationMutex.Dispose() }
+    throw $_
+}
+
+if ($Action -in @('PlanUpgrade', 'Upgrade', 'VerifyUpgrade', 'RollbackUpgrade')) {
+    if ($Action -in @('PlanUpgrade', 'Upgrade') -and $null -eq $candidate) { Refuse 'LocalSimulation.CandidateArgumentsInvalid' }
+    $epoch = [Guid]::Empty
+    if ($Action -ne 'PlanUpgrade' -and
+        (-not [Guid]::TryParseExact($ExpectedDeploymentEpoch, 'D', [ref]$epoch) -or $epoch -eq [Guid]::Empty -or
+         $ExpectedDeploymentEpoch -cne $epoch.ToString('D') -or $ExpectedPendingSha256 -cnotmatch '^[0-9a-f]{64}$')) {
+        Refuse 'LocalSimulation.UpgradeArgumentsInvalid'
+    }
+    $receipt = Read-ValidatedReceipt -RequireConfirmation -AllowStaleMirror
+    Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
+    $result = Invoke-RuntimeAction {
+        Invoke-LocalSimulationUpgrade -Action $Action -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt -Candidate $candidate -ExpectedDeploymentEpoch $ExpectedDeploymentEpoch -ExpectedPendingSha256 $ExpectedPendingSha256
+    }
+    Write-Outcome -Value $result -ExitCode 0
+}
+
 if ($Action -eq 'Initialize') {
     $engine = (Get-Process -Id $PID).Path
     $preflightText = & $engine -NoLogo -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Action Preflight -StateRoot $resolvedStateRoot -OutputFormat Json
@@ -335,6 +378,7 @@ if ($Action -eq 'Reset') {
 
     Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
     Invoke-RuntimeAction { Assert-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
+    Invoke-RuntimeAction { Assert-LocalSimulationResetFence $receipt } | Out-Null
     Invoke-RuntimeAction { Reset-MyDmsVnLocalSimulationExternal -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
     Invoke-RuntimeAction { Complete-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
 

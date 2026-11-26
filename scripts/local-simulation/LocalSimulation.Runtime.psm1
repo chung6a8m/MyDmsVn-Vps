@@ -597,18 +597,38 @@ function Get-DockerInspectObject {
     catch { throw [InvalidOperationException]::new($FailureCode) }
 }
 
+function Get-LocalSimulationReleaseId {
+    param([pscustomobject] $Receipt)
+    if ('releaseId' -notin $Receipt.wsl.PSObject.Properties.Name) { return $Receipt.sourceSha }
+    if ($Receipt.wsl.releaseId -cnotmatch '^[0-9a-f]{40}$') { throw [InvalidOperationException]::new('LocalSimulation.ReleaseIdentityMismatch') }
+    return $Receipt.wsl.releaseId
+}
+
+function Get-LocalSimulationActiveArtifactRoot {
+    param([string] $StateRoot, [pscustomobject] $Receipt)
+    $base = Join-Path $StateRoot 'artifacts'
+    $release = Get-LocalSimulationReleaseId $Receipt
+    if ($release -eq $Receipt.sourceSha) { return $base }
+    return (Join-Path (Join-Path $base 'releases') $release)
+}
+
+function Get-LocalSimulationWslIdentityArgs {
+    param([pscustomobject] $Receipt)
+    return @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256, (Get-LocalSimulationReleaseId $Receipt))
+}
+
 function Assert-LocalSimulationIdentity {
-    param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Receipt, [switch] $Stopping)
+    param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Receipt, [switch] $Stopping, [switch] $UpgradeInProgress)
     Assert-LocalSimulationRegistration $StateRoot $Receipt
     $head = ([string](@(Invoke-ExternalSafe 'git' @('-C', $RepoRoot, 'rev-parse', 'HEAD') 'LocalSimulation.GitStateUnavailable')[0])).Trim()
     $dirty = @(Invoke-ExternalSafe 'git' @('-C', $RepoRoot, 'status', '--porcelain') 'LocalSimulation.GitStateUnavailable')
     if ($head -ne [string]$Receipt.sourceSha -or $dirty.Count -ne 0) { throw [InvalidOperationException]::new('LocalSimulation.SourceIdentityMismatch') }
     if ((Get-FileSha256 (Join-Path $RepoRoot 'scripts\local-simulation\mydmsvn-local-sim')) -ne [string]$Receipt.artifacts.bashSha256) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactIdentityMismatch') }
     Assert-ArtifactManifest (Join-Path $StateRoot 'artifacts\sql-helper') ([string]$Receipt.artifacts.sqlHelperSha256)
-    Assert-ArtifactManifest (Join-Path $StateRoot 'artifacts\host') ([string]$Receipt.artifacts.hostSha256)
+    $candidateRoot = Get-LocalSimulationActiveArtifactRoot $StateRoot $Receipt
+    Assert-ArtifactManifest (Join-Path $candidateRoot 'host') ([string]$Receipt.artifacts.hostSha256)
     if ('candidate' -in $Receipt.artifacts.PSObject.Properties.Name) {
         $candidate = $Receipt.artifacts.candidate
-        $candidateRoot = Join-Path $StateRoot 'artifacts'
         if (-not $Stopping) { Get-CandidateTree $candidateRoot 'desktop' $candidate.sourceSha $candidate.desktopManifestSha256 | Out-Null }
         Get-CandidateTree $candidateRoot 'host' $candidate.sourceSha $candidate.hostManifestSha256 -AllowRuntimeManifest | Out-Null
     }
@@ -622,7 +642,9 @@ function Assert-LocalSimulationIdentity {
         $mount.Count -ne 1 -or [string]$mount[0].Name -ne 'mydmsvn-local-sim-sql-data') {
         throw [InvalidOperationException]::new('LocalSimulation.ResourceIdentityMismatch')
     }
-    Invoke-WslHelper $RepoRoot 'identity' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256) -Sudo | Out-Null
+    if (-not $UpgradeInProgress) {
+        Invoke-WslHelper $RepoRoot 'identity' (Get-LocalSimulationWslIdentityArgs $Receipt) -Sudo | Out-Null
+    }
 }
 
 function Wait-LocalSimulationSqlReady {
@@ -757,7 +779,7 @@ function Start-MyDmsVnLocalSimulation {
     $container = Get-DockerInspectObject container 'mydmsvn-local-sim-sql' 'LocalSimulation.SqlContainerMissing'
     if ($container.State.Running -ne $true) { Invoke-ExternalSafe 'docker' @('start', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlStartFailed' | Out-Null }
     Wait-LocalSimulationSqlReady $StateRoot $Receipt
-    Invoke-WslHelper $RepoRoot 'start' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256) -Sudo | Out-Null
+    Invoke-WslHelper $RepoRoot 'start' (Get-LocalSimulationWslIdentityArgs $Receipt) -Sudo | Out-Null
     return [ordered]@{ action = 'Start'; status = 'STARTED'; instanceId = $Receipt.instanceId }
 }
 
@@ -765,16 +787,16 @@ function Verify-MyDmsVnLocalSimulation {
     param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Receipt)
     Assert-LocalSimulationIdentity $RepoRoot $StateRoot $Receipt
     Invoke-SqlHelper $StateRoot $Receipt 'verify' | Out-Null
-    Invoke-WslHelper $RepoRoot 'verify' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256) -Sudo | Out-Null
+    Invoke-WslHelper $RepoRoot 'verify' (Get-LocalSimulationWslIdentityArgs $Receipt) -Sudo | Out-Null
     Invoke-HttpExercise $StateRoot $Receipt
-    Invoke-WslHelper $RepoRoot 'recovery' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256) -Sudo | Out-Null
+    Invoke-WslHelper $RepoRoot 'recovery' (Get-LocalSimulationWslIdentityArgs $Receipt) -Sudo | Out-Null
     return [ordered]@{ action = 'Verify'; status = 'VERIFIED'; instanceId = $Receipt.instanceId; executed = 4; passed = 4; failed = 0; skipped = 0 }
 }
 
 function Stop-MyDmsVnLocalSimulation {
     param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Receipt)
     Assert-LocalSimulationIdentity $RepoRoot $StateRoot $Receipt -Stopping
-    Invoke-WslHelper $RepoRoot 'stop' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256) -Sudo | Out-Null
+    Invoke-WslHelper $RepoRoot 'stop' (Get-LocalSimulationWslIdentityArgs $Receipt) -Sudo | Out-Null
     Invoke-ExternalSafe 'docker' @('stop', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlStopFailed' | Out-Null
     return [ordered]@{ action = 'Stop'; status = 'STOPPED'; instanceId = $Receipt.instanceId }
 }
@@ -815,7 +837,7 @@ function Reset-MyDmsVnLocalSimulationExternal {
     $engineId = @(Invoke-ExternalSafe 'docker' @('info', '--format', '{{.ID}}') 'LocalSimulation.DockerBackendUnavailable')
     if (([string]$engineId[0]).Trim() -ne [string]$Receipt.docker.engineId) { throw [InvalidOperationException]::new('LocalSimulation.DockerEngineMismatch') }
     if ([bool]$Receipt.wsl.installed) {
-        Invoke-WslHelper $RepoRoot 'reset-admission' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha) -Sudo | Out-Null
+        Invoke-WslHelper $RepoRoot 'reset-admission' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, (Get-LocalSimulationReleaseId $Receipt)) -Sudo | Out-Null
     }
     $containerLabel = $null
     $volumeLabel = $null
@@ -845,7 +867,7 @@ function Reset-MyDmsVnLocalSimulationExternal {
         }
     }
     if ([bool]$Receipt.wsl.installed) {
-        Invoke-WslHelper $RepoRoot 'reset' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha) -Sudo | Out-Null
+        Invoke-WslHelper $RepoRoot 'reset' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, (Get-LocalSimulationReleaseId $Receipt)) -Sudo | Out-Null
     }
     if ($null -ne $containerLabel) {
         Invoke-ExternalSafe 'docker' @('rm', '-f', '-v', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlContainerRemoveFailed' | Out-Null
@@ -858,4 +880,6 @@ function Reset-MyDmsVnLocalSimulationExternal {
     }
 }
 
-Export-ModuleMember -Function Get-LocalSimulationCandidate,Initialize-MyDmsVnLocalSimulation,Start-MyDmsVnLocalSimulation,Verify-MyDmsVnLocalSimulation,Stop-MyDmsVnLocalSimulation,Reset-MyDmsVnLocalSimulationExternal,Assert-LocalSimulationRegistration,Complete-LocalSimulationRegistration,Remove-LocalSimulationRegistration
+. (Join-Path $PSScriptRoot 'LocalSimulation.Upgrade.ps1')
+
+Export-ModuleMember -Function Invoke-LocalSimulationUpgrade,Assert-LocalSimulationResetFence,Get-LocalSimulationCandidate,Initialize-MyDmsVnLocalSimulation,Start-MyDmsVnLocalSimulation,Verify-MyDmsVnLocalSimulation,Stop-MyDmsVnLocalSimulation,Reset-MyDmsVnLocalSimulationExternal,Assert-LocalSimulationRegistration,Complete-LocalSimulationRegistration,Remove-LocalSimulationRegistration
