@@ -96,6 +96,15 @@ admit_lab() {
   done
 }
 
+protect_installation_tree() {
+  local root="$1"
+  regular_dir "$root"
+  [[ -z "$(find "$root" ! -type f ! -type d -print -quit)" ]] ||
+    fail 'LocalSimulation.ArtifactIdentityMismatch'
+  find "$root" -type d -exec chmod 0755 -- '{}' +
+  find "$root" -type f -exec chmod 0644 -- '{}' +
+}
+
 install_lab() {
   [[ $# == 4 ]] || fail 'LocalSimulation.InstallArgumentsInvalid'
   [[ "$(id -u)" == 0 ]] || fail 'LocalSimulation.RootRequired'
@@ -113,15 +122,18 @@ install_lab() {
   chmod 0600 /etc/mydmsvn-local-sim/instance-id /etc/mydmsvn-local-sim/source-sha
   useradd --system --no-create-home --shell /usr/sbin/nologin mydmsvn-local-sim
   install -d -o root -g root -m 0755 /opt/mydmsvn-local-sim /opt/mydmsvn-local-sim/releases /usr/local/libexec
-  cp -a -- "$state/runtime" /opt/mydmsvn-local-sim/runtime
-  chown -R root:root /opt/mydmsvn-local-sim/runtime
+  install -d -o root -g root -m 0700 /opt/mydmsvn-local-sim/runtime
+  cp -R --no-preserve=ownership,mode -- "$state/runtime/." /opt/mydmsvn-local-sim/runtime/
+  protect_installation_tree /opt/mydmsvn-local-sim/runtime
+  chmod 0755 -- /opt/mydmsvn-local-sim/runtime/dotnet
+  find /opt/mydmsvn-local-sim/runtime/shared -name createdump -type f -exec chmod 0755 -- '{}' +
   install -d -o root -g root -m 0700 /etc/mydmsvn-local-sim/credentials /etc/mydmsvn-local-sim/tls
   install -d -o mydmsvn-local-sim -g mydmsvn-local-sim -m 0700 /var/lib/mydmsvn-local-sim /var/lib/mydmsvn-local-sim/audit
   install -o mydmsvn-local-sim -g mydmsvn-local-sim -m 0600 /dev/null /var/lib/mydmsvn-local-sim/audit/security.jsonl
   [[ ! -e "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA" ]] || fail 'LocalSimulation.ReleaseExists'
-  install -d -o root -g root -m 0755 "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA"
-  cp -a -- "$publish/." "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA/"
-  chown -R root:root "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA"
+  install -d -o root -g root -m 0700 "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA"
+  cp -R --no-preserve=ownership,mode -- "$publish/." "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA/"
+  protect_installation_tree "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA"
   ln -sfn "releases/$SOURCE_SHA" /opt/mydmsvn-local-sim/current
   install -o root -g root -m 0644 "$rendered/mydmsvn-local-sim.service" /etc/systemd/system/mydmsvn-local-sim.service
   install -o root -g root -m 0755 "$rendered/mydmsvn-local-sim-start" /usr/local/libexec/mydmsvn-local-sim-start

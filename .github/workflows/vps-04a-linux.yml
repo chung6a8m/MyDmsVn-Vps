@@ -18,7 +18,7 @@ concurrency:
 jobs:
 
   local-simulation-linux-safety:
-    name: Linux local simulation shell safety (12 tests, no skips)
+    name: Linux local simulation shell safety (13 tests, no skips)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -27,7 +27,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import unittest
-          expected = 12
+          expected = 13
           suite = unittest.defaultTestLoader.loadTestsFromName('scripts.tests.test_local_simulation_wsl')
           assert suite.countTestCases() == expected, (suite.countTestCases(), expected)
           result = unittest.TextTestRunner(verbosity=2).run(suite)

@@ -29,6 +29,26 @@ def run_helper(*args):
 
 
 class LocalSimulationWslTests(unittest.TestCase):
+    def test_installed_payload_permissions_drop_windows_mount_write_bits(self):
+        driver = self.base / "install-file-modes.sh"
+        driver.write_text(
+            'source "$1"\n'
+            'root="$(mktemp -d /tmp/mydmsvn-file-modes.XXXXXXXX)"\n'
+            'trap \'rm -f -- "$root/dotnet" "$root/host.dll"; rmdir -- "$root"\' EXIT\n'
+            'touch "$root/dotnet" "$root/host.dll"\n'
+            'chmod 0777 "$root" "$root/dotnet" "$root/host.dll"\n'
+            'protect_installation_tree "$root"\n'
+            'chmod 0755 -- "$root/dotnet"\n'
+            'stat -c %a "$root" "$root/dotnet" "$root/host.dll"\n',
+            encoding="utf-8", newline="\n",
+        )
+        command = ["bash", linux_path(driver), linux_path(HELPER)]
+        if os.name == "nt":
+            command = ["wsl", "-d", "Ubuntu", "--", *command]
+        result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(["755", "755", "644"], result.stdout.split())
+
     def test_prerequisites_use_a_hash_pinned_aspnet_runtime(self):
         source = HELPER.read_text(encoding="utf-8")
         self.assertIn(
@@ -62,7 +82,7 @@ class LocalSimulationWslTests(unittest.TestCase):
         install = source.split("install_lab()", 1)[1].split("install_prerequisites()", 1)[0]
         marker = install.index("/etc/mydmsvn-local-sim/instance-id")
         self.assertLess(marker, install.index("useradd --system"))
-        self.assertLess(marker, install.index('cp -a -- "$state/runtime"'))
+        self.assertLess(marker, install.index('cp -R --no-preserve=ownership,mode -- "$state/runtime/."'))
         self.assertIn("/etc/mydmsvn-local-sim/source-sha", install)
 
     def test_reset_keeps_marker_until_cleanup_postconditions(self):
