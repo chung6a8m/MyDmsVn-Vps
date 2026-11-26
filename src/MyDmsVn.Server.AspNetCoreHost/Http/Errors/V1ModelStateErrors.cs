@@ -15,6 +15,12 @@ internal static class V1ModelStateErrors
             .Select(pair => pair.Key).ToArray();
         var field = keys.Contains("") ? null : keys.FirstOrDefault(key => key is "limit" or "search" or "fromDate" or "toDate" or "customerId" or "warehouseId" or
             "employeeId" or "status" or "productId" or "pageSize" or "cursor" or "saleId");
+        var salesError = keys.FirstOrDefault(key => key.StartsWith(V1SalesRequestFormatter.ErrorPrefix, System.StringComparison.Ordinal));
+        if (salesError != null)
+        {
+            var path = salesError.Substring(V1SalesRequestFormatter.ErrorPrefix.Length);
+            field = path.Length == 0 ? null : path;
+        }
         var correlation = context.HttpContext.RequestServices
             .GetRequiredService<RequestIdentityAdmission>().CorrelationId;
         return V1ApiResults.Invalid(field, correlation);

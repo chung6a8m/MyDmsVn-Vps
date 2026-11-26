@@ -19,7 +19,7 @@ internal static class EndpointInventory
 
     private static Type? NativeOwner(Net10RouteTable.Route route) =>
         route.Controller == typeof(CatalogLookupController) ? typeof(NativeLookup) :
-        route.Controller == typeof(SalesReceiptsController) && route.Verb == "GET" ? typeof(NativeSales) : null;
+        route.Controller == typeof(SalesReceiptsController) ? typeof(NativeSales) : null;
 
     internal static bool IsNative(Net10RouteTable.Route route) => NativeOwner(route) != null;
 
