@@ -13,10 +13,12 @@ namespace MyDmsVn.Server.HttpHost.Features.Catalog;
 
 [ApiController]
 [Route("api/v1/catalog")]
+[Produces("application/json")]
 [ProducesResponseType(typeof(V1SuccessEnvelope<IReadOnlyList<CatalogLookupDto>>), 200)]
 [ProducesResponseType(typeof(V1ErrorEnvelope), 400)]
 [ProducesResponseType(typeof(V1ErrorEnvelope), 401)]
 [ProducesResponseType(typeof(V1ErrorEnvelope), 403)]
+[ProducesResponseType(typeof(V1ErrorEnvelope), 413)]
 [ProducesResponseType(typeof(V1ErrorEnvelope), 500)]
 public sealed class CatalogLookupController : ControllerBase
 {

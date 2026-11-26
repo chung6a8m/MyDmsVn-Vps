@@ -9,10 +9,10 @@ namespace MyDmsVn.Server.HttpHost.Features.Catalog;
 // Host-owned typed DTO; query metadata is also available to MVC ApiExplorer.
 public sealed class CatalogLookupQuery
 {
-    [FromQuery(Name = "search"), StringLength(256)]
+    [FromQuery(Name = "search"), MaxLength(256)]
     public string? Search { get; init; }
 
-    [FromQuery(Name = "limit"), BindRequired, Range(1, 200)]
+    [FromQuery(Name = "limit"), BindRequired, Required, Range(1, 200)]
     public int Limit { get; init; }
 }
 

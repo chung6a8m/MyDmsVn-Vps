@@ -84,6 +84,7 @@ internal static class Program
         app.UseMiddleware<CoreApiAdmissionMiddleware>();
         app.Use((context, next) => NativeApiRegistration.AdmitDesktopFeatureAsync(context, next));
         Net10RouteTable.Map(app);
+        NativeApiRegistration.MapNativeOpenApi(app);
         Net10RouteTable.MapFallback(app);
     }
 }
