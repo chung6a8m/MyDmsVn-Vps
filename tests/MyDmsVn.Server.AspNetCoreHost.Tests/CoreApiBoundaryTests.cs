@@ -376,7 +376,7 @@ public sealed class CoreApiBoundaryTests
         var validPaths = valid.Select(Path).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
         var missPaths = misses.Select(Path).OrderBy(x => x, StringComparer.Ordinal).ToArray();
         Assert.Equal(validPaths, missPaths);
-        Assert.Contains(valid, e => e.RoutePattern.RawText == "/api/v3/operations/{operationId}/resend-eligibility" &&
+        Assert.Contains(valid, e => Path(e) == "/api/v3/operations/{operationId}/resend-eligibility" &&
             e.Order == 2);
         Assert.Contains(misses, e => e.RoutePattern.RawText == "/api/v1/catalog/products");
     }
