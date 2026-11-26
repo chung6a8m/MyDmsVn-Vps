@@ -32,6 +32,21 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             Write(logger => logger.Information("Desktop logout {ClientDisposition} {ErrorCode}",
                 disposition, SafeCode(errorCode)));
 
+        internal static void RecordRefresh(Guid correlationId, string disposition, int? httpStatus,
+            string? errorCode, string? networkStatus) =>
+            Write(logger => logger.Information(
+                "Desktop refresh {CorrelationId} {ClientDisposition} {HttpStatus} {ErrorCode} {NetworkStatus}",
+                correlationId.ToString("N"), disposition, httpStatus, RefreshErrorCode(errorCode), networkStatus));
+
+        // Server error codes are untrusted text. Only emit codes understood by this flow.
+        private static string? RefreshErrorCode(string? code) => code switch
+        {
+            null or "ValidationError" or "Auth.Unauthorized" or "Auth.RateLimited" or
+                "Auth.InvalidRefreshTicket" or "Auth.SessionChanged" or "Http.InvalidResponse" or
+                "Http.Timeout" or "Http.Unavailable" or "Refresh.Canceled" or "Refresh.Unexpected" => code,
+            _ => "UnrecognizedErrorCode",
+        };
+
         private static string? SafeCode(string? value) =>
             value == null || ErrorCodePattern.IsMatch(value) ? value : "UnrecognizedErrorCode";
 

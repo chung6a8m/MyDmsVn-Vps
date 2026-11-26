@@ -147,6 +147,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         private async Task<bool> RefreshAsync(long generation, CancellationToken cancellationToken)
         {
             await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            RefreshAttempt? attempt = null;
             try
             {
                 if (!_session.TryCapture(generation, out _, out _, out var expiresUtc))
@@ -156,25 +157,37 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
                 // SQL rotation can commit even if the ACK is lost. Exactly one
                 // attempt: failure forces reauthentication, never replay refresh.
-                var refreshed = await AuthAsync("refresh", null, cancellationToken)
+                attempt = new RefreshAttempt();
+                var refreshed = await AuthAsync("refresh", null, cancellationToken, attempt)
                     .ConfigureAwait(false);
-                if (refreshed.IsSuccess && ValidTicket(refreshed.Data!) &&
-                    _session.TryRefresh(generation, refreshed.Data!.AccessToken!,
-                        refreshed.Data.ExpiresAtUtc))
-                    return true;
+                var errorCode = refreshed.Error?.Code;
+                if (refreshed.IsSuccess)
+                {
+                    var ticket = refreshed.Data!;
+                    var valid = ValidTicket(ticket);
+                    if (valid && _session.TryRefresh(generation, ticket.AccessToken!, ticket.ExpiresAtUtc))
+                    {
+                        attempt.Record("Succeeded", null);
+                        return true;
+                    }
+                    errorCode = valid ? "Auth.SessionChanged" : "Auth.InvalidRefreshTicket";
+                }
 
                 DiscardRefresh(generation);
+                attempt.Record("Failed", errorCode);
                 return false;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // Rotation might already have committed: never allow another
                 // refresh on the old cookie after a caller-initiated cancellation.
+                attempt?.Record("Canceled", "Refresh.Canceled");
                 DiscardRefresh(generation);
                 throw;
             }
             catch
             {
+                attempt?.Record("Failed", "Refresh.Unexpected");
                 DiscardRefresh(generation);
                 return false;
             }
@@ -193,9 +206,9 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         }
 
         private Task<ApiResponse<AuthTicket>> AuthAsync(
-            string operation, object? body, CancellationToken token) =>
+            string operation, object? body, CancellationToken token, RefreshAttempt? refreshAttempt = null) =>
             RequestAsync<AuthTicket>(HttpMethod.Post, "/api/v1/auth/" + operation,
-                body, null, cookieEndpoint: true, token);
+                body, null, cookieEndpoint: true, token, refreshAttempt: refreshAttempt);
 
         private async Task RevokeAsync()
         {
@@ -225,7 +238,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         private async Task<ApiResponse<T>> RequestAsync<T>(
             HttpMethod method, string route, object? body, string? accessToken,
             bool cookieEndpoint, CancellationToken cancellationToken,
-            IReadOnlyDictionary<string, string>? additionalHeaders = null)
+            IReadOnlyDictionary<string, string>? additionalHeaders = null,
+            RefreshAttempt? refreshAttempt = null)
         {
             var exactWeb5Context = route == "/api/v2/operations/context";
             const string v2Prefix = "/api/v2/operations/";
@@ -254,7 +268,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             using (var request = new HttpRequestMessage(method, uri))
             {
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-                request.Headers.TryAddWithoutValidation("X-Correlation-ID", Guid.NewGuid().ToString("N"));
+                request.Headers.TryAddWithoutValidation("X-Correlation-ID",
+                    (refreshAttempt?.CorrelationId ?? Guid.NewGuid()).ToString("N"));
                 if (method != HttpMethod.Get && method != HttpMethod.Head)
                     request.Headers.TryAddWithoutValidation("Origin", _options.Origin.ToString().TrimEnd('/'));
                 if (cookieEndpoint)
@@ -284,6 +299,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                         request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                         .ConfigureAwait(false))
                     {
+                        if (refreshAttempt != null)
+                            refreshAttempt.HttpStatus = (int)response.StatusCode;
                         var hasId = request.Headers.TryGetValues("Idempotency-Key", out var operationKeys) &&
                             operationKeys.Count() == 1;
                         var id = hasId && Guid.TryParseExact(operationKeys!.Single(), "D", out var parsedId)
@@ -327,13 +344,15 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     return Fail<T>(ApiStatusCode.InternalServerError,
                         "Http.Timeout", "The server did not respond before the timeout.");
                 }
-                catch (HttpRequestException)
+                catch (HttpRequestException error)
                 {
+                    refreshAttempt?.ObserveNetworkFailure(error);
                     return Fail<T>(ApiStatusCode.InternalServerError,
                         "Http.Unavailable", "The server is unavailable. Check the secure connection.");
                 }
-                catch (IOException)
+                catch (IOException error)
                 {
+                    refreshAttempt?.ObserveNetworkFailure(error);
                     return Fail<T>(ApiStatusCode.InternalServerError,
                         "Http.Unavailable", "The server connection failed.");
                 }
@@ -399,6 +418,23 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             }
             _client.Dispose();
             _refreshGate.Dispose();
+        }
+
+        private sealed class RefreshAttempt
+        {
+            public Guid CorrelationId { get; } = Guid.NewGuid();
+            public int? HttpStatus { get; set; }
+            private WebExceptionStatus? NetworkStatus { get; set; }
+
+            public void ObserveNetworkFailure(Exception error)
+            {
+                if (error.InnerException is WebException networkError)
+                    NetworkStatus = networkError.Status;
+            }
+
+            public void Record(string disposition, string? errorCode) =>
+                HttpDesktopOperationDiagnostics.RecordRefresh(
+                    CorrelationId, disposition, HttpStatus, errorCode, NetworkStatus?.ToString());
         }
 
         private sealed class AuthTicket
