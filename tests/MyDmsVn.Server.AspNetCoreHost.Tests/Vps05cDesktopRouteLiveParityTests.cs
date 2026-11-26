@@ -820,6 +820,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             builder.Services.AddSingleton<IPasswordHasher, TestPasswords>();
             builder.Services.AddSingleton<ILegacyPasswordVerifier, TestPasswords>();
             AddHandlers(builder.Services, state);
+            builder.Services.AddVps10NativeApi();
 
             var app = builder.Build();
             app.Use(async (context, next) =>
@@ -837,6 +838,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             });
             app.UseRouting();
             app.UseMiddleware<CoreApiAdmissionMiddleware>();
+            app.Use((context, next) => NativeApiRegistration.AdmitDesktopFeatureAsync(context, next));
             Net10RouteTable.Map(app);
             Net10RouteTable.MapFallback(app);
             await app.StartAsync();

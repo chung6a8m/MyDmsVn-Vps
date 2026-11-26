@@ -69,7 +69,11 @@ public sealed class Vps10ContractCharacterizationTests
             Assert.Equal(Text(endpoint, "controller"), Text(row, "baselineController"));
             Assert.Equal(Text(endpoint, "action"), Text(row, "baselineAction"));
             Assert.Equal(endpoint.GetProperty("order").GetInt32(), row.GetProperty("order").GetInt32());
-            Assert.Equal("bridge", Text(row, "activeOwner")); // updated with actual ownership in 10.2+
+            var native = Text(row, "owningIncrement") == "VPS-10.2";
+            Assert.Equal(native ? "native" : "bridge", Text(row, "activeOwner"));
+            Assert.Equal(Text(row, "activeOwner"), Text(endpoint, "activeOwner"));
+            Assert.Equal(Text(row, "actualController"), Text(endpoint, "actualController"));
+            Assert.Equal(Text(row, "actualAction"), Text(endpoint, "actualAction"));
             Assert.False(string.IsNullOrWhiteSpace(Text(row, "contractFamily")));
             Assert.Equal(source.TryGetProperty("desktopApiMode", out var mode) && mode.GetString() == "enabled",
                 row.GetProperty("featureFlags").EnumerateArray().Any(flag => flag.GetString() == "DesktopApiEnabled:required"));

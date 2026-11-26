@@ -43,4 +43,14 @@ assert len(actual_routes) == 57 and len(actual) == 57, "Missing/duplicate compil
 assert expected == actual, (
     f"HTTP controller/action parity mismatch; missing={sorted(expected - actual)} extra={sorted(actual - expected)}"
 )
-print("PASS: net10 compiled route map 57/57; not a live SQL/HTTP or production acceptance")
+migration = json.loads((manifest / "vps-10-route-migration.json").read_text(encoding="utf-8-sig"))
+by_route = {(r["httpMethod"], r["path"]): r for r in migration["routes"]}
+assert len(by_route) == len(migration["routes"]) == 57
+assert sum(r["activeOwner"] == "native" for r in migration["routes"]) == 4
+for endpoint in actual_routes:
+    row = by_route[endpoint["httpMethod"], endpoint["path"]]
+    for key in ("order", "activeOwner", "actualController", "actualAction"):
+        assert row[key] == endpoint[key], (row["id"], key, row[key], endpoint[key])
+    assert row["baselineController"] == endpoint["controller"]
+    assert row["baselineAction"] == endpoint["action"]
+print("PASS: actual net10 endpoint map 57/57, native 4, bridge 53; not live SQL/HTTP or production acceptance")

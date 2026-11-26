@@ -335,7 +335,9 @@ public sealed class CoreApiBoundaryTests
     [Fact]
     public void RouteOrderAndDedicatedMethodMissEndpointsRemainExplicit()
     {
-        using var app = WebApplication.CreateBuilder().Build();
+        var builder = WebApplication.CreateBuilder();
+        builder.Services.AddVps10NativeApi();
+        using var app = builder.Build();
         Net10RouteTable.Map(app);
         var endpoints = ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
@@ -381,6 +383,7 @@ public sealed class CoreApiBoundaryTests
             }));
         builder.Services.AddSingleton<AuthAttemptLimiter>();
         builder.Services.AddScoped<RequestIdentityAdmission>();
+        builder.Services.AddVps10NativeApi();
         await using var app = builder.Build();
         // Isolate routing, error envelopes and verb constraints from the
         // SQL-dependent security/session admission exercised in later gates.

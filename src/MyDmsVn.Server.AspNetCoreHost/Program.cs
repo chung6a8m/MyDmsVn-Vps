@@ -82,6 +82,7 @@ internal static class Program
         // audit readiness run after routing, before endpoint dispatch.
         app.UseRouting();
         app.UseMiddleware<CoreApiAdmissionMiddleware>();
+        app.Use((context, next) => NativeApiRegistration.AdmitDesktopFeatureAsync(context, next));
         Net10RouteTable.Map(app);
         Net10RouteTable.MapFallback(app);
     }

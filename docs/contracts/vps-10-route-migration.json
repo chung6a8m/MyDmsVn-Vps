@@ -35,7 +35,9 @@
         "canonicalBytes": null,
         "desktopMethods": [],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.AuthController",
+      "actualAction": "Capabilities"
     },
     {
       "id": "GET /api/v1/auth/me",
@@ -63,7 +65,9 @@
           "IIdentityApiClient.GetCurrentUserAsync"
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.AuthController",
+      "actualAction": "Me"
     },
     {
       "id": "GET /api/v1/catalog/customers",
@@ -94,7 +98,9 @@
           "ICustomerApiClient.ListAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.CustomersController",
+      "actualAction": "List"
     },
     {
       "id": "GET /api/v1/catalog/customers/lookup",
@@ -103,7 +109,7 @@
       "order": 0,
       "baselineController": "CatalogLookupController",
       "baselineAction": "Customers",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.2",
       "contractFamily": "web2-v1",
       "authentication": "bearer",
@@ -123,7 +129,9 @@
           "ICustomerApiClient.LookupAsync"
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.CatalogLookupController",
+      "actualAction": "Customers"
     },
     {
       "id": "GET /api/v1/catalog/customers/{id:int}",
@@ -154,7 +162,9 @@
           "ICustomerApiClient.GetAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.CustomersController",
+      "actualAction": "Get"
     },
     {
       "id": "GET /api/v1/catalog/employees",
@@ -185,7 +195,9 @@
           "IEmployeeApiClient.ListAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.EmployeesController",
+      "actualAction": "List"
     },
     {
       "id": "GET /api/v1/catalog/employees/lookup",
@@ -194,7 +206,7 @@
       "order": 0,
       "baselineController": "CatalogLookupController",
       "baselineAction": "Employees",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.2",
       "contractFamily": "web2-v1",
       "authentication": "bearer",
@@ -214,7 +226,9 @@
           "IEmployeeApiClient.LookupAsync"
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.CatalogLookupController",
+      "actualAction": "Employees"
     },
     {
       "id": "GET /api/v1/catalog/employees/{id:int}",
@@ -245,7 +259,9 @@
           "IEmployeeApiClient.GetAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.EmployeesController",
+      "actualAction": "Get"
     },
     {
       "id": "GET /api/v1/catalog/products",
@@ -276,7 +292,9 @@
           "IProductApiClient.ListAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.ProductsController",
+      "actualAction": "List"
     },
     {
       "id": "GET /api/v1/catalog/products/lookup",
@@ -285,7 +303,7 @@
       "order": 0,
       "baselineController": "CatalogLookupController",
       "baselineAction": "Products",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.2",
       "contractFamily": "web2-v1",
       "authentication": "bearer",
@@ -305,7 +323,9 @@
           "IProductApiClient.LookupAsync"
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.CatalogLookupController",
+      "actualAction": "Products"
     },
     {
       "id": "GET /api/v1/catalog/products/{id:int}",
@@ -336,7 +356,9 @@
           "IProductApiClient.GetAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.ProductsController",
+      "actualAction": "Get"
     },
     {
       "id": "GET /api/v1/catalog/warehouses",
@@ -367,7 +389,9 @@
           "IWarehouseApiClient.ListAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.WarehousesController",
+      "actualAction": "List"
     },
     {
       "id": "GET /api/v1/catalog/warehouses/lookup",
@@ -376,7 +400,7 @@
       "order": 0,
       "baselineController": "CatalogLookupController",
       "baselineAction": "Warehouses",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.2",
       "contractFamily": "web2-v1",
       "authentication": "bearer",
@@ -396,7 +420,9 @@
           "IWarehouseApiClient.LookupAsync"
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.CatalogLookupController",
+      "actualAction": "Warehouses"
     },
     {
       "id": "GET /api/v1/catalog/warehouses/{id:int}",
@@ -427,7 +453,9 @@
           "IWarehouseApiClient.GetAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.WarehousesController",
+      "actualAction": "Get"
     },
     {
       "id": "GET /api/v1/foundation/status",
@@ -458,7 +486,9 @@
           "IFoundationApiClient.GetStatusAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.FoundationParityController",
+      "actualAction": "Status"
     },
     {
       "id": "GET /api/v1/goods-receipts",
@@ -487,7 +517,9 @@
           "IGoodsReceiptApiClient.ListAsync"
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.GoodsReceiptsController",
+      "actualAction": "List"
     },
     {
       "id": "GET /api/v1/goods-receipts/{receiptId}",
@@ -516,7 +548,9 @@
           "IGoodsReceiptApiClient.GetAsync"
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.GoodsReceiptsController",
+      "actualAction": "Get"
     },
     {
       "id": "GET /api/v1/health",
@@ -539,7 +573,9 @@
         "canonicalBytes": null,
         "desktopMethods": [],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.HealthController",
+      "actualAction": "Get"
     },
     {
       "id": "GET /api/v1/inventory/balances",
@@ -568,7 +604,9 @@
           "IInventoryApiClient.GetStockBalancesAsync"
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.InventoryController",
+      "actualAction": "Balances"
     },
     {
       "id": "GET /api/v1/inventory/stock-card",
@@ -597,7 +635,9 @@
           "IInventoryApiClient.GetStockCardAsync"
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.InventoryController",
+      "actualAction": "StockCard"
     },
     {
       "id": "GET /api/v1/operations/context",
@@ -626,7 +666,9 @@
         "canonicalBytes": null,
         "desktopMethods": [],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.OperationsController",
+      "actualAction": "Context"
     },
     {
       "id": "GET /api/v1/operations/{operationId}",
@@ -659,7 +701,9 @@
         "canonicalBytes": null,
         "desktopMethods": [],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.OperationsController",
+      "actualAction": "Status"
     },
     {
       "id": "GET /api/v1/sales-receipts",
@@ -688,7 +732,9 @@
           "ISalesReceiptApiClient.ListAsync"
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.SalesReceiptsController",
+      "actualAction": "List"
     },
     {
       "id": "GET /api/v1/sales-receipts/{saleId}",
@@ -717,7 +763,9 @@
           "ISalesReceiptApiClient.GetAsync"
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.SalesReceiptsController",
+      "actualAction": "Get"
     },
     {
       "id": "GET /api/v1/security/permissions/catalog",
@@ -748,7 +796,9 @@
           "IPermissionCatalogApiClient.GetCatalogAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualAction": "PermissionCatalog"
     },
     {
       "id": "GET /api/v1/security/permissions/check",
@@ -779,7 +829,9 @@
           "IPermissionApiClient.CheckAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualAction": "CheckPermission"
     },
     {
       "id": "GET /api/v1/security/roles",
@@ -810,7 +862,9 @@
           "ISecurityAdministrationApiClient.ListRolesAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualAction": "ListRoles"
     },
     {
       "id": "GET /api/v1/security/users",
@@ -841,7 +895,9 @@
           "ISecurityAdministrationApiClient.ListUsersAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualAction": "ListUsers"
     },
     {
       "id": "GET /api/v2/operations/context",
@@ -870,7 +926,9 @@
         "canonicalBytes": null,
         "desktopMethods": [],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.OperationResolutionController",
+      "actualAction": "Context"
     },
     {
       "id": "GET /api/v2/operations/{operationId}/resolution",
@@ -903,7 +961,9 @@
         "canonicalBytes": null,
         "desktopMethods": [],
         "historicalSqlLedger": "GROUP_EAD_SQL"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.OperationResolutionController",
+      "actualAction": "Resolution"
     },
     {
       "id": "GET /api/v3/operations/resend-context",
@@ -934,7 +994,9 @@
         "canonicalBytes": null,
         "desktopMethods": [],
         "historicalSqlLedger": "DISABLED_404"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.Web6ResendEligibilityController",
+      "actualAction": "Context"
     },
     {
       "id": "GET /api/v3/operations/{operationId}/resend-eligibility",
@@ -971,7 +1033,9 @@
         "canonicalBytes": null,
         "desktopMethods": [],
         "historicalSqlLedger": "DISABLED_404"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.Web6ResendEligibilityController",
+      "actualAction": "Eligibility"
     },
     {
       "id": "GET /api/v3/operations/{operationId}/resend-receipt",
@@ -1004,7 +1068,9 @@
         "canonicalBytes": null,
         "desktopMethods": [],
         "historicalSqlLedger": "DISABLED_404"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.Web6ResendEligibilityController",
+      "actualAction": "Receipt"
     },
     {
       "id": "POST /api/v1/auth/login",
@@ -1033,7 +1099,9 @@
           "IIdentityApiClient.LoginAsync"
         ],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.AuthController",
+      "actualAction": "Login"
     },
     {
       "id": "POST /api/v1/auth/logout",
@@ -1058,7 +1126,9 @@
         "canonicalBytes": null,
         "desktopMethods": [],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.AuthController",
+      "actualAction": "Logout"
     },
     {
       "id": "POST /api/v1/auth/refresh",
@@ -1085,7 +1155,9 @@
         "canonicalBytes": null,
         "desktopMethods": [],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.AuthController",
+      "actualAction": "Refresh"
     },
     {
       "id": "POST /api/v1/catalog/customers",
@@ -1116,7 +1188,9 @@
           "ICustomerApiClient.CreateAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.CustomersController",
+      "actualAction": "Create"
     },
     {
       "id": "POST /api/v1/catalog/employees",
@@ -1147,7 +1221,9 @@
           "IEmployeeApiClient.CreateAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.EmployeesController",
+      "actualAction": "Create"
     },
     {
       "id": "POST /api/v1/catalog/products",
@@ -1178,7 +1254,9 @@
           "IProductApiClient.CreateAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.ProductsController",
+      "actualAction": "Create"
     },
     {
       "id": "POST /api/v1/catalog/warehouses",
@@ -1209,7 +1287,9 @@
           "IWarehouseApiClient.CreateAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.WarehousesController",
+      "actualAction": "Create"
     },
     {
       "id": "POST /api/v1/goods-receipts",
@@ -1240,7 +1320,9 @@
           "IGoodsReceiptApiClient.CreateDraftAsync"
         ],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.GoodsReceiptsController",
+      "actualAction": "Create"
     },
     {
       "id": "POST /api/v1/goods-receipts/{receiptId}/post",
@@ -1271,7 +1353,9 @@
           "IGoodsReceiptApiClient.PostAsync"
         ],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.GoodsReceiptsController",
+      "actualAction": "Post"
     },
     {
       "id": "POST /api/v1/sales-receipts",
@@ -1302,7 +1386,9 @@
           "ISalesReceiptApiClient.CreateDraftAsync"
         ],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.SalesReceiptsController",
+      "actualAction": "Create"
     },
     {
       "id": "POST /api/v1/sales-receipts/{saleId}/post",
@@ -1333,7 +1419,9 @@
           "ISalesReceiptApiClient.PostAsync"
         ],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.SalesReceiptsController",
+      "actualAction": "Post"
     },
     {
       "id": "POST /api/v1/security/import/apply",
@@ -1364,7 +1452,9 @@
           "ISecurityAdministrationApiClient.ApplyPermissionImportAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualAction": "ApplyImport"
     },
     {
       "id": "POST /api/v1/security/import/preview",
@@ -1395,7 +1485,9 @@
           "ISecurityAdministrationApiClient.PreviewPermissionImportAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualAction": "PreviewImport"
     },
     {
       "id": "POST /api/v1/security/mutations",
@@ -1426,7 +1518,9 @@
           "ISecurityAdministrationApiClient.MutateAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.SecurityParityController",
+      "actualAction": "Mutate"
     },
     {
       "id": "PUT /api/v1/catalog/customers/{id:int}",
@@ -1457,7 +1551,9 @@
           "ICustomerApiClient.UpdateAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.CustomersController",
+      "actualAction": "Update"
     },
     {
       "id": "PUT /api/v1/catalog/customers/{id:int}/active",
@@ -1488,7 +1584,9 @@
           "ICustomerApiClient.SetActiveAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.CustomersController",
+      "actualAction": "SetActive"
     },
     {
       "id": "PUT /api/v1/catalog/employees/{id:int}",
@@ -1519,7 +1617,9 @@
           "IEmployeeApiClient.UpdateAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.EmployeesController",
+      "actualAction": "Update"
     },
     {
       "id": "PUT /api/v1/catalog/employees/{id:int}/active",
@@ -1550,7 +1650,9 @@
           "IEmployeeApiClient.SetActiveAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.EmployeesController",
+      "actualAction": "SetActive"
     },
     {
       "id": "PUT /api/v1/catalog/products/{id:int}",
@@ -1581,7 +1683,9 @@
           "IProductApiClient.UpdateAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.ProductsController",
+      "actualAction": "Update"
     },
     {
       "id": "PUT /api/v1/catalog/products/{id:int}/active",
@@ -1612,7 +1716,9 @@
           "IProductApiClient.SetActiveAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.ProductsController",
+      "actualAction": "SetActive"
     },
     {
       "id": "PUT /api/v1/catalog/warehouses/{id:int}",
@@ -1643,7 +1749,9 @@
           "IWarehouseApiClient.UpdateAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.WarehousesController",
+      "actualAction": "Update"
     },
     {
       "id": "PUT /api/v1/catalog/warehouses/{id:int}/active",
@@ -1674,7 +1782,9 @@
           "IWarehouseApiClient.SetActiveAsync"
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.WarehousesController",
+      "actualAction": "SetActive"
     },
     {
       "id": "PUT /api/v1/goods-receipts/{receiptId}/draft",
@@ -1705,7 +1815,9 @@
           "IGoodsReceiptApiClient.UpdateDraftAsync"
         ],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.GoodsReceiptsController",
+      "actualAction": "Update"
     },
     {
       "id": "PUT /api/v1/sales-receipts/{saleId}/draft",
@@ -1736,7 +1848,9 @@
           "ISalesReceiptApiClient.UpdateDraftAsync"
         ],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
-      }
+      },
+      "actualController": "MyDmsVn.Server.HttpHost.SalesReceiptsController",
+      "actualAction": "Update"
     }
   ]
 }
