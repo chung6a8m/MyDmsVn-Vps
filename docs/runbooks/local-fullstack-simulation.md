@@ -109,6 +109,10 @@ Reset validates the receipt path, instance ID, Docker engine and labels, WSL mar
 - `StateAlreadyExists`: use the receipt-driven Reset above. An empty state directory is safe and accepted.
 - `LockedRestoreFailed`: restore with the exact conditional graph shown in the test commands; do not disable locked mode.
 - `Wsl.*Failed`: inspect `systemctl status mydmsvn-local-sim.service`, `journalctl -u mydmsvn-local-sim.service`, and `nginx -t` inside Ubuntu. These surfaces intentionally do not reveal secrets.
+
+For builds that include operation diagnostics, Native Host emits structured Serilog events to the systemd journal. Search by the operation UUID for the selected HTTP status and error codes, then compare the SQL transaction outcome for the same actor, deployment epoch, kind, target and fingerprint. `ResultStaged` indicates that the journal insert ran within the transaction. Check `TransactionOutcome` for its acknowledged outcome. `CommitUnknown` and `RollbackUnknown` require independent investigation.
+
+Desktop writes bounded Serilog files under `%LOCALAPPDATA%\MyDmsVn-Vps\Diagnostics`. Search by UUID for the received HTTP status, the safe envelope codes and the client's disposition. Operation diagnostics complement the protected security audit, SQL journal and operator runbook. Use [UNKNOWN write recovery](issue-7-unknown-write-recovery.md) for settlement and fence release.
 - SQL identity/ownership refusal: do not relabel or reuse an existing database/volume. Reset the owned instance and initialize again.
 
 For evidence, record base/head SHA, exact commands and environment, discovered/executed/skipped counts, failures, and explicit blockers. A skipped SQL/GUI check or empty filter is not PASS.

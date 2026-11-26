@@ -44,6 +44,7 @@ internal static class NativeApiRegistration
                 options.ModelBinderProviders.Insert(0, new V1Web3ReadBinderProvider());
                 options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
                 options.Filters.Add(new V1UnsupportedContentTypeFilter());
+                options.Filters.Add(new NativeOperationDiagnostics());
             })
             .AddJsonOptions(options => V1HttpJson.Configure(options.JsonSerializerOptions))
             .ConfigureApiBehaviorOptions(options =>

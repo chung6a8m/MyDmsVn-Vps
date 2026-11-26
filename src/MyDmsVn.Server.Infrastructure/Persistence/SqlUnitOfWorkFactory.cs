@@ -6,6 +6,7 @@ using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using MyDmsVn.Server.Application.Persistence;
+using MyDmsVn.Server.Application.Operations;
 
 namespace MyDmsVn.Server.Infrastructure.Persistence;
 
@@ -52,6 +53,10 @@ internal sealed class SqlUnitOfWork : IUnitOfWork, ISqlExecutionContext
     private readonly IReadOnlyDictionary<Type, Func<IServiceProvider, ISqlExecutionContext, object>> _repositoryFactories;
     private readonly Dictionary<Type, object> _repositories = new();
     private IDbTransaction? _transaction;
+    private WebOperationContext? _operation;
+    private int _operationActor;
+    private bool _commitUncertain;
+    internal string? JournalEffect { get; set; }
 
     public SqlUnitOfWork(
         IDbConnection connection,
@@ -110,9 +115,19 @@ internal sealed class SqlUnitOfWork : IUnitOfWork, ISqlExecutionContext
     {
         EnsureState(UnitOfWorkState.ActiveTransaction, nameof(Commit));
         var transaction = _transaction!;
-        transaction.Commit();
+        try
+        {
+            transaction.Commit();
+        }
+        catch
+        {
+            _commitUncertain = true;
+            ReportOperationTransaction("CommitUnknown");
+            throw;
+        }
         _transaction = null;
         State = UnitOfWorkState.Committed;
+        ReportOperationTransaction("Committed");
         transaction.Dispose();
     }
 
@@ -120,7 +135,7 @@ internal sealed class SqlUnitOfWork : IUnitOfWork, ISqlExecutionContext
     {
         EnsureState(UnitOfWorkState.ActiveTransaction, nameof(Rollback));
         var transaction = _transaction!;
-        transaction.Rollback();
+        RollbackTransaction(transaction);
         _transaction = null;
         State = UnitOfWorkState.RolledBack;
         transaction.Dispose();
@@ -136,7 +151,7 @@ internal sealed class SqlUnitOfWork : IUnitOfWork, ISqlExecutionContext
         Exception? cleanupError = null;
         if (State == UnitOfWorkState.ActiveTransaction && _transaction is not null)
         {
-            CaptureCleanupFailure(ref cleanupError, _transaction.Rollback);
+            CaptureCleanupFailure(ref cleanupError, () => RollbackTransaction(_transaction));
         }
 
         foreach (var repository in _repositories.Values.OfType<IDisposable>())
@@ -203,6 +218,51 @@ internal sealed class SqlUnitOfWork : IUnitOfWork, ISqlExecutionContext
         catch (Exception exception)
         {
             firstError ??= exception;
+        }
+    }
+
+    internal void ObserveOperation(WebOperationContext operation, int actor)
+    {
+        if (_operation == null)
+        {
+            _operation = operation;
+            _operationActor = actor;
+        }
+    }
+
+    private void RollbackTransaction(IDbTransaction transaction)
+    {
+        try
+        {
+            transaction.Rollback();
+        }
+        catch
+        {
+            ReportOperationTransaction("RollbackUnknown");
+            throw;
+        }
+
+        if (!_commitUncertain)
+            ReportOperationTransaction("RolledBack");
+    }
+
+    private void ReportOperationTransaction(string outcome)
+    {
+        if (_operation is not { } operation)
+            return;
+
+        // Diagnostics cannot change the SQL outcome or cleanup path.
+        try
+        {
+            (_serviceProvider?.GetService(typeof(Serilog.ILogger)) as Serilog.ILogger)?.Information(
+                "Operation SQL transaction {OperationId} {DeploymentEpoch} {ActorUserId} {OperationKind} {TargetId} {FingerprintSha256} {TransactionOutcome} {JournalEffect}",
+                operation.OperationId, operation.DeploymentEpoch, _operationActor, operation.Kind,
+                operation.RequestTargetId, BitConverter.ToString(operation.Fingerprint).Replace("-", "").ToLowerInvariant(),
+                outcome, JournalEffect);
+        }
+        catch (Exception)
+        {
+            // Preserve the transaction result if a diagnostics provider fails.
         }
     }
 }

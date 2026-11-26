@@ -266,8 +266,19 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                         request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                         .ConfigureAwait(false))
                     {
+                        var hasId = request.Headers.TryGetValues("Idempotency-Key", out var operationKeys) &&
+                            operationKeys.Count() == 1;
+                        var id = hasId && Guid.TryParseExact(operationKeys!.Single(), "D", out var parsedId)
+                            ? parsedId : Guid.Empty;
+                        ApiResponse<T> Observe(ApiResponse<T> result)
+                        {
+                            if (id != Guid.Empty)
+                                HttpDesktopOperationDiagnostics.RecordResponse(id, (int)response.StatusCode, result.Error);
+                            return result;
+                        }
+
                         if (response.Content?.Headers.ContentType?.MediaType != "application/json")
-                            return InvalidResponse<T>();
+                            return Observe(InvalidResponse<T>());
                         var json = await ReadBoundedAsync(response.Content, cancellationToken)
                             .ConfigureAwait(false);
                         var status = (ApiStatusCode)(int)response.StatusCode;
@@ -280,13 +291,13 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                             error is ArgumentException || error is FormatException ||
                             error is OverflowException || error is NullReferenceException)
                         {
-                            return InvalidResponse<T>();
+                            return Observe(InvalidResponse<T>());
                         }
 
                         if (decoded == null ||
                             (response.IsSuccessStatusCode != decoded.IsSuccess))
-                            return InvalidResponse<T>();
-                        return decoded;
+                            return Observe(InvalidResponse<T>());
+                        return Observe(decoded);
                     }
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -601,7 +601,9 @@
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection": "[8.0.1, )",
           "MyDmsVn.Desktop.Application": "[1.0.0, )",
-          "Newtonsoft.Json": "[13.0.4, )"
+          "Newtonsoft.Json": "[13.0.4, )",
+          "Serilog": "[4.4.0, )",
+          "Serilog.Sinks.File": "[7.0.0, )"
         }
       },
       "mydmsvn.server.application": {

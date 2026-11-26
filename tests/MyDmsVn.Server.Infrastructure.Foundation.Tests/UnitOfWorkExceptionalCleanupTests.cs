@@ -1,16 +1,73 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using MyDmsVn.Server.Application.Persistence;
+using MyDmsVn.Server.Application.Operations;
 using MyDmsVn.Server.Infrastructure.Persistence;
+using Serilog;
+using Serilog.Core;
+using Serilog.Events;
 using Xunit;
 
 namespace MyDmsVn.Server.Infrastructure.IntegrationTests;
 
 public sealed class UnitOfWorkExceptionalCleanupTests
 {
+    [Theory]
+    [InlineData("commit", "Committed")]
+    [InlineData("dispose", "RolledBack")]
+    [InlineData("lost-commit", "CommitUnknown")]
+    public void Observed_operation_reports_the_acknowledged_transaction_outcome(string action, string outcome)
+    {
+        var connection = new ThrowingTransactionConnection(throwOnRollback: false, throwOnDispose: false);
+        using var capture = new DiagnosticCapture();
+        using var unitOfWork = new SqlUnitOfWork(connection, capture,
+            new Dictionary<Type, Func<IServiceProvider, ISqlExecutionContext, object>>());
+        var operation = new WebOperationContext(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            WebOperationKind.SalesPost, 1, new byte[32], new UnusedCodec());
+        unitOfWork.BeginTransaction();
+        unitOfWork.ObserveOperation(operation, actor: 42);
+        if (action == "commit")
+            unitOfWork.Commit();
+        if (action == "lost-commit")
+        {
+            connection.Transaction.ThrowOnCommit = true;
+            Assert.Throws<InvalidOperationException>(unitOfWork.Commit);
+        }
+
+        unitOfWork.Dispose();
+
+        var entry = Assert.Single(capture.Events);
+        Assert.Equal(operation.OperationId, Assert.IsType<ScalarValue>(entry.Properties["OperationId"]).Value);
+        Assert.Equal(42, Assert.IsType<ScalarValue>(entry.Properties["ActorUserId"]).Value);
+        Assert.Equal(outcome, Assert.IsType<ScalarValue>(entry.Properties["TransactionOutcome"]).Value);
+    }
+
+    private sealed class DiagnosticCapture : IServiceProvider, IDisposable
+    {
+        private readonly Logger _logger;
+        private readonly CaptureSink _sink = new();
+        public List<LogEvent> Events => _sink.Events;
+        public DiagnosticCapture() => _logger = new LoggerConfiguration().WriteTo.Sink(_sink).CreateLogger();
+        public object? GetService(Type serviceType) => serviceType == typeof(ILogger) ? _logger : null;
+        public void Dispose() => _logger.Dispose();
+
+        private sealed class CaptureSink : ILogEventSink
+        {
+            public List<LogEvent> Events { get; } = new();
+            public void Emit(LogEvent logEvent) => Events.Add(logEvent);
+        }
+    }
+
+    private sealed class UnusedCodec : IWebOperationResultCodec
+    {
+        public byte[] Encode<T>(WebOperationKind kind, T originalResult) => throw new NotSupportedException();
+        public T Decode<T>(WebOperationKind kind, byte[] bytes) => throw new NotSupportedException();
+    }
+
     [Fact]
     public void Commit_records_terminal_state_before_transaction_disposal_throws()
     {
@@ -158,6 +215,7 @@ public sealed class UnitOfWorkExceptionalCleanupTests
         }
 
         public int CommitCount { get; private set; }
+        public bool ThrowOnCommit { get; set; }
 
         public int RollbackCount { get; private set; }
 
@@ -170,6 +228,8 @@ public sealed class UnitOfWorkExceptionalCleanupTests
         public void Commit()
         {
             CommitCount++;
+            if (ThrowOnCommit)
+                throw new InvalidOperationException("Expected commit acknowledgement failure.");
         }
 
         public void Rollback()

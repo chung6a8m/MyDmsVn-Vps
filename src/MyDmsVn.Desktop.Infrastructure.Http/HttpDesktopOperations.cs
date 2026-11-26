@@ -162,11 +162,17 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
+                HttpDesktopOperationDiagnostics.RecordDisposition(record.OperationId, "Unknown");
                 throw; // commit could have happened before cancellation
             }
 
-            if (!result.IsSuccess) return Unknown<T>(record);
+            if (!result.IsSuccess)
+            {
+                HttpDesktopOperationDiagnostics.RecordDisposition(record.OperationId, "Unknown");
+                return Unknown<T>(record);
+            }
             Clear(record); // no silent success if the file cannot be removed
+            HttpDesktopOperationDiagnostics.RecordDisposition(record.OperationId, "Acknowledged");
             return result;
         }
 
@@ -195,6 +201,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 { return Unknown<T>(record); }
 
                 Clear(record);
+                HttpDesktopOperationDiagnostics.RecordDisposition(record.OperationId, "JournalCommitted");
                 return decoded;
             }
             finally { _gate.Release(); }
@@ -251,6 +258,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                         "The original exact NOT_EXECUTED certificate cannot be authenticated.");
                 var caseId = (string?)terminal["caseId"];
                 Clear(record);
+                HttpDesktopOperationDiagnostics.RecordDisposition(record.OperationId, "CertifiedNotExecuted");
                 return new DesktopWriteRecoveryResult("NOT_EXECUTED",
                     "The original intent is certified NOT_EXECUTED. Obtain a fresh authorized baseline and create a NEW key; never resend the old one.",
                     true, caseId);
