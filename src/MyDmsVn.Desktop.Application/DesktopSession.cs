@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using MyDmsVn.Contracts;
 
 namespace MyDmsVn.Desktop.Application
@@ -32,6 +33,11 @@ namespace MyDmsVn.Desktop.Application
         void RecordUserActivity();
 
         bool ExpireIfIdle();
+    }
+
+    public interface IAsyncDesktopSignOut
+    {
+        Task SignOutAsync();
     }
 
     public interface IMonotonicClock

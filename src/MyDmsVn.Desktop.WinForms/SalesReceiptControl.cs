@@ -635,12 +635,17 @@ public sealed class SalesReceiptControl : UserControl, IActivatableDesktopContro
         { if (IsHandleCreated) BeginInvoke(new Action(() => { if (!_disposed) action(); })); }
         else action();
     }
-    private void SessionChanged(object? sender, EventArgs e)
+    private void SessionChanged(object? sender, EventArgs e) => Dispatch(() =>
     {
+        // The shell can dispose this workspace earlier in the same notification.
         FeedbackScope.Invalidate();
         _lifetime.Cancel();
-        Dispatch(() => { CancelBoundary(); _read = _write = _post = false; SaleDateEditor.ProjectAcceptedValue(null); ClearFilterDates(); ApplyState(); });
-    }
+        CancelBoundary();
+        _read = _write = _post = false;
+        SaleDateEditor.ProjectAcceptedValue(null);
+        ClearFilterDates();
+        ApplyState();
+    });
     private void ClearFilterDates()
     {
         FromDateEditor.BeginEditSession(null); ToDateEditor.BeginEditSession(null);

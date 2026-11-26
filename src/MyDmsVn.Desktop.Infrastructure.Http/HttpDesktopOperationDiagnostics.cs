@@ -28,6 +28,10 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     "Operation Desktop disposition {OperationId} {ClientDisposition}", id, disposition));
         }
 
+        internal static void RecordLogout(string disposition, string? errorCode) =>
+            Write(logger => logger.Information("Desktop logout {ClientDisposition} {ErrorCode}",
+                disposition, SafeCode(errorCode)));
+
         private static string? SafeCode(string? value) =>
             value == null || ErrorCodePattern.IsMatch(value) ? value : "UnrecognizedErrorCode";
 

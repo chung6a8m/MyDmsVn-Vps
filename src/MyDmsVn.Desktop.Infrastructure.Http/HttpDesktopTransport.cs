@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using MyDmsVn.Contracts;
+using MyDmsVn.Desktop.Application;
 using MyDmsVn.Desktop.Infrastructure.Http.Wire;
 using Newtonsoft.Json;
 
@@ -162,22 +163,19 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                         refreshed.Data.ExpiresAtUtc))
                     return true;
 
-                _session.RequireReauthentication(generation);
-                ClearRefreshCookie();
+                DiscardRefresh(generation);
                 return false;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // Rotation might already have committed: never allow another
                 // refresh on the old cookie after a caller-initiated cancellation.
-                _session.RequireReauthentication(generation);
-                ClearRefreshCookie();
+                DiscardRefresh(generation);
                 throw;
             }
             catch
             {
-                _session.RequireReauthentication(generation);
-                ClearRefreshCookie();
+                DiscardRefresh(generation);
                 return false;
             }
             finally
@@ -186,21 +184,41 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             }
         }
 
+        private void DiscardRefresh(long generation)
+        {
+            _session.RequireReauthentication(generation);
+            // Logout needs a refresh cookie from this family after rotation settles.
+            if (_session.State != DesktopSessionState.LoggingOut)
+                ClearRefreshCookie();
+        }
+
         private Task<ApiResponse<AuthTicket>> AuthAsync(
             string operation, object? body, CancellationToken token) =>
             RequestAsync<AuthTicket>(HttpMethod.Post, "/api/v1/auth/" + operation,
                 body, null, cookieEndpoint: true, token);
 
-        private async Task RevokeAsync(CancellationToken cancellationToken)
+        private async Task RevokeAsync()
         {
+            using var timeout = new CancellationTokenSource(_options.RequestTimeout);
+            var entered = false;
             try
             {
-                await RequestAsync<object>(HttpMethod.Post, "/api/v1/auth/logout",
-                    null, null, cookieEndpoint: true, cancellationToken).ConfigureAwait(false);
+                await _refreshGate.WaitAsync(timeout.Token).ConfigureAwait(false);
+                entered = true;
+                var response = await RequestAsync<object>(HttpMethod.Post, "/api/v1/auth/logout",
+                    null, null, cookieEndpoint: true, timeout.Token).ConfigureAwait(false);
+                HttpDesktopOperationDiagnostics.RecordLogout(response.IsSuccess ? "Acknowledged" : "Unconfirmed",
+                    response.Error?.Code);
+            }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+            {
+                HttpDesktopOperationDiagnostics.RecordLogout("Unconfirmed", "Http.Timeout");
             }
             finally
             {
                 ClearRefreshCookie();
+                if (entered)
+                    _refreshGate.Release();
             }
         }
 

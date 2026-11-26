@@ -16,6 +16,25 @@ namespace MyDmsVn.Desktop.Tests;
 public sealed class SalesScenarioBehaviorTests
 {
     [Fact]
+    public void Sign_out_survives_sales_workspace_disposal_during_session_notification()
+    {
+        Action? closeWorkspace = null;
+        ScenarioControlHost.Run(SalesScenarioId.S01Draft, data =>
+        {
+            // The shell subscribed before the workspace and closes it in this event.
+            data.Session.SessionChanged += (_, _) => closeWorkspace?.Invoke();
+        }, (host, guard) =>
+        {
+            closeWorkspace = host.Control.Dispose;
+            host.Data.Session.SignOut();
+
+            Assert.True(host.Control.IsDisposed);
+            Assert.False(host.Data.Session.IsAuthenticated);
+            Assert.Empty(guard.Exceptions);
+        });
+    }
+
+    [Fact]
     public void S01_duplicate_product_lines_keep_ids_and_save_the_submitted_edits()
     {
         ScenarioControlHost.Run(SalesScenarioId.S01Draft, (host, guard) =>

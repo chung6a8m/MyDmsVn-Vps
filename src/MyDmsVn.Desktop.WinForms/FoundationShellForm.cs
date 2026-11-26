@@ -915,7 +915,13 @@ namespace MyDmsVn.Desktop.WinForms
             _themeButton = themeButton;
             themeButton.Click += (_, _) => ToggleTheme();
             var signOutButton = new BusinessCompactIconButton("signout") { AccessibleName = "Sign out" };
-            signOutButton.Click += (_, _) => SignOut();
+            signOutButton.Click += async (_, _) =>
+            {
+                if (_session is IAsyncDesktopSignOut asyncSignOut)
+                    await asyncSignOut.SignOutAsync();
+                else
+                    SignOut();
+            };
             Navigation.SessionArea.Controls.Add(_sessionUserLabel);
             Navigation.SessionArea.Controls.Add(themeButton);
             Navigation.SessionArea.Controls.Add(signOutButton);

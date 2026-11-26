@@ -162,6 +162,57 @@ namespace MyDmsVn.Desktop.Session.Tests
         }
 
         [Fact]
+        public async Task Sign_out_waits_for_an_in_flight_refresh_before_sending_logout()
+        {
+            var refreshStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseRefresh = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var loggingOut = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var logoutBeforeRefresh = false;
+            var logoutRequests = 0;
+            using (var fixture = Create(async request =>
+            {
+                switch (request.RequestUri!.AbsolutePath)
+                {
+                    case "/api/v1/auth/login":
+                        return Json(HttpStatusCode.OK, LoginJson.Replace("2099-01-01T00:00:00Z",
+                            DateTime.UtcNow.AddSeconds(20).ToString("O", CultureInfo.InvariantCulture)));
+                    case "/api/v1/auth/refresh":
+                        refreshStarted.SetResult(true);
+                        await releaseRefresh.Task.ConfigureAwait(false);
+                        return Json(HttpStatusCode.OK, LoginJson);
+                    case "/api/v1/auth/logout":
+                        logoutBeforeRefresh = !releaseRefresh.Task.IsCompleted;
+                        logoutRequests++;
+                        return Json(HttpStatusCode.OK, "{\"data\":{}}");
+                    default:
+                        throw new InvalidOperationException("No business read may use the signed-out session.");
+                }
+            }))
+            {
+                fixture.Session.SessionChanged += (_, _) =>
+                {
+                    if (fixture.Session.State == DesktopSessionState.LoggingOut)
+                        loggingOut.TrySetResult(true);
+                };
+                Assert.True((await fixture.Transport.LoginAsync(
+                    new LoginRequest("operator", "secret"), CancellationToken.None)).IsSuccess);
+                var read = fixture.Transport.GetCurrentUserAsync(CancellationToken.None);
+                await refreshStarted.Task;
+
+                var signOut = Task.Run(() => fixture.Session.SignOut());
+                await loggingOut.Task;
+                // A broken transport completes sign-out while rotation is still in flight.
+                await Task.WhenAny(signOut, Task.Delay(200));
+                releaseRefresh.SetResult(true);
+
+                Assert.Equal("Auth.SessionChanged", (await read).Error!.Code);
+                await signOut;
+                Assert.False(logoutBeforeRefresh);
+                Assert.Equal(1, logoutRequests);
+            }
+        }
+
+        [Fact]
         public async Task In_flight_response_after_sign_out_cannot_repopulate_session()
         {
             var requestStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -162,7 +162,8 @@ namespace MyDmsVn.Desktop.WinForms
                 expiryTimer.Start();
                 EventHandler sessionChanged = (_, _) =>
                 {
-                    if (session.IsAuthenticated || shell.IsDisposed)
+                    if (session.IsAuthenticated || shell.IsDisposed ||
+                        session is IAsyncDesktopSignOut && session.State == DesktopSessionState.LoggingOut)
                     {
                         return;
                     }
@@ -176,7 +177,14 @@ namespace MyDmsVn.Desktop.WinForms
                         shell.Close();
                     }
                 };
+                FormClosingEventHandler formClosing = (_, args) =>
+                {
+                    if (session is IAsyncDesktopSignOut && session.State == DesktopSessionState.LoggingOut
+                        && args.CloseReason == CloseReason.UserClosing)
+                        args.Cancel = true;
+                };
                 session.SessionChanged += sessionChanged;
+                shell.FormClosing += formClosing;
                 try
                 {
                     System.Windows.Forms.Application.Run(shell);
@@ -190,6 +198,7 @@ namespace MyDmsVn.Desktop.WinForms
                     }
 
                     session.SessionChanged -= sessionChanged;
+                    shell.FormClosing -= formClosing;
                 }
             }
         }

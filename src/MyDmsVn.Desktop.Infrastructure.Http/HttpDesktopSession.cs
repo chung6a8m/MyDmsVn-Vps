@@ -8,7 +8,7 @@ using MyDmsVn.Desktop.Application;
 namespace MyDmsVn.Desktop.Infrastructure.Http
 {
     /// <summary>In-memory credentials and generation fencing; never persists Bearer or refresh secrets.</summary>
-    public sealed class HttpDesktopSession : IDesktopSession, IDesktopSessionActivity
+    public sealed class HttpDesktopSession : IDesktopSession, IDesktopSessionActivity, IAsyncDesktopSignOut
     {
         private readonly object _sync = new object();
         private readonly DesktopSessionOptions _options;
@@ -19,7 +19,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         private DateTime _expiresUtc;
         private long _version;
         private TimeSpan _lastActivity;
-        private Func<CancellationToken, Task>? _revoke;
+        private Func<Task>? _revoke;
 
         public HttpDesktopSession(DesktopSessionOptions options, IMonotonicClock clock)
         {
@@ -34,7 +34,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         public CurrentUserDto? CurrentUser { get { lock (_sync) return _user; } }
         public long Version { get { lock (_sync) return _version; } }
 
-        internal void RegisterRevoke(Func<CancellationToken, Task> revoke)
+        internal void RegisterRevoke(Func<Task> revoke)
         {
             _revoke = revoke ?? throw new ArgumentNullException(nameof(revoke));
         }
@@ -179,26 +179,27 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             return expired;
         }
 
-        public void SignOut()
+        public void SignOut() => SignOutAsync().GetAwaiter().GetResult();
+
+        public async Task SignOutAsync()
         {
-            Func<CancellationToken, Task>? revoke;
+            Func<Task>? revoke;
             lock (_sync)
             {
+                if (_state == DesktopSessionState.LoggingOut)
+                    return;
                 revoke = _state == DesktopSessionState.Authenticated ? _revoke : null;
                 _version++;
                 _state = DesktopSessionState.LoggingOut;
                 ClearUnsafe();
             }
             SessionChanged?.Invoke(this, EventArgs.Empty);
-            // The existing Desktop session contract is synchronous. Bound the
-            // server revocation before returning, never use fire-and-forget logout.
             if (revoke != null)
             {
                 try
                 {
-                    using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3)))
-                        // Start the HTTP pipeline off the UI context that is waiting for it.
-                        Task.Run(() => revoke(cts.Token), cts.Token).GetAwaiter().GetResult();
+                    // Compatibility callers can still wait synchronously.
+                    await Task.Run(revoke).ConfigureAwait(false);
                 }
                 catch (Exception) { /* Local credentials are already invalidated. */ }
             }
