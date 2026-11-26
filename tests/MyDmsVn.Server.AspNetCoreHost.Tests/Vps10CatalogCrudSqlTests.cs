@@ -155,8 +155,8 @@ public sealed class Vps10CatalogCrudSqlTests
             using var ra = await a;
             using var rb = await b;
             var replies = new[] { ra, rb };
-            var success = Assert.Single(replies.Where(x => x.Status == 200));
-            var conflict = Assert.Single(replies.Where(x => x.Status == 409));
+            var success = Assert.Single(replies, x => x.Status == 200);
+            var conflict = Assert.Single(replies, x => x.Status == 409);
             Assert.Equal(singular + ".DuplicateCode", conflict.ErrorCode);
             var id = success.Data.GetProperty("id").GetInt32();
             Assert.True(id > 0);
