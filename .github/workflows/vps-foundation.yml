@@ -131,13 +131,13 @@ jobs:
         run: |
           $results = Join-Path $env:RUNNER_TEMP 'trx'
           dotnet test $env:TEST_PROJECT -c Release -f net48 --no-build --no-restore `
-            --filter 'FullyQualifiedName~Vps10TypedWireTests|FullyQualifiedName~Historical_receipt_outcome_recovers_typed_values_only_for_matching_id' `
+            --filter 'FullyQualifiedName~Vps10TypedWireTests|FullyQualifiedName~Historical_receipt_outcome_recovers_typed_values_only_for_matching_id|FullyQualifiedName~Typed_feature_dispatch_matches_frozen_bytes_and_persisted_intent' `
             --logger "trx;LogFileName=vps10-typed-wire.trx" --results-directory $results -v minimal
           if ($LASTEXITCODE -ne 0) { throw 'VPS-10.3 targeted wire tests failed' }
           [xml]$trx = Get-Content -LiteralPath (Join-Path $results 'vps10-typed-wire.trx') -Raw
           $counts = $trx.TestRun.ResultSummary.Counters
-          if ([int]$counts.total -ne 16 -or [int]$counts.executed -ne 16 -or
-              [int]$counts.passed -ne 16 -or [int]$counts.failed -ne 0 -or
+          if ([int]$counts.total -ne 38 -or [int]$counts.executed -ne 38 -or
+              [int]$counts.passed -ne 38 -or [int]$counts.failed -ne 0 -or
               [int]$counts.notExecuted -ne 0) {
             throw "VPS-10.3 focused count mismatch: $($counts.OuterXml)"
           }

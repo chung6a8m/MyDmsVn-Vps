@@ -260,7 +260,7 @@ namespace MyDmsVn.Desktop.Session.Tests
             record.TargetId = 9007199254740993L;
             store.Save(record);
             var outcome = HttpDesktopWire.ParseObjectPreservingDates(
-                Vps10TypedWireTests.Read("web3-v1/receipt-get-posted-response.json"));
+                Vps10TypedWireTests.Read("web3-v1/receipt-update-response.json"));
             if (wrongId) outcome["data"]!["receiptId"] = "9007199254740994";
             var envelope = new JObject
             {
@@ -301,6 +301,9 @@ namespace MyDmsVn.Desktop.Session.Tests
                     Assert.Equal(record.TargetId.Value, result.Data!.Id);
                     Assert.Equal(9007199254740996L, result.Data.Lines[0].Id);
                     Assert.Equal(12.3456m, result.Data.Lines[1].UnitCost);
+                    Assert.Equal("Draft", result.Data.Status);
+                    Assert.Null(result.Data.PostedAtUtc);
+                    Assert.Equal("AAAAAAAAAAI=", result.Data.Version);
                     Assert.Null(store.Load());
                 }
             }

@@ -59,7 +59,14 @@ namespace MyDmsVn.Desktop.Infrastructure.Http.Wire
             var receipt = typeof(T) == typeof(GoodsReceiptDto) ||
                 typeof(T) == typeof(PagedResult<GoodsReceiptDto>);
             var strictObject = typeof(T) == typeof(JObject) && httpSuccess;
-            var envelope = ReadEnvelope(json, receipt || strictObject);
+            // Parse actual date properties only when mapping their typed contracts.
+            // Otherwise an ISO-looking note/name becomes a DateTime before mapping,
+            // while the retained journal's strict reader keeps that same value as text.
+            var preserveDateText = receipt || typeof(T) == typeof(SalesReceiptDto) ||
+                typeof(T) == typeof(SalesReceiptListPage) ||
+                typeof(T) == typeof(PostSalesReceiptResponse) ||
+                typeof(T) == typeof(PostGoodsReceiptResponse);
+            var envelope = ReadEnvelope(json, receipt || strictObject, preserveDateText);
             if (strictObject && (envelope.Count != 1 || !(envelope["data"] is JObject)))
                 throw new JsonSerializationException("Expected exactly one object data member.");
             return DecodeResponse<T>(envelope, status);
@@ -108,13 +115,13 @@ namespace MyDmsVn.Desktop.Infrastructure.Http.Wire
                 error.Value<string>("message")!, details, error.Value<string>("correlationId")));
         }
 
-        internal static JObject ReadEnvelope(string json, bool strict)
+        internal static JObject ReadEnvelope(string json, bool strict, bool preserveDateText = false)
         {
             using (var text = new StringReader(json))
             using (var reader = new JsonTextReader(text)
             {
                 Culture = CultureInfo.InvariantCulture,
-                DateParseHandling = strict ? DateParseHandling.None : DateParseHandling.DateTime,
+                DateParseHandling = strict || preserveDateText ? DateParseHandling.None : DateParseHandling.DateTime,
                 DateTimeZoneHandling = DateTimeZoneHandling.Utc,
                 MaxDepth = 64,
             })

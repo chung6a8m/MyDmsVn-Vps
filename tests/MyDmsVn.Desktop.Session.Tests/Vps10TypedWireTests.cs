@@ -128,6 +128,50 @@ namespace MyDmsVn.Desktop.Session.Tests
             Assert.Equal("abc", failure.Error.CorrelationId);
         }
 
+        [Theory]
+        [InlineData("vi-VN")]
+        [InlineData("en-US")]
+        [InlineData("de-DE")]
+        [InlineData("")]
+        public void Date_looking_business_text_is_identical_on_live_and_replay(string cultureName)
+        {
+            InCulture(cultureName, () =>
+            {
+                const string literal = "2026-11-01T09:03:04.1234567+07:00";
+                var sales = HttpDesktopWire.ParseObjectPreservingDates(Read("web2-v1/sales-get-posted-response.json"));
+                sales["data"]!["note"] = literal;
+                sales["data"]!["lines"]![0]!["productDisplayName"] = literal;
+                var live = V1WireMapper.DecodeResponse<SalesReceiptDto>(
+                    sales.ToString(Formatting.None), ApiStatusCode.Ok, true).Data!;
+                var replay = V1WireMapper.DecodeResponse<SalesReceiptDto>(sales, ApiStatusCode.Ok).Data!;
+                Assert.Equal(literal, live.Note);
+                Assert.Equal(literal, replay.Note);
+                Assert.Equal(literal, live.Lines[0].ProductDisplayName);
+                Assert.Equal(literal, replay.Lines[0].ProductDisplayName);
+                Assert.Equal(new DateTime(2024, 2, 29), live.SaleDate);
+                Assert.Equal(DateTimeKind.Unspecified, live.SaleDate.Kind);
+                Assert.Equal(new DateTime(2026, 10, 31, 3, 0, 0, DateTimeKind.Utc), live.PostedAtUtc!.Value);
+                Assert.Equal(DateTimeKind.Utc, live.PostedAtUtc.Value.Kind);
+
+                var receipt = HttpDesktopWire.ParseObjectPreservingDates(Read("web3-v1/receipt-get-posted-response.json"));
+                receipt["data"]!["note"] = literal;
+                var receiptLive = V1WireMapper.DecodeResponse<GoodsReceiptDto>(
+                    receipt.ToString(Formatting.None), ApiStatusCode.Ok, true).Data!;
+                var receiptReplay = V1WireMapper.DecodeResponse<GoodsReceiptDto>(receipt, ApiStatusCode.Ok).Data!;
+                Assert.Equal(literal, receiptLive.Note);
+                Assert.Equal(literal, receiptReplay.Note);
+                Assert.Equal(new DateTime(2026, 11, 1, 2, 3, 4, DateTimeKind.Utc).AddTicks(1234567),
+                    receiptLive.PostedAtUtc!.Value);
+                Assert.Equal(DateTimeKind.Utc, receiptLive.PostedAtUtc.Value.Kind);
+
+                var page = HttpDesktopWire.ParseObjectPreservingDates(Read("web2-v1/sales-list-response.json"));
+                page["data"]!["items"]![0]!["customerDisplayName"] = literal;
+                var list = V1WireMapper.DecodeResponse<SalesReceiptListPage>(
+                    page.ToString(Formatting.None), ApiStatusCode.Ok, true).Data!;
+                Assert.Equal(literal, list.Items[0].CustomerDisplayName);
+            });
+        }
+
         private static object ToTyped(string kind, long? target, JObject body)
         {
             if (kind.EndsWith(".Post", StringComparison.Ordinal))
