@@ -143,9 +143,9 @@ public sealed class Vps10OpenApiAndFeatureGateTests
                 foreach (var optional in new[] { "targetId", "relatedId" })
                 {
                     Assert.DoesNotContain(optional, required);
-                    var idSchema = Resolve(document, requestProperties.GetProperty(optional));
-                    Assert.Equal("int32", idSchema.GetProperty("format").GetString());
-                    var idTypes = idSchema.GetProperty("type").EnumerateArray().Select(x => x.GetString()).ToArray();
+                    var optionalIdSchema = Resolve(document, requestProperties.GetProperty(optional));
+                    Assert.Equal("int32", optionalIdSchema.GetProperty("format").GetString());
+                    var idTypes = optionalIdSchema.GetProperty("type").EnumerateArray().Select(x => x.GetString()).ToArray();
                     Assert.Contains("integer", idTypes);
                     Assert.Contains("null", idTypes);
                 }
