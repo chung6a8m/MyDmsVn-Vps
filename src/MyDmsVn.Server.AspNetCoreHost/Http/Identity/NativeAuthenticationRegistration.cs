@@ -32,3 +32,17 @@ internal static class NativeAuthenticationRegistration
             ? null : new AdmittedSession(user, validated.SessionId);
     }
 }
+
+ 
+// Public MVC dependency; keep the legacy limiter's type and shared singleton
+// private to the Host. This adapter does not create a second limiter.
+public interface INativeAuthAttemptAdmission
+{
+    bool TryAdmit(string operation, string subject, string remoteIp, DateTime now);
+}
+
+internal sealed class NativeAuthAttemptAdmission(AuthAttemptLimiter limiter) : INativeAuthAttemptAdmission
+{
+    public bool TryAdmit(string operation, string subject, string remoteIp, DateTime now) =>
+        limiter.TryAdmit(operation, subject, remoteIp, now);
+}

@@ -28,11 +28,12 @@ public sealed record LogoutResponse;
 [ProducesResponseType(typeof(V1ErrorEnvelope), 500)]
 public sealed class AuthController(IMediator mediator, IWebAuthSessionStore sessions, IUtcClock clock,
     IPermissionAuthorizationService permissions, IRequestCorrelationAccessor correlation,
-    ISecurityAuditWriter audit, WebHostOptions options, AuthAttemptLimiter limiter) : ControllerBase
+    ISecurityAuditWriter audit, WebHostOptions options, INativeAuthAttemptAdmission limiter) : ControllerBase
 {
     private const string CookieName = "__Host-mydmsvn-rt";
 
     [HttpPost("login")]
+    [AuthLoginRequest]
     [ProducesResponseType(typeof(V1SuccessEnvelope<AuthenticatedResponse>), 200)]
     [ProducesResponseType(typeof(V1ErrorEnvelope), 429)]
     public async Task<IActionResult> Login([FromBody] LoginBody credentials, CancellationToken cancellationToken)
@@ -128,8 +129,8 @@ public sealed class AuthController(IMediator mediator, IWebAuthSessionStore sess
     private static IActionResult Success<T>(T value) => new JsonResult(new V1SuccessEnvelope<T>(value))
         { StatusCode = 200, ContentType = "application/json; charset=utf-8" };
     private static IActionResult Mapped<T>(ApiResponse<T> mapped) =>
-        new JsonResult(mapped) { StatusCode = mapped.IsSuccess ? 200 : (int)mapped.Error!.Status,
-            ContentType = "application/json; charset=utf-8" };
+        mapped.IsSuccess ? Success(mapped.Data!) : new JsonResult(new V1ErrorEnvelope(mapped.Error!))
+        { StatusCode = (int)mapped.Error!.Status, ContentType = "application/json; charset=utf-8" };
     private Task Audit(string category, SecurityAuditOutcome outcome, int? userId, bool committed,
         CancellationToken cancellationToken, bool requiresAdmission = true) =>
         audit.WriteAsync(new SecurityAuditEntry(SecurityAuditAction.Authentication, outcome, userId, clock.UtcNow,

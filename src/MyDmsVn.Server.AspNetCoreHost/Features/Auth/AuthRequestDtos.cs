@@ -7,7 +7,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Formatters;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MyDmsVn.Server.HttpHost.Features.Auth;
 
@@ -70,5 +73,24 @@ internal sealed class AuthLoginFormatter : InputFormatter
     {
         context.ModelState.TryAddModelError("", "The request is invalid.");
         return InputFormatterResult.FailureAsync();
+    }
+}
+
+// Reject token headers/query before binding credentials, as the legacy action
+// did. Core transport/CSRF admission and body limits already ran.
+[AttributeUsage(AttributeTargets.Method)]
+internal sealed class AuthLoginRequestAttribute : Attribute, IAsyncResourceFilter
+{
+    public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
+    {
+        var request = context.HttpContext.Request;
+        if (new Uri(request.GetEncodedUrl(), UriKind.Absolute).Query.Length != 0 ||
+            request.Headers.ContainsKey("X-Refresh-Token") || request.Headers.ContainsKey("Refresh-Token"))
+        {
+            context.Result = V1ApiResults.Error(400, "ValidationError", "The request is invalid.",
+                context.HttpContext.RequestServices.GetRequiredService<RequestIdentityAdmission>().CorrelationId);
+            return;
+        }
+        await next().ConfigureAwait(false);
     }
 }

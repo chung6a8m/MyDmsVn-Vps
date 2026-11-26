@@ -27,6 +27,8 @@ internal static class NativeApiRegistration
     internal static IServiceCollection AddVps10NativeApi(this IServiceCollection services)
     {
         services.AddScoped<IV1OperationContextFactory, V1OperationContextFactory>();
+        services.AddSingleton<INativeAuthAttemptAdmission>(provider =>
+            new NativeAuthAttemptAdmission(provider.GetRequiredService<AuthAttemptLimiter>()));
         services.AddControllers(options =>
             {
                 options.InputFormatters.Insert(0, new V1MutationRequestFormatter());
