@@ -96,19 +96,23 @@ public sealed class WebHostOptions
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
     }
 
-    private static int ReadAccessLifetime()
+    private static int ReadAccessLifetime(Func<string, string?> readSetting)
     {
-        var configured = Environment.GetEnvironmentVariable("MYDMSVN_WEB_ACCESS_LIFETIME_MINUTES");
+        var configured = readSetting("MYDMSVN_WEB_ACCESS_LIFETIME_MINUTES");
         if (configured == null) return 10;
         if (!int.TryParse(configured, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var minutes))
             throw new FormatException();
         return minutes;
     }
-    public static WebHostOptions FromEnvironment()
+    public static WebHostOptions FromEnvironment() => Read(Environment.GetEnvironmentVariable);
+
+    // Share the exact parser with the net10 composition root; the legacy host
+    // continues to read only the process environment.
+    internal static WebHostOptions Read(Func<string, string?> readSetting)
     {
         try
         {
-            string Required(string name) => Environment.GetEnvironmentVariable(name) ?? throw new InvalidOperationException();
+            string Required(string name) => readSetting(name) ?? throw new InvalidOperationException();
             var keys = Required("MYDMSVN_WEB_JWT_KEYS").Split(',').Select(entry => entry.Split(':'))
                 .ToDictionary(parts => parts.Length == 2 ? parts[0] : throw new FormatException(), parts => Convert.FromBase64String(parts[1]), StringComparer.Ordinal);
             var mode = Required("MYDMSVN_WEB_OPERATION_MODE");
@@ -119,28 +123,28 @@ public sealed class WebHostOptions
                 "web5" => true,
                 _ => throw new FormatException()
             };
-            var resendValue = Environment.GetEnvironmentVariable("MYDMSVN_WEB6_RESEND_ELIGIBILITY");
+            var resendValue = readSetting("MYDMSVN_WEB6_RESEND_ELIGIBILITY");
             var resend = resendValue switch
             {
                 null or "disabled" => false,
                 "receipt-v1" => true,
                 _ => throw new FormatException()
             };
-            var desktop = Environment.GetEnvironmentVariable("MYDMSVN_WEB_DESKTOP_API");
+            var desktop = readSetting("MYDMSVN_WEB_DESKTOP_API");
             var desktopEnabled = desktop switch
             {
                 null or "disabled" => false,
                 "enabled" => true,
                 _ => throw new FormatException()
             };
-            var candidate = Environment.GetEnvironmentVariable("MYDMSVN_WEB6_CANDIDATE_ID");
+            var candidate = readSetting("MYDMSVN_WEB6_CANDIDATE_ID");
             if (candidate == "") candidate = null;
-            var candidateRoot = Environment.GetEnvironmentVariable("MYDMSVN_WEB6_CANDIDATE_ROOT");
-            var auditPath = Environment.GetEnvironmentVariable("MYDMSVN_WEB_SECURITY_AUDIT_PATH");
+            var candidateRoot = readSetting("MYDMSVN_WEB6_CANDIDATE_ROOT");
+            var auditPath = readSetting("MYDMSVN_WEB_SECURITY_AUDIT_PATH");
             if (resend && (candidateRoot == null || auditPath == null)) throw new FormatException();
             return new WebHostOptions(Required("MYDMSVN_WEB_ORIGIN"), Required("MYDMSVN_WEB_JWT_ISSUER"),
                 Required("MYDMSVN_WEB_JWT_AUDIENCE"), Required("MYDMSVN_WEB_JWT_ACTIVE_KID"), keys,
-                accessLifetimeMinutes: ReadAccessLifetime(), web4Enabled: web4, web5Enabled: mode == "web5",
+                accessLifetimeMinutes: ReadAccessLifetime(readSetting), web4Enabled: web4, web5Enabled: mode == "web5",
                 web6ResendEligibilityEnabled: resend, web6CandidateId: candidate,
                 web6CandidateRoot: candidateRoot, securityAuditPath: auditPath, desktopApiEnabled: desktopEnabled);
         }

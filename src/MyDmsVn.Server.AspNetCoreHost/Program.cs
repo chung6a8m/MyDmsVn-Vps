@@ -1,22 +1,13 @@
 using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using MyDmsVn.Server.Application;
-using MyDmsVn.Server.Application.Identity;
-using MyDmsVn.Server.Infrastructure;
-using MyDmsVn.Server.Infrastructure.Operations;
 
 namespace MyDmsVn.Server.HttpHost;
 
-// VPS-08: optional explicit loopback-only Nginx TLS termination and proxy admission.
-// Direct HTTPS remains unchanged unless the VPS-08 deployment mode is selected.
+// Composition root: configuration, registrations, pre-listen validation and pipeline.
 internal static class Program
 {
     public static async Task Main(string[] args)
@@ -40,80 +31,40 @@ internal static class Program
         }
     }
 
-    // The Web API 2 host used ValidateScopes=true in every environment.
-    // ASP.NET Core enables it by default only in Development; retain fail-closed
-    // request identity/correlation lifetimes on a Linux Production deployment.
+    // Retain fail-closed request identity/correlation lifetimes in Production.
     internal static void RequireScopeValidation(WebApplicationBuilder builder) =>
         builder.Host.UseDefaultServiceProvider(options => options.ValidateScopes = true);
 
     private static async Task<WebApplication> CreateAppAsync(string[] args)
     {
-        var options = WebHostOptions.FromEnvironment();
-        var proxy = LoopbackProxyBoundary.ReadSettings(Environment.GetEnvironmentVariable, options.PublicOrigin);
-        var sessions = WebAuthSessionConfiguration.Read(Environment.GetEnvironmentVariable);
-        var connection = Environment.GetEnvironmentVariable("MYDMSVN_WEB_SQL_CONNECTION_STRING");
-        var superuser = Environment.GetEnvironmentVariable("MYDMSVN_WEB_SUPERUSER_USERNAME");
-        if (string.IsNullOrWhiteSpace(connection) || string.IsNullOrWhiteSpace(superuser))
-            throw new InvalidOperationException("Missing restricted web deployment settings.");
-        if (proxy != null)
-            LoopbackProxyBoundary.RequireSqlTls(connection!);
-
-        // Keep the exact legacy schema/principal/superuser refusal gates, before opening a listener.
-        using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
-        {
-            var compatibility = await (options.Web5Enabled
-                ? new SqlWeb5SchemaCompatibilityChecker(connection!).CheckAsync(timeout.Token)
-                : options.Web4Enabled
-                    ? new SqlWebSchemaCompatibilityChecker(connection!).CheckAsync(timeout.Token)
-                    : new SqlWebSchema11CompatibilityChecker(connection!).CheckAsync(timeout.Token))
-                .ConfigureAwait(false);
-            if (!compatibility.IsCompatible)
-                throw new InvalidOperationException("Incompatible web database schema.");
-            await new SqlWebRuntimePrincipalValidator(
-                requireJournal: options.Web4Enabled,
-                requireResolution: options.Web5Enabled,
-                requireDesktopApi: options.DesktopApiEnabled)
-                .ValidateAsync(connection!, timeout.Token).ConfigureAwait(false);
-            await new SqlSuperuserBindingValidator()
-                .ValidateAsync(connection!, superuser!, timeout.Token).ConfigureAwait(false);
-        }
-
+        var configuration = HostOptionsRegistration.ReadEnvironment();
         var builder = WebApplication.CreateBuilder(args);
         RequireScopeValidation(builder);
-        if (proxy != null)
-        {
-            // Never publish an HTTP Kestrel listener off the loopback interface.
-            builder.WebHost.UseUrls(LoopbackProxyBoundary.LoopbackUrl);
-            builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(
-                LoopbackProxyBoundary.ConfigureForwardedHeaders);
-        }
-        builder.Services.AddServerApplication(superuser).AddHttpRequestIdentity();
-        builder.Services.AddProductionGeneratedMediator();
-        builder.Services.AddSingleton(options);
-        builder.Services.AddSingleton(sessions);
-        builder.Services.AddSingleton<AuthAttemptLimiter>();
-        builder.Services.AddScoped<CoreApiAdmissionMiddleware>();
-        builder.Services.AddSingleton<ISecurityAuditReadiness, CoreSecurityAuditReadiness>();
-        if (options.SecurityAuditPath != null)
-        {
-            if (!OperatingSystem.IsLinux())
-                throw new InvalidOperationException("Portable protected audit is Linux-only.");
-            // Constructor proves a pre-provisioned 0700 root and 0600 file via
-            // no-follow descriptor checks and a durable fsync, before listening.
-            builder.Services.Replace(ServiceDescriptor.Singleton<ISecurityAuditSink>(
-                new PortableProtectedSecurityAuditSink(options)));
-        }
-        else
-        {
-            if (options.Web6ResendEligibilityEnabled)
-                throw new InvalidOperationException("WEB6 requires protected audit storage.");
-            builder.Services.Replace(ServiceDescriptor.Singleton<ISecurityAuditSink, TraceSecurityAuditSink>());
-        }
-        builder.Services.AddSqlPersistence(connection!);
+        builder.Services.AddVps10HostServices(configuration);
+        HostOptionsRegistration.ConfigureListener(builder, configuration);
+        return await BuildAndValidateAsync(builder, CancellationToken.None).ConfigureAwait(false);
+    }
 
+    internal static async Task<WebApplication> BuildAndValidateAsync(
+        WebApplicationBuilder builder, CancellationToken cancellationToken)
+    {
         var app = builder.Build();
-        // Correlation, transport, strict CSRF, body size, Bearer+SQL session and
-        // audit readiness must run after routing, before any endpoint dispatch.
+        try
+        {
+            await HostStartupChecks.ValidateAsync(app.Services, cancellationToken).ConfigureAwait(false);
+            ConfigurePipeline(app);
+            return app;
+        }
+        catch
+        {
+            await app.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private static void ConfigurePipeline(WebApplication app)
+    {
+        var proxy = app.Services.GetRequiredService<HostDeploymentOptions>().Proxy;
         if (proxy != null)
         {
             app.Use((context, next) => LoopbackProxyBoundary.AdmitAsync(context, next, proxy));
@@ -127,10 +78,11 @@ internal static class Program
                 await next().ConfigureAwait(false);
             });
         }
+        // Correlation, transport, CSRF, body size, Bearer+SQL session and
+        // audit readiness run after routing, before endpoint dispatch.
         app.UseRouting();
         app.UseMiddleware<CoreApiAdmissionMiddleware>();
         Net10RouteTable.Map(app);
         Net10RouteTable.MapFallback(app);
-        return app;
     }
 }
