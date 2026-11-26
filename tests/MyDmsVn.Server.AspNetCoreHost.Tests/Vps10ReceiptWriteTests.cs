@@ -111,7 +111,10 @@ public sealed class Vps10ReceiptWriteTests
     {
         using var source = JsonDocument.Parse(CreateBody);
         var line = source.RootElement.GetProperty("lines")[0].GetRawText();
-        var body = CreateBody.Replace("[" + line + "]", "[" + string.Join(",", Enumerable.Repeat(line, count)) + "]", StringComparison.Ordinal);
+        // Use distinct product IDs: Application rejects duplicate products independently of wire cardinality.
+        var lines = Enumerable.Range(7, count).Select(id => line.Replace("\"productId\":7",
+            "\"productId\":" + id.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal));
+        var body = CreateBody.Replace("[" + line + "]", "[" + string.Join(",", lines) + "]", StringComparison.Ordinal);
         await using var fixture = await LiveFixture.StartAsync();
         using var response = await fixture.SendAsync("POST", Receipt, body);
         if (accepted)
@@ -121,6 +124,28 @@ public sealed class Vps10ReceiptWriteTests
         }
         else await Invalid(response, "lines");
         Assert.Equal(accepted ? 1 : 0, fixture.HandlerCalls);
+    }
+
+    [Theory]
+    [InlineData("POST", Receipt)]
+    [InlineData("PUT", Update)]
+    public async Task Duplicate_product_preserves_application_validation(string method, string path)
+    {
+        using var source = JsonDocument.Parse(CreateBody);
+        var line = source.RootElement.GetProperty("lines")[0].GetRawText();
+        var body = CreateBody.Replace("[" + line + "]", "[" + line + "," + line + "]", StringComparison.Ordinal);
+        if (method == "PUT") body = body[..^1] + ",\"expectedVersion\":\"AAAAAAAAAAI=\"}";
+        await using var fixture = await LiveFixture.StartAsync();
+        using var response = await fixture.SendAsync(method, path, body);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync());
+        var error = json.RootElement.GetProperty("error");
+        Assert.Equal("ValidationError", error.GetProperty("code").GetString());
+        var detail = Assert.Single(error.GetProperty("details").EnumerateArray());
+        Assert.Equal("GoodsReceipt.DuplicateProduct", detail.GetProperty("code").GetString());
+        Assert.Equal("lines[1].productId", detail.GetProperty("field").GetString());
+        Assert.NotEmpty(fixture.PermissionChecks);
+        Assert.Equal(0, fixture.HandlerCalls);
     }
 
     [Theory]
