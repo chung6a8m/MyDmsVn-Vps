@@ -46,7 +46,9 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             "/api/v1/catalog/products/lookup",
             "/api/v1/catalog/warehouses/lookup",
             "/api/v1/sales-receipts",
-            "/api/v1/sales-receipts/{saleId}"
+            "/api/v1/sales-receipts/{saleId}",
+            "/api/v1/sales-receipts/{saleId}/draft",
+            "/api/v1/sales-receipts/{saleId}/post"
         }, paths.EnumerateObject().Select(p => p.Name).OrderBy(p => p, StringComparer.Ordinal).ToArray());
         foreach (var route in paths.EnumerateObject().Where(p => p.Name.StartsWith("/api/v1/catalog/", StringComparison.Ordinal)))
         {
@@ -85,6 +87,14 @@ public sealed class Vps10OpenApiAndFeatureGateTests
         }
         var list = paths.GetProperty("/api/v1/sales-receipts").GetProperty("get");
         var detail = paths.GetProperty("/api/v1/sales-receipts/{saleId}").GetProperty("get");
+        var create = paths.GetProperty("/api/v1/sales-receipts").GetProperty("post");
+        var update = paths.GetProperty("/api/v1/sales-receipts/{saleId}/draft").GetProperty("put");
+        var post = paths.GetProperty("/api/v1/sales-receipts/{saleId}/post").GetProperty("post");
+        foreach (var mutation in new[] { create, update, post })
+        {
+            Assert.True(mutation.TryGetProperty("requestBody", out _));
+            Assert.True(mutation.GetProperty("responses").TryGetProperty("409", out _));
+        }
         Assert.False(list.TryGetProperty("requestBody", out _));
         Assert.False(detail.TryGetProperty("requestBody", out _));
         var listParameters = list.GetProperty("parameters").EnumerateArray().ToArray();

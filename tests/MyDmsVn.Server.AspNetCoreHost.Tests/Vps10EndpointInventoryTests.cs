@@ -26,15 +26,15 @@ public sealed class Vps10EndpointInventoryTests
         ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints).ToArray();
 
     [Fact]
-    public void Actual_endpoints_have_six_MVC_and_51_bridge_owners()
+    public void Actual_endpoints_have_nine_MVC_and_48_bridge_owners()
     {
         using var app = Build();
         var endpoints = Endpoints(app);
         var inventory = Net10RouteTable.ReadInventory(endpoints);
         Assert.Equal(57, inventory.Count);
-        Assert.Equal(6, inventory.Count(row => row.ActiveOwner == "native"));
-        Assert.Equal(51, inventory.Count(row => row.ActiveOwner == "bridge"));
-        Assert.Equal(6, endpoints.Count(endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() != null));
+        Assert.Equal(9, inventory.Count(row => row.ActiveOwner == "native"));
+        Assert.Equal(48, inventory.Count(row => row.ActiveOwner == "bridge"));
+        Assert.Equal(9, endpoints.Count(endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() != null));
         Assert.All(inventory.Where(row => row.ActiveOwner == "native"), row =>
         {
             var expected = row.Path.StartsWith("/api/v1/catalog/", StringComparison.Ordinal)

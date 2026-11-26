@@ -30,6 +30,23 @@ internal static class SalesHttpMapper
             row.WarehouseId, row.WarehouseDisplayName, row.EmployeeId, row.EmployeeDisplayName,
             row.Status, row.LineCount, Number(row.TotalAmount))).ToArray(), value.NextCursor, value.PreviousCursor);
 
+    internal static SaveSalesReceiptRequest ToApplication(SalesCreateRequest value) =>
+        new(value.SaleDate.ToDateTime(TimeOnly.MinValue), value.CustomerId, value.WarehouseId, value.EmployeeId,
+            value.Note, Lines(value.Lines));
+
+    internal static UpdateSalesReceiptDraftRequest ToApplication(long saleId, SalesUpdateRequest value) =>
+        new(saleId, value.ExpectedVersion, value.SaleDate.ToDateTime(TimeOnly.MinValue), value.CustomerId,
+            value.WarehouseId, value.EmployeeId, value.Note, Lines(value.Lines));
+
+    internal static PostSalesReceiptRequest ToApplication(long saleId, SalesPostRequest value) =>
+        new(saleId, value.ExpectedVersion);
+
+    private static SaveSalesReceiptLineRequest[] Lines(SalesSaveLineRequest[] values) =>
+        values.Select(line => new SaveSalesReceiptLineRequest(line.SaleLineId, line.ProductId, line.Qty, line.UnitPrice, line.IsGift)).ToArray();
+
+    internal static SalesPostResponse Post(PostSalesReceiptResponse value) =>
+        new(Id(value.SaleId), value.Status, Utc(value.PostedAtUtc), value.Version);
+
     private static string Id(long value) => value.ToString(CultureInfo.InvariantCulture);
     // Do not pad or round: preserve the represented scale of each decimal.
     private static string Number(decimal value) => value.ToString(CultureInfo.InvariantCulture);

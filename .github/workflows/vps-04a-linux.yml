@@ -322,6 +322,44 @@ jobs:
           assert counts == {'total':48,'executed':48,'passed':48,'failed':0,'notExecuted':0}, counts
           print(f'PASS VPS-10.4A Sales reads: {counts}')
           PY
+      - name: Require VPS-10.4B Sales writes (43 cases)
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-build --no-restore -v minimal \
+            --filter FullyQualifiedName~Vps10SalesWriteTests \
+            --logger "trx;LogFileName=vps10-sales-writes.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          path = Path(os.environ['GITHUB_WORKSPACE'])/'vps04a-trx/vps10-sales-writes.trx'
+          counters = ET.parse(path).getroot().find('./t:ResultSummary/t:Counters', ns)
+          assert counters is not None
+          counts = {k: int(v) for k, v in counters.attrib.items() if k in ('total','executed','passed','failed','notExecuted')}
+          assert counts == {'total':43,'executed':43,'passed':43,'failed':0,'notExecuted':0}, counts
+          print(f'PASS VPS-10.4B Sales writes: {counts}')
+          PY
+      - name: Require VPS-10.4B canonical operation parity (8 cases)
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-build --no-restore -v minimal \
+            --filter FullyQualifiedName~Vps10CanonicalOperationTests \
+            --logger "trx;LogFileName=vps10-canonical-operation.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          path = Path(os.environ['GITHUB_WORKSPACE'])/'vps04a-trx/vps10-canonical-operation.trx'
+          counters = ET.parse(path).getroot().find('./t:ResultSummary/t:Counters', ns)
+          assert counters is not None
+          counts = {k: int(v) for k, v in counters.attrib.items() if k in ('total','executed','passed','failed','notExecuted')}
+          assert counts == {'total':8,'executed':8,'passed':8,'failed':0,'notExecuted':0}, counts
+          print(f'PASS VPS-10.4B canonical operation parity: {counts}')
+          PY
       - name: Require all 293 live 57-route differential cases
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |

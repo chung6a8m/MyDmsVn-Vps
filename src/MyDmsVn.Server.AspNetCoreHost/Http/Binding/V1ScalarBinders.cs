@@ -56,8 +56,11 @@ internal sealed class SalesIdBinder : IModelBinder
         {
             var request = bindingContext.HttpContext.Request;
             // Detail checks query, then body, then the ID (even for an invalid ID).
-            V1QueryPolicy.Read(request);
-            await V1QueryPolicy.RequireEmptyBodyAsync(request).ConfigureAwait(false);
+            if (request.Method == "GET")
+            {
+                V1QueryPolicy.Read(request);
+                await V1QueryPolicy.RequireEmptyBodyAsync(request).ConfigureAwait(false);
+            }
             var text = request.RouteValues["saleId"] as string ?? "";
             bindingContext.Result = ModelBindingResult.Success(V1ScalarBinders.PositiveLong(text, "saleId"));
         }

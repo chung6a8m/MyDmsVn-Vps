@@ -23,8 +23,10 @@ internal static class NativeApiRegistration
 {
     internal static IServiceCollection AddVps10NativeApi(this IServiceCollection services)
     {
+        services.AddScoped<IV1OperationContextFactory, V1OperationContextFactory>();
         services.AddControllers(options =>
             {
+                options.InputFormatters.Insert(0, new V1SalesRequestFormatter());
                 options.ModelBinderProviders.Insert(0, new CatalogLookupQueryBinderProvider());
                 options.ModelBinderProviders.Insert(0, new V1SalesReadBinderProvider());
                 options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
@@ -66,7 +68,8 @@ internal static class NativeApiRegistration
                     schema.Type == (JsonSchemaType.Array | JsonSchemaType.Null))
                     schema.Type = JsonSchemaType.Array;
                 if (context.JsonTypeInfo.Type == typeof(V1SuccessEnvelope<SalesDetailResponse>) ||
-                    context.JsonTypeInfo.Type == typeof(V1SuccessEnvelope<SalesListPageResponse>))
+                    context.JsonTypeInfo.Type == typeof(V1SuccessEnvelope<SalesListPageResponse>) ||
+                    context.JsonTypeInfo.Type == typeof(V1SuccessEnvelope<SalesPostResponse>))
                 {
                     schema.Required ??= new HashSet<string>(StringComparer.Ordinal);
                     schema.Required.Add("data");
@@ -76,12 +79,14 @@ internal static class NativeApiRegistration
                 // transformers run. A successful Sales envelope always has data.
                 if (context.JsonPropertyInfo?.Name == "data" &&
                     (context.JsonTypeInfo.Type == typeof(SalesDetailResponse) ||
-                     context.JsonTypeInfo.Type == typeof(SalesListPageResponse)))
+                     context.JsonTypeInfo.Type == typeof(SalesListPageResponse) ||
+                     context.JsonTypeInfo.Type == typeof(SalesPostResponse)))
                 {
                     schema.Type = JsonSchemaType.Object;
                     schema.Metadata?.Remove("x-is-nullable-property");
                 }
                 DescribeSalesResponse(schema, context.JsonTypeInfo.Type);
+                DescribeSalesRequest(schema, context.JsonTypeInfo.Type);
                 // A URL segment is text. Avoid advertising a JSON integer that
                 // JavaScript clients could round before formatting the path.
                 if (context.ParameterDescription?.Name == "saleId" && context.JsonTypeInfo.Type == typeof(long))
@@ -102,14 +107,42 @@ internal static class NativeApiRegistration
                     "No request body; limit is a required canonical integer from 1 to 200. " +
                     "Search is optional (maximum 256 UTF-16 code units); duplicate and unknown query names are rejected. " +
                     "Sales reads require an active Bearer session; list pageSize defaults to 25 (1–200), dates are calendar-only, " +
-                    "search is limited after trimming, cursor is bound to filters/pageSize, detail accepts a positive canonical Int64 path and no query/body.";
+                    "search is limited after trimming, cursor is bound to filters/pageSize, detail accepts a positive canonical Int64 path and no query/body. " +
+                    "Sales writes accept strict application/json UTF-8, no query; decimal and Int64 wire fields are strings. " +
+                    "WEB4-enabled writes require Idempotency-Key and X-MyDmsVn-Deployment-Epoch.";
                 return Task.CompletedTask;
             });
         });
         return services;
     }
 
-    // Only the four Sales wire DTOs are affected. Omitted nullable response
+    // Input records use typed decimal/long values after binding; OpenAPI must
+    // describe the actual JSON tokens rather than their CLR representation.
+    private static void DescribeSalesRequest(OpenApiSchema schema, Type type)
+    {
+        if (schema.Properties == null) return;
+        if (type == typeof(SalesCreateRequest) || type == typeof(SalesUpdateRequest) ||
+            type == typeof(SalesPostRequest) || type == typeof(SalesSaveLineRequest))
+        {
+            schema.Required = new HashSet<string>(schema.Properties.Keys.Where(key => key != "note"), StringComparer.Ordinal);
+            foreach (var key in new[] { "saleLineId", "qty", "unitPrice" })
+                if (schema.Properties.TryGetValue(key, out var property) && property is OpenApiSchema scalar)
+                {
+                    scalar.Type = JsonSchemaType.String;
+                    scalar.Format = null;
+                    scalar.Pattern = key == "saleLineId" ? "^(0|[1-9][0-9]{0,18})$" : @"^[0-9]+(\.[0-9]{1,4})?$";
+                    scalar.MaxLength = key == "saleLineId" ? 19 : 64;
+                }
+            if (schema.Properties.TryGetValue("note", out var note) && note is OpenApiSchema text)
+                text.MaxLength = 1000;
+            if (schema.Properties.TryGetValue("expectedVersion", out var version) && version is OpenApiSchema token)
+                token.MaxLength = 128;
+        }
+        if (type == typeof(SalesPostResponse) && schema.Properties.TryGetValue("postedAtUtc", out var timestamp) &&
+            timestamp is OpenApiSchema instant) instant.Format = "date-time";
+    }
+
+    // The Sales wire response DTOs are affected. Omitted nullable response
     // fields are optional, but if present they are strings, never JSON null.
     private static void DescribeSalesResponse(OpenApiSchema schema, Type type)
     {

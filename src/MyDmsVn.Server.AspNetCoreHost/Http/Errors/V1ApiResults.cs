@@ -37,6 +37,23 @@ internal static class V1ApiResults
         return Error(mapped.Error!);
     }
 
+    internal static IActionResult OperationError(string code, string correlationId)
+    {
+        var status = code switch
+        {
+            "Auth.Unauthorized" => 401,
+            "Auth.Forbidden" => 403,
+            "Operation.NotObserved" => 404,
+            "Deployment.EpochMismatch" or "Idempotency.KeyConflict" or "Idempotency.FingerprintMismatch" => 409,
+            "Operation.ResultExpired" => 410,
+            "Operation.ResultUnavailable" or "Operation.Unavailable" => 503,
+            _ => 0
+        };
+        return status == 0
+            ? Error(500, "InternalError", "An unexpected error occurred.", correlationId)
+            : Error(status, code, "The protected operation is unavailable or cannot be disclosed.", correlationId);
+    }
+
     internal static IActionResult Invalid(string? field, string correlationId) =>
         Error(new ApiError(ApiStatusCode.BadRequest, "ValidationError", "The request is invalid.",
             new[] { new ApiErrorDetail("Validation.InvalidValue", "The field or request format is invalid.", field) },

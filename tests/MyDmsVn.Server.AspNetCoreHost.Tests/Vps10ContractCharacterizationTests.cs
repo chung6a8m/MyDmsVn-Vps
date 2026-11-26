@@ -69,7 +69,7 @@ public sealed class Vps10ContractCharacterizationTests
             Assert.Equal(Text(endpoint, "controller"), Text(row, "baselineController"));
             Assert.Equal(Text(endpoint, "action"), Text(row, "baselineAction"));
             Assert.Equal(endpoint.GetProperty("order").GetInt32(), row.GetProperty("order").GetInt32());
-            var native = Text(row, "owningIncrement") is "VPS-10.2" or "VPS-10.4A";
+            var native = Text(row, "owningIncrement") is "VPS-10.2" or "VPS-10.4A" or "VPS-10.4B";
             Assert.Equal(native ? "native" : "bridge", Text(row, "activeOwner"));
             Assert.Equal(Text(row, "activeOwner"), Text(endpoint, "activeOwner"));
             Assert.Equal(Text(row, "actualController"), Text(endpoint, "actualController"));

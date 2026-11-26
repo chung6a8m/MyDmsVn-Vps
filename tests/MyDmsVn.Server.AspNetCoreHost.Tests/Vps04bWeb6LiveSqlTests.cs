@@ -18,7 +18,7 @@ using Xunit;
 namespace MyDmsVn.Server.AspNetCoreHost.Tests;
 
 [SupportedOSPlatform("linux")]
-public sealed class Vps04bWeb6LiveSqlTests
+public sealed partial class Vps04bWeb6LiveSqlTests
 {
     private static string Required(string name) =>
         Environment.GetEnvironmentVariable(name) is { Length: > 0 } value ? value :

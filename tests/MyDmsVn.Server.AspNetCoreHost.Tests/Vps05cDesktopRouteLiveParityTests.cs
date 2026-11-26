@@ -875,7 +875,9 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         }
 
         public async Task<HttpResponseMessage> SendAsync(string method, string path, string? body,
-            bool authenticated = true, bool withOrigin = false)
+            bool authenticated = true, bool withOrigin = false,
+            string? operationKey = null, string? operationEpoch = null, string? operationFingerprint = null,
+            bool duplicateOperationKey = false)
         {
             using var request = new HttpRequestMessage(new HttpMethod(method), path);
             if (authenticated)
@@ -886,6 +888,13 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 request.Headers.Add("Origin", "https://web2.mydmsvn.test");
                 request.Headers.Add("Sec-Fetch-Site", "same-origin");
             }
+            if (operationKey != null)
+            {
+                request.Headers.TryAddWithoutValidation("Idempotency-Key", operationKey);
+                if (duplicateOperationKey) request.Headers.TryAddWithoutValidation("Idempotency-Key", operationKey);
+            }
+            if (operationEpoch != null) request.Headers.TryAddWithoutValidation("X-MyDmsVn-Deployment-Epoch", operationEpoch);
+            if (operationFingerprint != null) request.Headers.TryAddWithoutValidation("X-MyDmsVn-Operation-Fingerprint", operationFingerprint);
             if (body != null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
             return await _client.SendAsync(request);
         }

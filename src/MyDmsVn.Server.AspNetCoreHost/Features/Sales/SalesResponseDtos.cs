@@ -22,3 +22,5 @@ public sealed record SalesListRowResponse(
     string SaleId, string SaleNumber, DateOnly SaleDate, int CustomerId, string? CustomerDisplayName,
     int WarehouseId, string? WarehouseDisplayName, int EmployeeId, string? EmployeeDisplayName,
     string Status, int LineCount, string TotalAmount);
+
+public sealed record SalesPostResponse(string SaleId, string Status, string PostedAtUtc, string Version);
