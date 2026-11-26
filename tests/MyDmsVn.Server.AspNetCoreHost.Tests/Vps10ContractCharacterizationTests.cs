@@ -60,8 +60,8 @@ public sealed class Vps10ContractCharacterizationTests
         foreach (var row in rows)
         {
             var key = Key(row);
-            var source = Assert.Single(frozen.Where(r => Key(r) == key));
-            var endpoint = Assert.Single(compiled.Where(r => Key(r) == key));
+            var source = Assert.Single(frozen, r => Key(r) == key);
+            var endpoint = Assert.Single(compiled, r => Key(r) == key);
             Assert.Equal(key, Text(row, "id"));
             Assert.Equal(Text(source, "controller"), Text(row, "baselineController"));
             Assert.Equal(Text(source, "action"), Text(row, "baselineAction"));
