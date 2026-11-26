@@ -6,6 +6,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Routing;
 using NativeLookup = MyDmsVn.Server.HttpHost.Features.Catalog.CatalogLookupController;
+using NativeProducts = MyDmsVn.Server.HttpHost.Features.Catalog.ProductsController;
+using NativeWarehouses = MyDmsVn.Server.HttpHost.Features.Catalog.WarehousesController;
+using NativeEmployees = MyDmsVn.Server.HttpHost.Features.Catalog.EmployeesController;
+using NativeCustomers = MyDmsVn.Server.HttpHost.Features.Catalog.CustomersController;
 using NativeSales = MyDmsVn.Server.HttpHost.Features.Sales.SalesReceiptsController;
 using NativeReceipts = MyDmsVn.Server.HttpHost.Features.Receipts.GoodsReceiptsController;
 using NativeInventory = MyDmsVn.Server.HttpHost.Features.Inventory.InventoryController;
@@ -21,6 +25,10 @@ internal static class EndpointInventory
 
     private static Type? NativeOwner(Net10RouteTable.Route route) =>
         route.Controller == typeof(CatalogLookupController) ? typeof(NativeLookup) :
+        route.Controller == typeof(ProductsController) ? typeof(NativeProducts) :
+        route.Controller == typeof(WarehousesController) ? typeof(NativeWarehouses) :
+        route.Controller == typeof(EmployeesController) ? typeof(NativeEmployees) :
+        route.Controller == typeof(CustomersController) ? typeof(NativeCustomers) :
         route.Controller == typeof(SalesReceiptsController) ? typeof(NativeSales) :
         route.Controller == typeof(GoodsReceiptsController) ? typeof(NativeReceipts) :
         route.Verb == "GET" && route.Controller == typeof(InventoryController) ? typeof(NativeInventory) : null;
@@ -62,7 +70,11 @@ internal static class EndpointInventory
             {
                 if (native == null || native.ControllerTypeInfo.AsType() != NativeOwner(route) ||
                     native.MethodInfo.Name != route.Action.Name ||
-                    endpoint.Metadata.GetMetadata<V1DesktopApiRequiredAttribute>() != null)
+                    (endpoint.Metadata.GetMetadata<V1DesktopApiRequiredAttribute>() != null) !=
+                        (route.Controller == typeof(ProductsController) ||
+                         route.Controller == typeof(WarehousesController) ||
+                         route.Controller == typeof(EmployeesController) ||
+                         route.Controller == typeof(CustomersController)))
                     throw new InvalidOperationException("Native WEB2 ownership or feature gate drift.");
             }
             else if (bridge != route)

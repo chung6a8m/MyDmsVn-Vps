@@ -41,10 +41,22 @@ public sealed class Vps10OpenApiAndFeatureGateTests
         var paths = document.GetProperty("paths");
         Assert.Equal(new[]
         {
+            "/api/v1/catalog/customers",
             "/api/v1/catalog/customers/lookup",
+            "/api/v1/catalog/customers/{id}",
+            "/api/v1/catalog/customers/{id}/active",
+            "/api/v1/catalog/employees",
             "/api/v1/catalog/employees/lookup",
+            "/api/v1/catalog/employees/{id}",
+            "/api/v1/catalog/employees/{id}/active",
+            "/api/v1/catalog/products",
             "/api/v1/catalog/products/lookup",
+            "/api/v1/catalog/products/{id}",
+            "/api/v1/catalog/products/{id}/active",
+            "/api/v1/catalog/warehouses",
             "/api/v1/catalog/warehouses/lookup",
+            "/api/v1/catalog/warehouses/{id}",
+            "/api/v1/catalog/warehouses/{id}/active",
             "/api/v1/goods-receipts",
             "/api/v1/goods-receipts/{receiptId}",
             "/api/v1/goods-receipts/{receiptId}/draft",
@@ -56,7 +68,7 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             "/api/v1/sales-receipts/{saleId}/draft",
             "/api/v1/sales-receipts/{saleId}/post"
         }, paths.EnumerateObject().Select(p => p.Name).OrderBy(p => p, StringComparer.Ordinal).ToArray());
-        foreach (var route in paths.EnumerateObject().Where(p => p.Name.StartsWith("/api/v1/catalog/", StringComparison.Ordinal)))
+        foreach (var route in paths.EnumerateObject().Where(p => p.Name.StartsWith("/api/v1/catalog/", StringComparison.Ordinal) && p.Name.EndsWith("/lookup", StringComparison.Ordinal)))
         {
             var operation = route.Value.GetProperty("get");
             Assert.False(operation.TryGetProperty("requestBody", out _));
@@ -90,6 +102,21 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             Assert.True(responses.TryGetProperty("401", out _));
             Assert.True(responses.TryGetProperty("403", out _));
             Assert.True(responses.TryGetProperty("413", out _));
+        }
+        // All four CRUD surfaces are native; the lookup remains independent.
+        foreach (var entity in new[] { "customers", "employees", "products", "warehouses" })
+        {
+            var collection = paths.GetProperty("/api/v1/catalog/" + entity);
+            var catalogDetail = paths.GetProperty("/api/v1/catalog/" + entity + "/{id}");
+            var active = paths.GetProperty("/api/v1/catalog/" + entity + "/{id}/active");
+            Assert.False(collection.GetProperty("get").TryGetProperty("requestBody", out _));
+            Assert.Equal(4, collection.GetProperty("get").GetProperty("parameters").GetArrayLength());
+            Assert.False(catalogDetail.GetProperty("get").TryGetProperty("requestBody", out _));
+            foreach (var mutation in new[] { collection.GetProperty("post"), catalogDetail.GetProperty("put"), active.GetProperty("put") })
+            {
+                Assert.True(mutation.TryGetProperty("requestBody", out _));
+                Assert.True(mutation.GetProperty("responses").TryGetProperty("409", out _));
+            }
         }
         // WEB3 reads and receipt writes are native.
         var receiptListPath = paths.GetProperty("/api/v1/goods-receipts");

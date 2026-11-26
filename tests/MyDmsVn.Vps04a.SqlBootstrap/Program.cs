@@ -135,7 +135,11 @@ internal static class Program
                     "GRANT SELECT ON dbo.GoodsReceiptLines TO [" + OracleLogin + "]; " +
                     "GRANT SELECT ON dbo.StockLedger TO [" + OracleLogin + "]; " +
                     "GRANT SELECT ON dbo.StockValuationEntries TO [" + OracleLogin + "]; " +
-                    "GRANT SELECT ON dbo.StockBalances TO [" + OracleLogin + "];");
+                    "GRANT SELECT ON dbo.StockBalances TO [" + OracleLogin + "]; " +
+                    "GRANT SELECT ON dbo.Products TO [" + OracleLogin + "]; " +
+                    "GRANT SELECT ON dbo.Warehouses TO [" + OracleLogin + "]; " +
+                    "GRANT SELECT ON dbo.Employees TO [" + OracleLogin + "]; " +
+                    "GRANT SELECT ON dbo.Customers TO [" + OracleLogin + "];");
             }
 
             var runtime = new SqlConnectionStringBuilder(admin.ConnectionString)
@@ -185,6 +189,10 @@ SELECT CASE WHEN
   ISNULL(HAS_PERMS_BY_NAME('dbo.StockLedger','OBJECT','SELECT'),0)<>1 OR
   ISNULL(HAS_PERMS_BY_NAME('dbo.StockValuationEntries','OBJECT','SELECT'),0)<>1 OR
   ISNULL(HAS_PERMS_BY_NAME('dbo.StockBalances','OBJECT','SELECT'),0)<>1 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.Products','OBJECT','SELECT'),0)<>1 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.Warehouses','OBJECT','SELECT'),0)<>1 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.Employees','OBJECT','SELECT'),0)<>1 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.Customers','OBJECT','SELECT'),0)<>1 OR
   EXISTS(
     SELECT 1 FROM sys.objects o
     CROSS APPLY sys.fn_my_permissions(
@@ -194,14 +202,14 @@ SELECT CASE WHEN
       AND NOT (p.permission_name=N'SELECT' AND OBJECT_SCHEMA_NAME(o.object_id)=N'dbo'
         AND o.name IN(N'WebAuthSessions',N'WebOperationJournal',N'SalesReceipts',
           N'SalesReceiptLines',N'GoodsReceipts',N'GoodsReceiptLines',
-          N'StockLedger',N'StockValuationEntries',N'StockBalances'))
+          N'StockLedger',N'StockValuationEntries',N'StockBalances',N'Products',N'Warehouses',N'Employees',N'Customers'))
   )
 THEN 1 ELSE 0 END;", connection);
                 if (Convert.ToInt32(await probe.ExecuteScalarAsync(), CultureInfo.InvariantCulture) != 0)
                 {
                     try { _stage = "oracle-denied:" + await DiagnoseOracleAsync(connection); }
                     catch { _stage = "oracle-denied:diagnostic-unavailable"; }
-                    throw new InvalidOperationException("Oracle exceeds the nine explicit CI-only read tables.");
+                    throw new InvalidOperationException("Oracle exceeds the thirteen explicit CI-only read tables.");
                 }
             }
 
@@ -217,8 +225,9 @@ THEN 1 ELSE 0 END;", connection);
                 "VPS04A_LIVE_PRODUCT_ID=" + ids.Product.ToString(CultureInfo.InvariantCulture),
                 "VPS04A_CI_FRACTIONAL_WAREHOUSE_A=" + ids.FractionalWarehouseA.ToString(CultureInfo.InvariantCulture),
                 "VPS04A_CI_FRACTIONAL_WAREHOUSE_B=" + ids.FractionalWarehouseB.ToString(CultureInfo.InvariantCulture),
+                "VPS106A_CI_INACTIVE_USER_ID=" + ids.InactiveUser.ToString(CultureInfo.InvariantCulture),
             });
-            Console.WriteLine("PASS: isolated SQL schema13 (13/13 DbUp), runtime principal, nine-table CI-only read-only oracle and active fixtures.");
+            Console.WriteLine("PASS: isolated SQL schema13 (13/13 DbUp), runtime principal, thirteen-table CI-only read-only oracle and active fixtures.");
             return 0;
         }
         catch (Exception problem)
@@ -252,7 +261,7 @@ WHERE o.is_ms_shipped=0 AND o.parent_object_id=0 AND p.permission_name IN
   AND NOT (p.permission_name=N'SELECT' AND OBJECT_SCHEMA_NAME(o.object_id)=N'dbo'
     AND o.name IN(N'WebAuthSessions',N'WebOperationJournal',N'SalesReceipts',
       N'SalesReceiptLines',N'GoodsReceipts',N'GoodsReceiptLines',
-      N'StockLedger',N'StockValuationEntries',N'StockBalances'))
+      N'StockLedger',N'StockValuationEntries',N'StockBalances',N'Products',N'Warehouses',N'Employees',N'Customers'))
 ORDER BY o.name,p.permission_name;", connection);
         var result=Convert.ToString(await command.ExecuteScalarAsync(),CultureInfo.InvariantCulture);
         if (!string.IsNullOrEmpty(result))
@@ -435,7 +444,7 @@ WHERE o.is_ms_shipped=0 AND o.parent_object_id=0 AND p.permission_name IN
         await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task<(int Customer, int Warehouse, int Employee, int Product, int FractionalWarehouseA, int FractionalWarehouseB)> SeedAsync(
+    private static async Task<(int Customer, int Warehouse, int Employee, int Product, int FractionalWarehouseA, int FractionalWarehouseB, int InactiveUser)> SeedAsync(
         string connectionString, string writerPassword, string deniedPassword)
     {
         using var connection = new SqlConnection(connectionString);
@@ -444,6 +453,27 @@ WHERE o.is_ms_shipped=0 AND o.parent_object_id=0 AND p.permission_name IN
         var hasher = new BcryptPasswordHasher();
         var writerId = await InsertUserAsync(connection, transaction, Writer, writerPassword, hasher);
         await InsertUserAsync(connection, transaction, Denied, deniedPassword, hasher);
+        // Synthetic CI-only identities with independent Catalog grants.
+        var catalogReader = await InsertUserAsync(connection, transaction, "vps106a_ci_read", deniedPassword, hasher);
+        var catalogWriter = await InsertUserAsync(connection, transaction, "vps106a_ci_write", deniedPassword, hasher);
+        var inactiveUser = await InsertUserAsync(connection, transaction, "vps106a_ci_inactive", deniedPassword, hasher);
+        foreach (var (actor, suffix) in new[] { (catalogReader, "Read"), (catalogWriter, "Write") })
+        {
+            foreach (var entity in new[] { "Products", "Warehouses", "Employees", "Customers" })
+            {
+                using var grant = new SqlCommand(
+                    "INSERT dbo.UserPermissions(UserId,PermissionKey,Granted) VALUES (@id,@key,1);",
+                    connection, transaction);
+                grant.Parameters.Add("@id", SqlDbType.Int).Value = actor;
+                grant.Parameters.Add("@key", SqlDbType.NVarChar, 200).Value = "Catalog." + entity + "." + suffix;
+                await grant.ExecuteNonQueryAsync();
+            }
+        }
+        using (var deactivate = new SqlCommand("UPDATE dbo.Users SET IsActive=0 WHERE UserId=@id;", connection, transaction))
+        {
+            deactivate.Parameters.Add("@id", SqlDbType.Int).Value = inactiveUser;
+            await deactivate.ExecuteNonQueryAsync();
+        }
 
         using (var binding = new SqlCommand(
             "INSERT dbo.SystemSecuritySettings(Id,SuperuserUserId,BoundNormalizedUsername) VALUES (1,@id,@username);",
@@ -472,7 +502,7 @@ WHERE o.is_ms_shipped=0 AND o.parent_object_id=0 AND p.permission_name IN
         var employee = await NewId("INSERT dbo.Employees(Code,Name) OUTPUT INSERTED.EmployeeId VALUES (@code,N'CI Employee');", "CI-EMP");
         var product = await NewId("INSERT dbo.Products(Code,Name,Unit) OUTPUT INSERTED.ProductId VALUES (@code,N'CI Product',N'EA');", "CI-PROD");
         transaction.Commit();
-        return (customer, warehouse, employee, product, fractionalWarehouseA, fractionalWarehouseB);
+        return (customer, warehouse, employee, product, fractionalWarehouseA, fractionalWarehouseB, inactiveUser);
     }
 
     private static async Task<int> InsertUserAsync(SqlConnection connection, SqlTransaction transaction,

@@ -34,6 +34,11 @@ sources = [p for p in sources if not any(name in {"bin", "obj"} for name in p.pa
                # VPS-10.2: this controller is net10-only and uses generated
                # Mediator, not the frozen legacy MediatR implementation.
                "src/MyDmsVn.Server.AspNetCoreHost/Features/Catalog/CatalogLookupController.cs",
+               # VPS-10.6A native-only generated Mediator, no legacy MediatR.
+               "src/MyDmsVn.Server.AspNetCoreHost/Features/Catalog/ProductsController.cs",
+               "src/MyDmsVn.Server.AspNetCoreHost/Features/Catalog/WarehousesController.cs",
+               "src/MyDmsVn.Server.AspNetCoreHost/Features/Catalog/EmployeesController.cs",
+               "src/MyDmsVn.Server.AspNetCoreHost/Features/Catalog/CustomersController.cs",
                # VPS-10.4A: exactly this native-only controller contributes one
                # generated IMediator injection and two Send calls, not MediatR.
                "src/MyDmsVn.Server.AspNetCoreHost/Features/Sales/SalesReceiptsController.cs",

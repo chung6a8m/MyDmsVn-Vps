@@ -26,19 +26,19 @@ public sealed class Vps10EndpointInventoryTests
         ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints).ToArray();
 
     [Fact]
-    public void Actual_endpoints_have_16_MVC_and_41_bridge_owners()
+    public void Actual_endpoints_have_36_MVC_and_21_bridge_owners()
     {
         using var app = Build();
         var endpoints = Endpoints(app);
         var inventory = Net10RouteTable.ReadInventory(endpoints);
         Assert.Equal(57, inventory.Count);
-        Assert.Equal(16, inventory.Count(row => row.ActiveOwner == "native"));
-        Assert.Equal(41, inventory.Count(row => row.ActiveOwner == "bridge"));
-        Assert.Equal(16, endpoints.Count(endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() != null));
+        Assert.Equal(36, inventory.Count(row => row.ActiveOwner == "native"));
+        Assert.Equal(21, inventory.Count(row => row.ActiveOwner == "bridge"));
+        Assert.Equal(36, endpoints.Count(endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() != null));
         Assert.All(inventory.Where(row => row.ActiveOwner == "native"), row =>
         {
             var expected = row.Path.StartsWith("/api/v1/catalog/", StringComparison.Ordinal)
-                ? "MyDmsVn.Server.HttpHost.Features.Catalog.CatalogLookupController"
+                ? "MyDmsVn.Server.HttpHost.Features.Catalog." + row.Controller
                 : row.Path.StartsWith("/api/v1/goods-receipts", StringComparison.Ordinal)
                     ? "MyDmsVn.Server.HttpHost.Features.Receipts.GoodsReceiptsController"
                     : row.Path.StartsWith("/api/v1/inventory/", StringComparison.Ordinal)
