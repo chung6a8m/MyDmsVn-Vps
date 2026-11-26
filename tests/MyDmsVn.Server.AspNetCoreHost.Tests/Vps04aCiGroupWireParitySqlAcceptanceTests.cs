@@ -1,5 +1,5 @@
 // WEB2–WEB6 bounded, actual Kestrel HTTPS -> disposable SQL acceptance.
-// An allowlisted, read-only nine-table Oracle supplies independently derived
+// An allowlisted, read-only allowlisted Oracle supplies independently derived
 // expected business values. Safe per-group JSON reports contain ONLY selected
 // synthetic IDs/statuses/field names and expected/actual/diff; never credentials,
 // JWTs, cookies, raw request bodies, or full sensitive HTTP response payloads.
@@ -118,7 +118,7 @@ public sealed class Vps04aCiGroupWireParitySqlAcceptanceTests
     private static async Task<(long Id, string State)> LastDocumentAsync(string table, string idColumn)
     {
         // Both SQL identifiers must be hard-coded within this allowlist: the
-        // Oracle is prohibited from reading catalog/user/security tables.
+        // this historical projection deliberately uses document tables only.
         Assert.True((table == "SalesReceipts" && idColumn == "SaleId") ||
                     (table == "GoodsReceipts" && idColumn == "ReceiptId"));
         using var connection = Oracle();
@@ -340,7 +340,7 @@ WHERE l.WarehouseId=@wh AND l.ProductId=@product;", sql);
             var rows = lookup.Body.RootElement.GetProperty("data");
             var matched = rows.EnumerateArray().Where(x => x.GetProperty("id").GetInt32() == product).ToArray();
             report.Record("catalog-products", "GET /api/v1/catalog/products/lookup?limit=25",
-                "web2-v1/catalog-products-response.json", "StockBalances.ProductId provenance (catalog table not Oracle-readable)",
+                "web2-v1/catalog-products-response.json", "StockBalances.ProductId provenance (historical document-based projection)",
                 new { status = 200, seededProductMatched = 1, seededStockKeysPresent = true,
                     rowFields = FixtureLookupRowKeys("web2-v1", "catalog-products-response.json") },
                 new { status = lookup.Status, seededProductMatched = matched.Length, seededStockKeysPresent = stockKeys > 0,
@@ -348,7 +348,7 @@ WHERE l.WarehouseId=@wh AND l.ProductId=@product;", sql);
         }
 
 
-        // customers: Oracle sees only document reference keys, not catalog
+        // customers: historical projection uses document reference keys, not catalog
         // rows; verify the lookup contains the independently posted reference.
         var customerId = await ScalarIntAsync("SELECT TOP(1) CustomerId FROM dbo.SalesReceipts ORDER BY SaleId DESC;");
         using (var lookup = await http.GetAsync("/api/v1/catalog/customers/lookup?limit=25", session.Token))
@@ -365,7 +365,7 @@ WHERE l.WarehouseId=@wh AND l.ProductId=@product;", sql);
                     rowFields = matched.Length == 1 ? Keys(matched[0]) : "(missing)" });
         }
 
-        // warehouses: Oracle sees only document reference keys, not catalog
+        // warehouses: historical projection uses document reference keys, not catalog
         // rows; verify the lookup contains the independently posted reference.
         var warehouseId = await ScalarIntAsync("SELECT TOP(1) WarehouseId FROM dbo.GoodsReceipts ORDER BY ReceiptId DESC;");
         using (var lookup = await http.GetAsync("/api/v1/catalog/warehouses/lookup?limit=25", session.Token))
@@ -382,7 +382,7 @@ WHERE l.WarehouseId=@wh AND l.ProductId=@product;", sql);
                     rowFields = matched.Length == 1 ? Keys(matched[0]) : "(missing)" });
         }
 
-        // employees: Oracle sees only document reference keys, not catalog
+        // employees: historical projection uses document reference keys, not catalog
         // rows; verify the lookup contains the independently posted reference.
         var employeeId = await ScalarIntAsync("SELECT TOP(1) EmployeeId FROM dbo.GoodsReceipts ORDER BY ReceiptId DESC;");
         using (var lookup = await http.GetAsync("/api/v1/catalog/employees/lookup?limit=25", session.Token))
