@@ -60,19 +60,25 @@ public sealed class ResendController(OperationReadBoundary boundary) : Controlle
         [FromHeader(Name = "X-MyDmsVn-Resend-Receipt")] string? receipt = null) => boundary.Run(Enabled, () =>
     {
         var input = OperationRequest.Resend(Request, operationId, true);
+        Web6ResendIdentity? identity = null;
+        ValidatedWeb6ResendReceipt? validated = null;
         return boundary.Transaction(Request, async (unit, actor, session) =>
         {
-            var identity = Identity(input, actor);
-            var validated = new Web6ResendReceiptCodec(boundary.Options, boundary.Clock).Validate(input.Receipt!, identity);
+            var admittedIdentity = identity!;
+            var admittedReceipt = validated!;
             var repository = unit.Repository<IWebOperationResendEligibilityRepository>();
             WebOperationResolution? result = null;
-            if (validated.IsExpired)
+            if (admittedReceipt.IsExpired)
                 await repository.AuthorizeReceiptAsync(actor, session, input.Key.Epoch, input.Kind, token).ConfigureAwait(false);
             else
                 result = await repository.ReadEligibilityAsync(actor, session, input.Key.Epoch, input.Key.OperationId,
                     input.Kind, input.Target, input.Key.Fingerprint, token).ConfigureAwait(false);
-            return OperationHttpMapper.Eligibility(identity, validated, result, boundary.Clock.UtcNow);
-        }, token);
+            return OperationHttpMapper.Eligibility(admittedIdentity, admittedReceipt, result, boundary.Clock.UtcNow);
+        }, token, actor =>
+        {
+            identity = Identity(input, actor);
+            validated = new Web6ResendReceiptCodec(boundary.Options, boundary.Clock).Validate(input.Receipt!, identity);
+        });
     }, token);
 
     private Web6ResendIdentity Identity(ResendKey input, int actor) =>

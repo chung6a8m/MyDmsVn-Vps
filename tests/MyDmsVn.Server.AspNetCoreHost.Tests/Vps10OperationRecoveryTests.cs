@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -52,13 +51,13 @@ public sealed class Vps10OperationRecoveryTests
     [InlineData("web2-v1/sales-create-response.json", WebOperationKind.SalesCreate)]
     [InlineData("web2-v1/sales-update-response.json", WebOperationKind.SalesUpdate)]
     [InlineData("web2-v1/sales-post-response.json", WebOperationKind.SalesPost)]
+    [InlineData("web4-v1/receipt-create-response.json", WebOperationKind.ReceiptCreate)]
+    [InlineData("web4-v1/receipt-update-response.json", WebOperationKind.ReceiptUpdate)]
+    [InlineData("web4-v1/receipt-post-response.json", WebOperationKind.ReceiptPost)]
     public void Native_codec_reads_legacy_and_encodes_identical_projection(string path, WebOperationKind kind)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "docs", "contracts")))
-            directory = directory.Parent;
-        Assert.NotNull(directory);
-        var bytes = File.ReadAllBytes(Path.Combine(directory!.FullName, "docs", "contracts", path));
+        using var historical = Vps10CanonicalOperationTests.Read(path);
+        var bytes = Encoding.UTF8.GetBytes(historical.RootElement.GetRawText());
         var legacy = new WebOperationResultCodec();
         var native = new V1OperationResultCodec();
         if (kind == WebOperationKind.SalesPost)
@@ -66,12 +65,58 @@ public sealed class Vps10OperationRecoveryTests
             var value = legacy.Decode<PostSalesReceiptResponse>(kind, bytes);
             Assert.Equal(legacy.Encode(kind, value), native.Encode(kind, native.Decode<PostSalesReceiptResponse>(kind, bytes)));
         }
+        else if (kind == WebOperationKind.ReceiptPost)
+        {
+            var value = legacy.Decode<PostGoodsReceiptResponse>(kind, bytes);
+            Assert.Equal(legacy.Encode(kind, value), native.Encode(kind, native.Decode<PostGoodsReceiptResponse>(kind, bytes)));
+        }
+        else if (kind is WebOperationKind.ReceiptCreate or WebOperationKind.ReceiptUpdate)
+        {
+            var value = legacy.Decode<GoodsReceiptDto>(kind, bytes);
+            Assert.Equal(legacy.Encode(kind, value), native.Encode(kind, native.Decode<GoodsReceiptDto>(kind, bytes)));
+        }
         else
         {
             var value = legacy.Decode<SalesReceiptDto>(kind, bytes);
             Assert.Equal(legacy.Encode(kind, value), native.Encode(kind, native.Decode<SalesReceiptDto>(kind, bytes)));
         }
-        Assert.Equal(JsonDocument.Parse(bytes).RootElement.GetRawText(), native.DecodeEnvelope(kind, bytes).GetRawText());
+        Assert.Equal(historical.RootElement.GetRawText(), native.DecodeEnvelope(kind, bytes).GetRawText());
+    }
+
+    [Theory]
+    [InlineData("/api/v1/operations/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", "permission", 403)]
+    [InlineData("/api/v1/operations/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", "not-observed", 404)]
+    [InlineData("/api/v1/operations/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", "epoch-mismatch", 409)]
+    [InlineData("/api/v1/operations/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", "fingerprint-mismatch", 409)]
+    [InlineData("/api/v2/operations/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/resolution", "not-observed", 404)]
+    [InlineData("/api/v2/operations/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/resolution", "fingerprint-mismatch", 409)]
+    public async Task Repository_refusal_is_not_a_replay_or_resend_authorization(string path, string variant, int status)
+    {
+        await using var fixture = await LiveFixture.StartAsync(web45Enabled: true, operationVariant: variant);
+        using var response = await fixture.SendOperationAsync(path, status: true, authenticated: true);
+        Assert.Equal(status, (int)response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.False(json.RootElement.TryGetProperty("data", out _));
+    }
+
+    [Theory]
+    [InlineData("/api/v1/operations/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")]
+    [InlineData("/api/v2/operations/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/resolution")]
+    public async Task Replay_discloses_original_outcome_without_current_business_read_permission(string path)
+    {
+        await using var fixture = await LiveFixture.StartAsync(web45Enabled: true, denyPermissions: true);
+        using var response = await fixture.SendOperationAsync(path, status: true, authenticated: true);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = json.RootElement.GetProperty("data");
+        Assert.Equal("COMMITTED", data.GetProperty("state").GetString());
+        Assert.Equal(JsonValueKind.Null, data.GetProperty("requestTargetId").ValueKind);
+        using var original = Vps10CanonicalOperationTests.Read("web2-v1/sales-create-response.json");
+        var legacy = new WebOperationResultCodec();
+        var historical = legacy.Decode<SalesReceiptDto>(WebOperationKind.SalesCreate,
+            Encoding.UTF8.GetBytes(original.RootElement.GetRawText()));
+        Assert.Equal(Encoding.UTF8.GetString(legacy.Encode(WebOperationKind.SalesCreate, historical)),
+            data.GetProperty("outcome").GetRawText());
     }
 
     [Theory]

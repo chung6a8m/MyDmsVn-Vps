@@ -134,7 +134,7 @@ internal static class NativeApiRegistration
             });
             options.AddDocumentTransformer((document, _, _) =>
             {
-                document.Info.Title = "MyDmsVn native v1 API";
+                document.Info.Title = "MyDmsVn native HTTP API (v1/v2/v3)";
                 document.Info.Description = "All 57 native business verb/path pairs; v1/v2/v3 compatibility contracts. " +
                     "Lookups require Bearer authentication with an active session. " +
                     "No request body; limit is a required canonical integer from 1 to 200. " +

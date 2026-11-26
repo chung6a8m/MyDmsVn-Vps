@@ -6,15 +6,15 @@ Base: `fdd04fea9089706a5394dcd71d1ecf1bc3a10565` (merged PR #43). Branch: `vps-1
 
 - Seven native MVC endpoints: v1 context/status, v2 context/resolution, v3 resend context/receipt/eligibility. Expected 57 native, zero bridge; transitional source links and auxiliary fallback remain until VPS-10.7.
 - Strict raw path/header parsing; admitted actor/session, original flag precedence, repository authorization and transaction retained. Response is typed and serialized before committing read transaction. Status discloses validated stored outcome rather than querying the business document again.
-- Native V1OperationResultCodec implements the same size, shape, decimal/identity/terminal validation and uses native Sales/Receipt projections. Original codec retained for differential comparison. Factory for native writes switches atomically. WEB6 receipt signing/validation and authorization implementation retained.
+- Native V1OperationResultCodec implements the same size, shape, decimal/identity/terminal validation and uses native Sales/Receipt projections. Original codec retained for differential comparison. Factory for native writes switches atomically. Six frozen Sales/Receipt outcomes and refusal/replay paths are included in the focused gate. WEB6 receipt signing/validation and authorization implementation retained.
 - No Desktop source, SQL migration, SDK, package or automatic resend policy change. Existing Desktop pending/restart, restricted principal, real HTTPS/SQL and protected audit gates remain necessary.
-- Frozen 293-case differential unchanged; new focused 24-case gate (12 HTTP, 12 codec). Actual endpoint inventory and Development OpenAPI path assertions updated.
+- Frozen 293-case differential unchanged; new focused 35-case gate (20 HTTP, 15 codec). Actual endpoint inventory and Development OpenAPI path assertions updated.
 
 ## Gate ledger
 
 | Gate | Status |
 | --- | --- |
-| G1 Linux SDK 10.0.404 locked build, 57 routes, focused 24 cases, all Host/Application regressions | NOT RUN locally |
+| G1 Linux SDK 10.0.404 locked build, 57 routes, focused 35 cases, all Host/Application regressions | NOT RUN locally |
 | G2 frozen differential 293/293 and OpenAPI | NOT RUN locally |
 | G3 Windows net48 Desktop pending/replay and upgrade regression | NOT RUN locally |
 | G4 disposable real HTTPS/SQL including enabled WEB6 and protected audit restart | NOT RUN locally |

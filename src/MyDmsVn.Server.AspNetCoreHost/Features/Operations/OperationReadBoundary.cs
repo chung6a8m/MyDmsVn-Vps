@@ -110,12 +110,16 @@ public sealed class OperationReadBoundary
         V1ApiResults.Error(400, "ValidationError", "The request is invalid.", correlation);
 
     internal async Task<IActionResult> Transaction<T>(HttpRequest request,
-        Func<IUnitOfWork, int, Guid, Task<T>> read, CancellationToken token)
+        Func<IUnitOfWork, int, Guid, Task<T>> read, CancellationToken token,
+        Action<int>? prepare = null)
     {
         await V1QueryPolicy.RequireEmptyBodyAsync(request).ConfigureAwait(false);
         var identity = _admission;
         if (!identity.Current.IsAuthenticated || !identity.Current.IsActive || !identity.Current.UserId.HasValue || !identity.SessionId.HasValue)
             throw new WebOperationException("Auth.Unauthorized");
+        // Validate the signed WEB6 receipt before acquiring the database transaction,
+        // after body and admitted identity checks, as in the original protocol.
+        prepare?.Invoke(identity.Current.UserId.Value);
         using var unit = await _units.CreateAsync(token).ConfigureAwait(false);
         unit.BeginTransaction();
         var value = await read(unit, identity.Current.UserId.Value, identity.SessionId.Value).ConfigureAwait(false);

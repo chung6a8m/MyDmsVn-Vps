@@ -67,7 +67,7 @@ internal static class OperationHttpMapper
         }
         else if (state is not ("RESULT_EXPIRED" or "RESULT_UNAVAILABLE")) throw Unavailable();
         var description = V1OperationCanonicalizer.Describe(status.Kind);
-        return new(epoch.ToString("D"), key.ToString("D"), WebOperationWireInput.KindName(status.Kind),
+        return new(epoch.ToString("D"), key.ToString("D"), description.Name,
             description.Method, description.Route, Target(status.RequestTargetId),
             Convert.ToHexString(status.RequestFingerprint).ToLowerInvariant(), state, outcome);
     }
