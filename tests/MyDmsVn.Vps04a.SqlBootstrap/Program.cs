@@ -296,7 +296,7 @@ AFTER INSERT
 AS
 BEGIN
   SET NOCOUNT ON;
-  IF EXISTS (SELECT 1 FROM inserted WHERE DocumentType = 'SalesReceipt')
+  IF EXISTS (SELECT 1 FROM inserted WHERE DocumentType IN ('SalesReceipt','GoodsReceipt'))
     THROW 51488, 'Disposable CI rollback injection.', 1;
 END;");
             Console.WriteLine("PASS: ephemeral ledger fault armed after original schema13 preflight.");

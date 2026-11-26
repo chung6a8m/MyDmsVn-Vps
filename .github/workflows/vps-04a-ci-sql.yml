@@ -525,6 +525,77 @@ jobs:
           print('VPS104B_SQL_RESTART_PASS 2/2: durable intent, fresh session, exact replay bytes and one sale')
           PY
 
+          # VPS-10.5B isolated phase AFTER every predecessor oracle.
+          # Existing approved ephemeral trigger is expanded to Receipt only in CI.
+          export VPS105B_RESTART_STATE="$work/vps105b-receipt-restart.json"
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet run --project ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
+            -p:Vps04Server=true -c Release -f net10.0 --no-build --no-restore -- arm-ledger-fault)
+          fault_armed=1
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps04bWeb6LiveSqlTests.NativeReceiptUpdateRaceAndInjectedPostRollback' \
+            --logger 'trx;LogFileName=vps105b-receipt-rollback.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet run --project ../../tests/MyDmsVn.Vps04a.SqlBootstrap/MyDmsVn.Vps04a.SqlBootstrap.csproj \
+            -p:Vps04Server=true -c Release -f net10.0 --no-build --no-restore -- disarm-ledger-fault)
+          fault_armed=0
+          kill "$server_pid"
+          wait "$server_pid" 2>/dev/null || true
+          server_pid=""
+          dotnet src/MyDmsVn.Server.AspNetCoreHost/bin/Release/net10.0/MyDmsVn.Server.AspNetCoreHost.dll >"$work/host-receipt-restarted.log" 2>&1 &
+          server_pid="$!"
+          ready=0
+          for attempt in $(seq 1 60); do
+            kill -0 "$server_pid" 2>/dev/null || exit 1
+            if curl --silent --fail --max-time 3 https://localhost:50443/api/v1/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps04bWeb6LiveSqlTests.NativeReceiptDisarmedSameKeyCommitsBeforeRestart' \
+            --logger 'trx;LogFileName=vps105b-receipt-commit.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+          kill "$server_pid"
+          wait "$server_pid" 2>/dev/null || true
+          server_pid=""
+          dotnet src/MyDmsVn.Server.AspNetCoreHost/bin/Release/net10.0/MyDmsVn.Server.AspNetCoreHost.dll >"$work/host-receipt-restarted.log" 2>&1 &
+          server_pid="$!"
+          ready=0
+          for attempt in $(seq 1 60); do
+            kill -0 "$server_pid" 2>/dev/null || exit 1
+            if curl --silent --fail --max-time 3 https://localhost:50443/api/v1/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = 1
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps04bWeb6LiveSqlTests.NativeReceiptPostReplaysAfterRestartAndPreservesInventoryCost' \
+            --logger 'trx;LogFileName=vps105b-receipt-replay.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          ns={'t':'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          for phase in ['rollback','commit','replay']:
+            path=Path('vps04a-ci-trx') / f'vps105b-receipt-{phase}.trx'
+            assert path.is_file(), path
+            c=ET.parse(path).getroot().find('./t:ResultSummary/t:Counters',ns)
+            assert c is not None, path
+            actual={k:int(c.attrib[k]) for k in ('total','executed','passed','failed','notExecuted')}
+            assert actual=={'total':1,'executed':1,'passed':1,'failed':0,'notExecuted':0},(path,actual)
+          print('VPS105B_SQL_RECEIPT_PASS 3/3: stale-version race, mid-UoW rollback, same-key commit, process restart, exact replay and inventory cost')
+          PY
+
       - name: Upload only safe WEB2-WEB6 expected actual diff projections
         if: always()
         uses: actions/upload-artifact@v6
