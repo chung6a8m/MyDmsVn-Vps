@@ -551,7 +551,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             json.RootElement.GetProperty("error").GetProperty("correlationId").GetString());
     }
 
-    private static void AssertMatchesNet48(string caseId, string variant,
+    internal static void AssertMatchesNet48(string caseId, string variant,
         HttpResponseMessage response, byte[] body)
     {
         var expected = Net48Observations.Value.Single(x => x.CaseId == caseId && x.Variant == variant);
@@ -750,7 +750,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
     private static WarehouseDto Warehouse() => new(1, "W1", "Warehouse", null, true);
     private static EmployeeDto Employee() => new(1, "E1", "Employee", null, 1, true);
     private static CustomerDto Customer() => new(1, "C1", "Customer", null, null, null, true);
-    private sealed class DesktopLiveFixture : IAsyncDisposable
+    internal sealed class DesktopLiveFixture : IAsyncDisposable
     {
         private static readonly Guid SessionId = Guid.Parse("11111111-1111-4111-8111-111111111111");
         private readonly WebApplication _app;
@@ -775,14 +775,14 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             bool web45Enabled = false, bool operationFailure = false,
             bool web6Failure = false, bool web6ContextFailure = false,
             bool web6ReceiptFailure = false, string? operationVariant = null,
-            string web6CandidateId = "candidate-1")
+            string web6CandidateId = "candidate-1", bool desktopApiEnabled = true)
         {
             var clock = new FrozenClock();
             var options = new WebHostOptions("https://web2.mydmsvn.test", "https://web2.mydmsvn.test", "auth-tests",
                 "active", new Dictionary<string, byte[]>
                 {
                     ["active"] = Encoding.UTF8.GetBytes("active-test-key-at-least-32-bytes-long")
-                }, desktopApiEnabled: true, web4Enabled: web45Enabled,
+                }, desktopApiEnabled: desktopApiEnabled, web4Enabled: web45Enabled,
                 web5Enabled: web6Enabled || web45Enabled,
                 web6ResendEligibilityEnabled: web6Enabled,
                 web6CandidateId: web6Enabled ? web6CandidateId : null);
@@ -863,6 +863,21 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 request.Headers.Add("Sec-Fetch-Site", "same-origin");
             }
             if (body != null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+            return await _client.SendAsync(request);
+        }
+
+        internal async Task<HttpResponseMessage> SendRawAsync(string method, string path, byte[] bytes, string contentType)
+        {
+            using var request = new HttpRequestMessage(new HttpMethod(method), path);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+            request.Headers.Add("X-Correlation-ID", Correlation);
+            if (method is "POST" or "PUT")
+            {
+                request.Headers.Add("Origin", "https://web2.mydmsvn.test");
+                request.Headers.Add("Sec-Fetch-Site", "same-origin");
+            }
+            request.Content = new ByteArrayContent(bytes);
+            request.Content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
             return await _client.SendAsync(request);
         }
 

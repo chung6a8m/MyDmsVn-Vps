@@ -161,6 +161,29 @@ jobs:
           assert counts['failed']==0 and counts['notExecuted']==0 and counts['passed']==counts['total'], counts
           print(f"PASS net10 HTTP boundary: {counts}")
           PY
+      - name: Require VPS-10.0 characterization and frozen source pins (37 cases)
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-build --no-restore -v minimal \
+            --filter FullyQualifiedName~Vps10ContractCharacterizationTests \
+            --logger "trx;LogFileName=vps10-characterization.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+          python3 - <<'PY'
+          import json, os, subprocess
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          root = Path(os.environ['GITHUB_WORKSPACE'])
+          manifest = json.loads((root/'docs/contracts/vps-10-route-migration.json').read_text(encoding='utf-8-sig'))
+          for path, expected in manifest['sourcePins'].items():
+              actual = subprocess.check_output(['git', 'rev-parse', 'HEAD:' + path], cwd=root, text=True).strip()
+              assert actual == expected, (path, actual, expected)
+          ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          counters = ET.parse(root/'vps04a-trx/vps10-characterization.trx').getroot().find('./t:ResultSummary/t:Counters', ns)
+          assert counters is not None, 'Missing VPS-10 characterization TRX counters'
+          counts = {k: int(v) for k, v in counters.attrib.items() if k in ('total','executed','passed','failed','notExecuted')}
+          assert counts == {'total':37,'executed':37,'passed':37,'failed':0,'notExecuted':0}, counts
+          print(f'PASS VPS-10.0 characterization and frozen source pins: {counts}')
+          PY
       - name: Require all 293 live 57-route differential cases
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |
