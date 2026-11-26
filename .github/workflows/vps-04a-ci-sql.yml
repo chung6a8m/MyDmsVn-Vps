@@ -424,6 +424,14 @@ jobs:
             --filter 'FullyQualifiedName~Vps04bWeb6LiveSqlTests.EnabledWeb6ContextReceiptEligibilityAndSessionRevocationWithRealSql' \
             --logger 'trx;LogFileName=vps04b-web6-live.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
 
+          # VPS-10.4B: create native operation before the actual host restart.
+          export VPS104B_RESTART_STATE="$work/vps104b-sales-restart.json"
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps04bWeb6LiveSqlTests.NativeSalesCommitBeforeHostRestart' \
+            --logger 'trx;LogFileName=vps104b-sales-before-restart.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
           (cd src/MyDmsVn.Server.AspNetCoreHost && \
             dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
             -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
@@ -477,6 +485,12 @@ jobs:
             --filter 'FullyQualifiedName~Vps04bWeb6LiveSqlTests.NewLinuxHostRecoversHealthyAndKeepsPriorAuditAfterRestart' \
             --logger 'trx;LogFileName=vps04b-web6-restart.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
 
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps04bWeb6LiveSqlTests.NativeSalesReplaysAfterHostRestart' \
+            --logger 'trx;LogFileName=vps104b-sales-after-restart.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
@@ -493,6 +507,20 @@ jobs:
             assert counts=={'total':1,'executed':1,'passed':1,'failed':0,'notExecuted':0},(name,counts)
           print('VPS-04B Linux protected audit WEB6: 3/3 real HTTPS-SQL facts, zero failure/skip; '
                 'pre-provisioned mode guard rejects startup; prior 16/16 SQL13 remain separate.')
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          ns={'t':'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          for phase in ['before','after']:
+            path=Path('vps04a-ci-trx') / f'vps104b-sales-{phase}-restart.trx'
+            assert path.is_file(), path
+            c=ET.parse(path).getroot().find('./t:ResultSummary/t:Counters',ns)
+            assert c is not None, path
+            actual={k:int(c.attrib[k]) for k in ('total','executed','passed','failed','notExecuted')}
+            assert actual=={'total':1,'executed':1,'passed':1,'failed':0,'notExecuted':0},(path,actual)
+          print('VPS104B_SQL_RESTART_PASS 2/2: durable intent, fresh session, exact replay bytes and one sale')
           PY
 
       - name: Upload only safe WEB2-WEB6 expected actual diff projections
