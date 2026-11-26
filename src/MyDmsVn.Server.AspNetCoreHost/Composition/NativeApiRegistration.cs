@@ -16,6 +16,7 @@ using Microsoft.OpenApi;
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.HttpHost.Features.Catalog;
 using MyDmsVn.Server.HttpHost.Features.Sales;
+using MyDmsVn.Server.HttpHost.Features.Inventory;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -29,6 +30,7 @@ internal static class NativeApiRegistration
                 options.InputFormatters.Insert(0, new V1SalesRequestFormatter());
                 options.ModelBinderProviders.Insert(0, new CatalogLookupQueryBinderProvider());
                 options.ModelBinderProviders.Insert(0, new V1SalesReadBinderProvider());
+                options.ModelBinderProviders.Insert(0, new V1Web3ReadBinderProvider());
                 options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
                 options.Filters.Add(new V1UnsupportedContentTypeFilter());
             })
@@ -85,11 +87,12 @@ internal static class NativeApiRegistration
                     schema.Type = JsonSchemaType.Object;
                     schema.Metadata?.Remove("x-is-nullable-property");
                 }
+                V1Web3OpenApi.Describe(schema, context.JsonTypeInfo.Type, context.JsonPropertyInfo?.Name, context.ParameterDescription?.Name);
                 DescribeSalesResponse(schema, context.JsonTypeInfo.Type);
                 DescribeSalesRequest(schema, context.JsonTypeInfo.Type);
                 // A URL segment is text. Avoid advertising a JSON integer that
                 // JavaScript clients could round before formatting the path.
-                if (context.ParameterDescription?.Name == "saleId" && context.JsonTypeInfo.Type == typeof(long))
+                if ((context.ParameterDescription?.Name is "saleId" or "receiptId") && context.JsonTypeInfo.Type == typeof(long))
                 {
                     schema.Type = JsonSchemaType.String;
                     schema.Format = null;

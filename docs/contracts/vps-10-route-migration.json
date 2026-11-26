@@ -497,7 +497,7 @@
       "order": 0,
       "baselineController": "GoodsReceiptsController",
       "baselineAction": "List",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.5A",
       "contractFamily": "web3-v1",
       "authentication": "bearer",
@@ -518,7 +518,7 @@
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.GoodsReceiptsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Receipts.GoodsReceiptsController",
       "actualAction": "List"
     },
     {
@@ -528,7 +528,7 @@
       "order": 0,
       "baselineController": "GoodsReceiptsController",
       "baselineAction": "Get",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.5A",
       "contractFamily": "web3-v1",
       "authentication": "bearer",
@@ -549,7 +549,7 @@
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.GoodsReceiptsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Receipts.GoodsReceiptsController",
       "actualAction": "Get"
     },
     {
@@ -584,7 +584,7 @@
       "order": 0,
       "baselineController": "InventoryController",
       "baselineAction": "Balances",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.5A",
       "contractFamily": "web3-v1",
       "authentication": "bearer",
@@ -605,7 +605,7 @@
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.InventoryController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Inventory.InventoryController",
       "actualAction": "Balances"
     },
     {
@@ -615,7 +615,7 @@
       "order": 0,
       "baselineController": "InventoryController",
       "baselineAction": "StockCard",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.5A",
       "contractFamily": "web3-v1",
       "authentication": "bearer",
@@ -636,7 +636,7 @@
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.InventoryController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Inventory.InventoryController",
       "actualAction": "StockCard"
     },
     {
