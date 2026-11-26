@@ -875,13 +875,13 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         }
 
         public async Task<HttpResponseMessage> SendAsync(string method, string path, string? body,
-            bool authenticated = true)
+            bool authenticated = true, bool withOrigin = false)
         {
             using var request = new HttpRequestMessage(new HttpMethod(method), path);
             if (authenticated)
                 request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
             request.Headers.Add("X-Correlation-ID", Correlation);
-            if (method is "POST" or "PUT")
+            if (withOrigin || method is "POST" or "PUT")
             {
                 request.Headers.Add("Origin", "https://web2.mydmsvn.test");
                 request.Headers.Add("Sec-Fetch-Site", "same-origin");

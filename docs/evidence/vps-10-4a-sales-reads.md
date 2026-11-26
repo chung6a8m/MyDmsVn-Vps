@@ -34,3 +34,5 @@ Initial HEAD `c71f1ca3f9081378c39a8ebde446d4ec00d706b6`: 9/11 workflows succeede
 | F04 (P2) Culture vectors did not demonstrate culture inside Kestrel handler; page/cursor coverage gaps | Set and restore request culture in opt-in fixture middleware, observe handler culture; add minimum page/trimmed search and opaque page cursor mapping cases. Preserve frozen 293 variant data and selectors. |
 
 Review fixes require 48/48 focused cases and all existing final-HEAD workflow gates. Local compilation/tests unavailable; AI second-pass review is not independent human acceptance.
+
+Method-miss probes explicitly supply the existing trusted Origin/Sec-Fetch-Site for PATCH; otherwise admission correctly returns 403 before route selection. This fixture-only opt-in preserves frozen calls.

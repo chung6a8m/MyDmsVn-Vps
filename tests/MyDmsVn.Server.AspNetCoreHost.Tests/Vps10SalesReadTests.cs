@@ -181,7 +181,7 @@ public sealed class Vps10SalesReadTests
     public async Task Mixed_native_and_bridge_method_miss_preserves_allowed_verbs(string path, string expectedAllow)
     {
         await using var fixture = await LiveFixture.StartAsync();
-        using var response = await fixture.SendAsync("PATCH", Sales + path, null);
+        using var response = await fixture.SendAsync("PATCH", Sales + path, null, withOrigin: true);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
         Assert.Equal(expectedAllow, string.Join(", ", response.Content.Headers.Allow));
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
