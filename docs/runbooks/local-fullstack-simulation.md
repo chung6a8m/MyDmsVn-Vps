@@ -72,3 +72,13 @@ Reset validates the receipt path, instance ID, Docker engine and labels, WSL mar
 - SQL identity/ownership refusal: do not relabel or reuse an existing database/volume. Reset the owned instance and initialize again.
 
 For evidence, record base/head SHA, exact commands and environment, discovered/executed/skipped counts, failures, and explicit blockers. A skipped SQL/GUI check or empty filter is not PASS.
+
+## VPS-10.7 native Host paired handoff
+
+Use the **same reviewed commit** for the published net48 Desktop and Linux net10 Host. Do not substitute a prior candidate or treat an old simulation receipt as final-HEAD evidence.
+
+Before the session, retain the Desktop and Host artifact manifests, exact source SHA, configuration mode (without secrets), the isolated SQL instance/schema identity, and the `--list-routes` JSON. Compare the latter with the existing frozen v1/v2/v3 route manifests using `scripts/verify-vps-04a.py`; require 57 native / 0 bridge. Check the published Host graph using `python3 scripts/verify-vps04b-runtime-boundary.py --artifact <published-host.deps.json>`. In a disposable Development instance verify OpenAPI against all 57 verb/path pairs; never expose Development OpenAPI in Production.
+
+Exercise from the actual Windows Desktop: login/refresh/logout, lookup, Sales draft/create/update/post/read, Receipt draft/create/update/post/read, inventory balances and stock card, security/permission denial, and reopen a persisted unresolved operation after lost ACK/restart. Keep the operation identity, fingerprint, deployment epoch, receipt and authoritative outcome; never auto-resend an unsafe/unknown operation. Use synthetic data, record exact observed outcomes and SQL invariants, and retain cleanup receipts.
+
+Re-exercise the pending-operation upgrade cases U01–U06 from [Issue #45](https://github.com/chung6a8m/MyDmsVn-Vps/issues/45) with the exact reviewed pair and distinguish automated HTTP/SQL evidence from attended Desktop observation. The earlier PR #44 source-only acceptance does not waive the VPS-10.7 paired gate. Record blockers as NOT VERIFIED and leave the live status in the [roadmap index](../roadmap/README.md).
