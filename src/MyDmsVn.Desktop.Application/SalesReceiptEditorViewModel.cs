@@ -47,8 +47,11 @@ public sealed class SalesReceiptEditorViewModel : ObservableObject, IDisposable
     private PostRecovery? _postRecovery;
 
     public SalesReceiptEditorViewModel(ISalesReceiptApiClient api, IDesktopSession session, IUiDispatcher ui,
-        ISalesReceiptPreviewCalculator calculator, ISalesCommandBufferAdmission buffers,
-        SalesDraftRecovery? draftRecovery = null)
+        ISalesReceiptPreviewCalculator calculator, ISalesCommandBufferAdmission buffers)
+        : this(api, session, ui, calculator, buffers, null) { }
+
+    public SalesReceiptEditorViewModel(ISalesReceiptApiClient api, IDesktopSession session, IUiDispatcher ui,
+        ISalesReceiptPreviewCalculator calculator, ISalesCommandBufferAdmission buffers, SalesDraftRecovery? draftRecovery)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _sessionVersion = session.Version;

@@ -61,7 +61,12 @@ public sealed class SalesReceiptControl : UserControl, IActivatableDesktopContro
 
     public SalesReceiptControl(ISalesReceiptApiClient api, IDesktopSession session, IUiDispatcher ui,
         ISalesReceiptPreviewCalculator calculator, Func<CatalogKind, CatalogLookupViewModel> lookupFactory,
-        IPermissionApiClient permissions, IProductApiClient productApi, SalesDraftRecovery? draftRecovery = null)
+        IPermissionApiClient permissions, IProductApiClient productApi)
+        : this(api, session, ui, calculator, lookupFactory, permissions, productApi, null) { }
+
+    public SalesReceiptControl(ISalesReceiptApiClient api, IDesktopSession session, IUiDispatcher ui,
+        ISalesReceiptPreviewCalculator calculator, Func<CatalogKind, CatalogLookupViewModel> lookupFactory,
+        IPermissionApiClient permissions, IProductApiClient productApi, SalesDraftRecovery? draftRecovery)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session)); _sessionVersion = session.Version;
         FeedbackScope = new WorkspaceFeedbackScope(_sessionVersion);

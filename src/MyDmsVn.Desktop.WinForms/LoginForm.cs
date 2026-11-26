@@ -19,7 +19,9 @@ namespace MyDmsVn.Desktop.WinForms
         private readonly BootstrapCheckBox _showPassword;
         private bool _disposed;
 
-        public LoginForm(LoginViewModel viewModel, SalesDraftRecovery? draftRecovery = null)
+        public LoginForm(LoginViewModel viewModel) : this(viewModel, null) { }
+
+        public LoginForm(LoginViewModel viewModel, SalesDraftRecovery? draftRecovery)
         {
             _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
             _draftRecovery = draftRecovery;
