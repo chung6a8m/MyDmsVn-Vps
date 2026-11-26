@@ -107,12 +107,12 @@ public sealed class Vps10OpenApiAndFeatureGateTests
         foreach (var entity in new[] { "customers", "employees", "products", "warehouses" })
         {
             var collection = paths.GetProperty("/api/v1/catalog/" + entity);
-            var detail = paths.GetProperty("/api/v1/catalog/" + entity + "/{id}");
+            var catalogDetail = paths.GetProperty("/api/v1/catalog/" + entity + "/{id}");
             var active = paths.GetProperty("/api/v1/catalog/" + entity + "/{id}/active");
             Assert.False(collection.GetProperty("get").TryGetProperty("requestBody", out _));
             Assert.Equal(4, collection.GetProperty("get").GetProperty("parameters").GetArrayLength());
-            Assert.False(detail.GetProperty("get").TryGetProperty("requestBody", out _));
-            foreach (var mutation in new[] { collection.GetProperty("post"), detail.GetProperty("put"), active.GetProperty("put") })
+            Assert.False(catalogDetail.GetProperty("get").TryGetProperty("requestBody", out _));
+            foreach (var mutation in new[] { collection.GetProperty("post"), catalogDetail.GetProperty("put"), active.GetProperty("put") })
             {
                 Assert.True(mutation.TryGetProperty("requestBody", out _));
                 Assert.True(mutation.GetProperty("responses").TryGetProperty("409", out _));
