@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 
 namespace MyDmsVn.Desktop.Infrastructure.Http
 {
-    /// <summary>Explicit v1 wire projection. Do not serialize Sales/Inventory commands as plain DTOs.</summary>
+    /// <summary>Invariant query projection and strict journal/corpus JSON reader; mutation DTOs live in Wire.</summary>
     public static class HttpDesktopWire
     {
         public static string Query(params (string Name, object? Value)[] parameters)
