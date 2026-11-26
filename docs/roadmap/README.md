@@ -26,7 +26,7 @@ The first wave preserves all 57 existing WEB2–WEB6/Desktop verb/path pairs acr
 | Increment | Current status | Next deliverable/gate |
 | --- | --- | --- |
 | VPS-10.0 — Contract baseline | COMPLETE UPON [PR #33](https://github.com/chung6a8m/MyDmsVn-Vps/pull/33) independent review, final-HEAD CI PASS AND MERGE | [57-route migration manifest](../contracts/vps-10-route-migration.json), [baseline and review evidence](../evidence/vps-10-native-host.md); exact final SHA, 37 characterization cases, 293 differential cases, manifest gate and CI/merge receipt in PR #33 |
-| VPS-10.1 — Host composition | IN PROGRESS — source prepared for review; CI and independent review pending | [Composition evidence](../evidence/vps-10-1-host-composition.md); 26 targeted cases, G1/G2 and final-HEAD CI required; 0 native routes |
+| VPS-10.1 — Host composition | COMPLETE UPON [PR #34](https://github.com/chung6a8m/MyDmsVn-Vps/pull/34) independent review, final-HEAD required CI PASS AND MERGE | [Composition evidence](../evidence/vps-10-1-host-composition.md); exact final SHA, 26 composition cases, G1/G2, final CI and merge receipt in PR #34; 0 native routes |
 | VPS-10.2 — Native lookup pilot | NOT STARTED | Four lookup routes, native MVC binding/results, mixed inventory and OpenAPI subset; exact wire differential |
 | VPS-10.3 — Desktop typed wire | NOT STARTED | net48 DTO/converter adapter, remove response reparse, culture and pending/replay compatibility |
 | VPS-10.4A — Sales reads | NOT STARTED | Two native read routes; strict query/date/cursor behavior and response contract |
@@ -39,7 +39,7 @@ The first wave preserves all 57 existing WEB2–WEB6/Desktop verb/path pairs acr
 | VPS-10.6D — Operations | NOT STARTED | Seven native v1/v2/v3 operation routes; historical outcomes, pending state and resend policy |
 | VPS-10.7 — Bridge removal/handoff | NOT STARTED | All 57 actual native routes, complete OpenAPI, zero production bridge inputs and paired Desktop/Host evidence |
 
-**Current implementation increment: VPS-10.1. Next: VPS-10.2 after VPS-10.1 review, required final-HEAD CI and merge.** Update these rows and the increment's evidence in its implementation PR; do not create a second live status ledger in the design or detailed plan.
+**Next implementation increment after PR #34 meets all gates and merges: VPS-10.2. Until then, VPS-10.1 remains in progress.** Update these rows and the increment's evidence in its implementation PR; do not create a second live status ledger in the design or detailed plan.
 
 ## Status rules
 
