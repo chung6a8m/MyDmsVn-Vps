@@ -1,6 +1,6 @@
 # Dependency boundaries and transition policy
 
-## Current, measured from imported project files
+## Imported baseline, measured from VPS-00 project files (historical)
 
 - Production `src/`: 11 C# projects; every project targets `net48`.
 - `Desktop.App` explicitly references `Desktop.Infrastructure.Local`, `Desktop.WinForms` **and** `Server.Infrastructure`.
@@ -31,3 +31,15 @@
 | Contracts | Neutral DTOs, no server runtime dependency | VPS-03/VPS-05 |
 
 Avoid a premature move of `Contracts` to `netstandard2.0` until Newtonsoft converter behavior is inventoried and verified. Architecture tests may move in different phases; failures inherited from legacy source must be recorded, not suppressed.
+
+## VPS-10 native-host target (activated per increment)
+
+The table above records the original transition gates; the production net10 entry point is now named `Server.AspNetCoreHost`. Its remaining source-level HTTP bridge is measured debt, not a claim that OWIN runs inside Kestrel. [OWN-VPS-05](../decisions/OWN-VPS-05.md) and the [native-host design](native-aspnetcore10-host.md) define the next target.
+
+- Native controller DTOs and binding/serialization live in `Server.AspNetCoreHost`; Application/Domain do not depend on ASP.NET Core, HttpContext, UI cultures or JSON DOM to execute business use cases.
+- Desktop stays `net48`, can evolve with the Host, and has no Server project/SQL dependency. Client wire DTOs and Json.NET converters belong in `Desktop.Infrastructure.Http`; host-only DateOnly DTOs do not force a shared net48 retarget.
+- Existing string int64/decimal, date/UTC, null/error, canonicalization and replay contracts remain stable. All 57 current route pairs across v1/v2/v3 have exactly one active implementation during coexistence.
+- Final net10 production has zero legacy HttpHost source links, fake Web API/OWIN types, WireDom and reflection action dispatcher. Keep the standalone net48 host and immutable test oracles for differential verification.
+- Update transition-specific static checks atomically when their guarded shape changes. In particular, replace the old wildcard-link-required assertion in `scripts/verify-vps04b-runtime-boundary.py` with the native target boundary; retain published dependency prohibitions and real route/corpus coverage.
+
+No rule above is marked achieved by this documentation change. [VPS-10 increments](../roadmap/vps-10-native-aspnetcore-host.md) own activation and evidence; the [roadmap index](../roadmap/README.md) owns progress.

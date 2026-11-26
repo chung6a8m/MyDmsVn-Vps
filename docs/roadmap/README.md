@@ -1,6 +1,6 @@
 # MyDmsVn-Vps — execution status (single source of truth)
 
-**Owner decisions:** OWN-VPS-01, OWN-VPS-02 and OWN-VPS-03 APPROVED on 2026-11-16. See [decision register](../decisions/README.md). State below is for this repository **only**, never inherited from the source.
+**Owner decisions:** OWN-VPS-01..03 APPROVED on 2026-11-16; scoped OWN-VPS-04 on 2026-11-19; OWN-VPS-05 on 2026-11-26. See [decision register](../decisions/README.md). State below is for this repository **only**, never inherited from the source.
 
 | Increment | Current branch status | Evidence/next gate |
 | --- | --- | --- |
@@ -17,6 +17,30 @@
 | VPS-08 — Linux Deployment & Hardening | **SOURCE-ONLY MERGED — [PR #27](https://github.com/chung6a8m/MyDmsVn-Vps/pull/27); [Issue #11](https://github.com/chung6a8m/MyDmsVn-Vps/issues/11) requires operational reconciliation before closeout.** GitHub recorded #11 closed on 2026-11-18 despite its own source-only comment; the approved 2026-11-19 plan reopens it until VPS08-01..08 pass. **NOT PRODUCTION READY.** | Independent source review F01–F07 addressed; **10/10 final source-HEAD workflows SUCCESS**, native VPS-08 **33/33**, verified **59/59** SHA-pinned published files, disposable HTTPS→SQL13 **15/15 + WEB6 3/3**, journal **58/58**. [Runbook](../runbooks/vps-08-linux-deployment.md), [source-only closeout evidence](../evidence/vps-08-linux-deployment.md). `protected-staging=SKIPPED / NOT PASS`. OWN-VPS-04 permits single-Owner execution only for the Issue #12 candidate and does not replace real Environment/runner, SQL13 Oracle/TLS, Nginx/systemd/secret/audit, reboot, fault rollback or reconciliation evidence. |
 | VPS-09 — Integrated Acceptance & Closeout | **IN PROGRESS — OWN-VPS-04 single-Owner governance/tooling prepared for source review; real integrated release BLOCKED**. Issue [#12](https://github.com/chung6a8m/MyDmsVn-Vps/issues/12) stays OPEN; no production approval or deployment. | [VPS-09 ledger](../evidence/vps-09-integrated-closeout.md), [operator runbook](../runbooks/vps-09-integrated-acceptance.md), [live scenario manifest](../testing/vps-09-live-scenarios.json), [14-gate registry](../testing/vps-09-gates.json). Packet schema v2 binds one Owner, two distinct runner fingerprints, the pre-pinned Owner key and a 24-hour delayed second pass, explicitly `NO_INDEPENDENT_HUMAN_REVIEW`. Source tests do not satisfy protected staging VPS08-01..08, attended Windows x86→deployed Linux→isolated SQL13, 293 real-SQL variants, 12 Oracle scenarios, recovery, cleanup, 11 exact-SHA workflow records or signed Owner release. |
 
+## VPS-10 — Native ASP.NET Core Host & Typed HTTP Contracts
+
+**Design: APPROVED. Implementation: NOT STARTED.** Owner approved the native-host/typed-DTO/invariant-wire direction and coordinated Desktop updates on `net48` on 2026-11-26 (Asia/Bangkok). [OWN-VPS-05](../decisions/OWN-VPS-05.md) records the authorization; the [target design](../architecture/native-aspnetcore10-host.md) and [implementation plan](vps-10-native-aspnetcore-host.md) define scope, source paths, interfaces, test cases and commands. Planning source: `6a9649430cfd8ff4576d5e351f4ef6d0080011a0`.
+
+The first wave preserves all 57 existing WEB2–WEB6/Desktop verb/path pairs across `/api/v1`, `/api/v2` and `/api/v3`. Desktop can be upgraded with the Host while keeping `net48`; persisted operations, replay and existing contracts remain compatible. This documentation checkpoint implements no production code and supplies no runtime PASS evidence. VPS-10 development can proceed with its DEV/disposable gates; VPS-08/VPS-09 operational status above is unchanged.
+
+| Increment | Current status | Next deliverable/gate |
+| --- | --- | --- |
+| VPS-10.0 — Contract baseline | NOT STARTED | Manifest and characterization for all 57 routes, raw HTTP/canonical/client/SQL coverage; record fresh baseline evidence |
+| VPS-10.1 — Host composition | NOT STARTED | Typed configuration, DI and pre-listen checks; preserve middleware order and scoped identity |
+| VPS-10.2 — Native lookup pilot | NOT STARTED | Four lookup routes, native MVC binding/results, mixed inventory and OpenAPI subset; exact wire differential |
+| VPS-10.3 — Desktop typed wire | NOT STARTED | net48 DTO/converter adapter, remove response reparse, culture and pending/replay compatibility |
+| VPS-10.4A — Sales reads | NOT STARTED | Two native read routes; strict query/date/cursor behavior and response contract |
+| VPS-10.4B — Sales writes | NOT STARTED | Three native write routes; typed binding, canonical context, SQL/concurrency/recovery |
+| VPS-10.5A — Receipt/Inventory reads | NOT STARTED | Four native read routes; field-specific null/scale/UTC rules |
+| VPS-10.5B — Receipt writes | NOT STARTED | Three native write routes; strict version grammar, inventory/cost/replay gates |
+| VPS-10.6A — Catalog CRUD | NOT STARTED | Twenty native routes, per-entity permissions and concurrency; split PRs further if needed |
+| VPS-10.6B — Security/Foundation | NOT STARTED | Eight native routes, trusted identity, authorization and audit parity |
+| VPS-10.6C — Auth/Health | NOT STARTED | Six native routes, refresh/revoke/cookie/session/readiness parity |
+| VPS-10.6D — Operations | NOT STARTED | Seven native v1/v2/v3 operation routes; historical outcomes, pending state and resend policy |
+| VPS-10.7 — Bridge removal/handoff | NOT STARTED | All 57 actual native routes, complete OpenAPI, zero production bridge inputs and paired Desktop/Host evidence |
+
+**Next implementation increment: VPS-10.0.** Update these rows and the increment's evidence in its implementation PR; do not create a second live status ledger in the design or detailed plan.
+
 ## Status rules
 
 - `NOT STARTED` means no implementation or acceptance evidence.
@@ -25,4 +49,4 @@
 - `BLOCKED` requires precise failed gate, environment, owner and next action. `EXCEPTION` requires explicit dated Owner acceptance; never infer one.
 - Link PRs, HEAD SHA, CI runs, test counts, and any skipped/failed obligations under `docs/evidence/`. Distinguish Windows build, Linux static validation, real Linux runtime, SQL integration and attended GUI evidence.
 
-Details, sequencing and each workstream's exit criteria live in [VPS-00..09 implementation roadmap](vps-00-vps-09.md). This README alone owns **live** status; do not create a competing status file.
+Details, sequencing and each workstream's exit criteria live in the [VPS-00..09 roadmap](vps-00-vps-09.md) and [VPS-10 implementation plan](vps-10-native-aspnetcore-host.md). This README alone owns **live** status; do not create a competing status file.

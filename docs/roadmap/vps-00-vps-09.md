@@ -38,3 +38,9 @@ Desktop net48 currently references Server net48 directly. Retargeting Server to 
 ## Review and evidence
 
 One narrow PR per listed increment (larger splits allowed when dependency analysis requires them). Review independently; fix findings and rerun on the final HEAD. Record exact test selection, discovered/executed/skipped counts, environment and CI URLs in `docs/evidence/`. Mark acceptance only when its gate is proven. For dependency/quality gates see [architecture](../architecture/dependency-boundaries.md) and [acceptance matrix](../testing/acceptance-matrix.md).
+
+## Subsequent development — VPS-10
+
+[OWN-VPS-05](../decisions/OWN-VPS-05.md), approved on 2026-11-26, adds [VPS-10 — Native ASP.NET Core Host & Typed HTTP Contracts](vps-10-native-aspnetcore-host.md). The net10 Host will move from its compatibility bridge to native controllers and typed binding; Desktop remains `net48` and can be upgraded with the Host. The full existing 57-route WEB2–WEB6/Desktop surface and persisted operation contracts are preserved in this first wave.
+
+VPS-10 is a separate development track with DEV/disposable verification. It does not require production closeout of VPS-08/VPS-09 before source development, does not close those gates, and does not change their release obligations. The [live status index](README.md) tracks both workstreams; this VPS-00..09 plan retains its historical scope.

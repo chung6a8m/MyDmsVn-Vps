@@ -8,7 +8,9 @@ Independent Windows Desktop + Linux VPS modernization of MyDmsVn, starting from 
 - **OWN-VPS-02:** SQL Server remains the data store. Future FluentMigrator conversion must support both fresh databases and verified existing databases.
 - **OWN-VPS-03:** Only the Desktop `net48` client is retained; Desktop.AppCore is excluded.
 
-See [Owner decisions](docs/decisions/README.md), [target architecture](docs/architecture/overview.md), and the [single authoritative roadmap status](docs/roadmap/README.md).
+See the [Owner decision register](docs/decisions/README.md) and [target architecture](docs/architecture/overview.md).
+
+VPS-10 is the next development increment. Its first wave will move the existing .NET 10 Host to native ASP.NET Core controllers and typed HTTP DTOs while preserving existing WEB2–WEB6 and Desktop HTTP contracts. Desktop can evolve in coordination with the Host on `net48`. See [Owner decision OWN-VPS-05](docs/decisions/OWN-VPS-05.md), the [target design](docs/architecture/native-aspnetcore10-host.md), the [implementation roadmap](docs/roadmap/vps-10-native-aspnetcore-host.md), and the [live status](docs/roadmap/README.md).
 
 For a disposable, synthetic Docker + WSL + Windows Desktop developer environment, use the [local full-stack simulation runbook](docs/runbooks/local-fullstack-simulation.md). Its results are local diagnostics only and do not satisfy VPS-08/VPS-09 acceptance.
 
