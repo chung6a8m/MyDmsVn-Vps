@@ -71,8 +71,27 @@ internal static class NativeApiRegistration
                     schema.Required ??= new HashSet<string>(StringComparer.Ordinal);
                     schema.Required.Add("data");
                 }
-                if (context.JsonTypeInfo.Type == typeof(string) && context.JsonPropertyInfo?.Name == "postedAtUtc")
-                    schema.Format = "date-time";
+                // ASP.NET Core 10 uses this metadata on generic nullable object
+                // properties to create a oneOf(null, reference) after schema
+                // transformers run. A successful Sales envelope always has data.
+                if (context.JsonPropertyInfo?.Name == "data" &&
+                    (context.JsonTypeInfo.Type == typeof(SalesDetailResponse) ||
+                     context.JsonTypeInfo.Type == typeof(SalesListPageResponse)))
+                {
+                    schema.Type = JsonSchemaType.Object;
+                    schema.Metadata?.Remove("x-is-nullable-property");
+                }
+                DescribeSalesResponse(schema, context.JsonTypeInfo.Type);
+                // A URL segment is text. Avoid advertising a JSON integer that
+                // JavaScript clients could round before formatting the path.
+                if (context.ParameterDescription?.Name == "saleId" && context.JsonTypeInfo.Type == typeof(long))
+                {
+                    schema.Type = JsonSchemaType.String;
+                    schema.Format = null;
+                    schema.Pattern = "^[1-9][0-9]{0,18}$";
+                    schema.MaxLength = 19;
+                    schema.Description = "Canonical positive Int64 text, at most 9223372036854775807.";
+                }
                 return Task.CompletedTask;
             });
             options.AddDocumentTransformer((document, _, _) =>
@@ -88,6 +107,29 @@ internal static class NativeApiRegistration
             });
         });
         return services;
+    }
+
+    // Only the four Sales wire DTOs are affected. Omitted nullable response
+    // fields are optional, but if present they are strings, never JSON null.
+    private static void DescribeSalesResponse(OpenApiSchema schema, Type type)
+    {
+        string[]? optional = type == typeof(SalesDetailResponse)
+            ? new[] { "note", "postedAtUtc", "totalCost", "grossProfit", "customerDisplayName", "warehouseDisplayName", "employeeDisplayName" }
+            : type == typeof(SalesDetailLineResponse)
+                ? new[] { "postedUnitCost", "costAmount", "productDisplayName" }
+                : type == typeof(SalesListPageResponse)
+                    ? new[] { "nextCursor", "previousCursor" }
+                    : type == typeof(SalesListRowResponse)
+                        ? new[] { "customerDisplayName", "warehouseDisplayName", "employeeDisplayName" }
+                        : null;
+        if (optional == null || schema.Properties == null) return;
+        schema.Required = new HashSet<string>(schema.Properties.Keys.Except(optional, StringComparer.Ordinal), StringComparer.Ordinal);
+        foreach (var name in optional)
+            if (schema.Properties.TryGetValue(name, out var property) && property is OpenApiSchema value)
+            {
+                value.Type = JsonSchemaType.String;
+                if (name == "postedAtUtc") value.Format = "date-time";
+            }
     }
 
     internal static void MapNativeOpenApi(WebApplication app)

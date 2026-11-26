@@ -95,12 +95,30 @@ public sealed class Vps10OpenApiAndFeatureGateTests
         var id = Assert.Single(detail.GetProperty("parameters").EnumerateArray());
         Assert.Equal("saleId", id.GetProperty("name").GetString());
         Assert.Equal("path", id.GetProperty("in").GetString());
+        var idSchema = Resolve(document, id.GetProperty("schema"));
+        Assert.Equal("string", idSchema.GetProperty("type").GetString());
+        Assert.Equal("^[1-9][0-9]{0,18}$", idSchema.GetProperty("pattern").GetString());
         var detailEnvelope = Resolve(document, ResponseSchema(detail.GetProperty("responses"), "200"));
-        var properties = Resolve(document, detailEnvelope.GetProperty("properties").GetProperty("data")).GetProperty("properties");
+        var detailData = RequiredObjectData(document, detailEnvelope);
+        var properties = detailData.GetProperty("properties");
+        var requiredDetail = detailData.GetProperty("required").EnumerateArray().Select(p => p.GetString()).ToArray();
+        Assert.Contains("saleId", requiredDetail);
+        Assert.Contains("lines", requiredDetail);
+        Assert.DoesNotContain("note", requiredDetail);
+        Assert.DoesNotContain("postedAtUtc", requiredDetail);
+        Assert.DoesNotContain("totalCost", requiredDetail);
+        Assert.Equal("string", Resolve(document, properties.GetProperty("note")).GetProperty("type").GetString());
+        Assert.Equal("date-time", Resolve(document, properties.GetProperty("postedAtUtc")).GetProperty("format").GetString());
         Assert.Equal("string", Resolve(document, properties.GetProperty("saleId")).GetProperty("type").GetString());
         Assert.Equal("string", Resolve(document, properties.GetProperty("totalAmount")).GetProperty("type").GetString());
         Assert.Equal("date", Resolve(document, properties.GetProperty("saleDate")).GetProperty("format").GetString());
         Assert.True(detail.GetProperty("responses").TryGetProperty("404", out _));
+        var listEnvelope = Resolve(document, ResponseSchema(list.GetProperty("responses"), "200"));
+        var listData = RequiredObjectData(document, listEnvelope);
+        Assert.Equal(new[] { "items" }, listData.GetProperty("required").EnumerateArray().Select(p => p.GetString()).ToArray());
+        var listProperties = listData.GetProperty("properties");
+        Assert.Equal("string", Resolve(document, listProperties.GetProperty("nextCursor")).GetProperty("type").GetString());
+        Assert.Equal("array", Resolve(document, listProperties.GetProperty("items")).GetProperty("type").GetString());
     }
 
     // Exercise the real routing/MVC middleware sequence over Kestrel; only the
@@ -149,6 +167,16 @@ public sealed class Vps10OpenApiAndFeatureGateTests
 
     private static JsonElement ResponseSchema(JsonElement responses, string code) =>
         responses.GetProperty(code).GetProperty("content").GetProperty("application/json").GetProperty("schema");
+
+    private static JsonElement RequiredObjectData(JsonElement document, JsonElement envelope)
+    {
+        Assert.Contains("data", envelope.GetProperty("required").EnumerateArray().Select(p => p.GetString()));
+        var data = envelope.GetProperty("properties").GetProperty("data");
+        Assert.False(data.TryGetProperty("oneOf", out _), data.GetRawText());
+        var resolved = Resolve(document, data);
+        Assert.Equal("object", resolved.GetProperty("type").GetString());
+        return resolved;
+    }
 
     private static JsonElement Resolve(JsonElement document, JsonElement schema)
     {

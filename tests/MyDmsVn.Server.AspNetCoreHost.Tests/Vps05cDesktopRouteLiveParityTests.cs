@@ -766,6 +766,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         public Exception? LastException => _errors.LastOrDefault();
         public int HandlerCalls => _state.Calls.Count;
         public object? LastRequest => _state.Calls.LastOrDefault();
+        public string? LastRequestCulture => _state.LastRequestCulture;
         public IReadOnlyList<string> PermissionChecks => _state.PermissionChecks;
 
         public static async Task<DesktopLiveFixture> StartAsync(
@@ -775,7 +776,8 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             bool web45Enabled = false, bool operationFailure = false,
             bool web6Failure = false, bool web6ContextFailure = false,
             bool web6ReceiptFailure = false, string? operationVariant = null,
-            string web6CandidateId = "candidate-1", bool desktopApiEnabled = true)
+            string web6CandidateId = "candidate-1", bool desktopApiEnabled = true,
+            string? requestCultureName = null)
         {
             var clock = new FrozenClock();
             var options = new WebHostOptions("https://web2.mydmsvn.test", "https://web2.mydmsvn.test", "auth-tests",
@@ -836,6 +838,26 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 context.Request.Host = new Microsoft.AspNetCore.Http.HostString("web2.mydmsvn.test");
                 await next().ConfigureAwait(false);
             });
+            if (requestCultureName != null)
+            {
+                var culture = CultureInfo.GetCultureInfo(requestCultureName);
+                app.Use(async (context, next) =>
+                {
+                    var original = CultureInfo.CurrentCulture;
+                    var originalUi = CultureInfo.CurrentUICulture;
+                    try
+                    {
+                        CultureInfo.CurrentCulture = culture;
+                        CultureInfo.CurrentUICulture = culture;
+                        await next().ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        CultureInfo.CurrentCulture = original;
+                        CultureInfo.CurrentUICulture = originalUi;
+                    }
+                });
+            }
             app.UseRouting();
             app.UseMiddleware<CoreApiAdmissionMiddleware>();
             app.Use((context, next) => NativeApiRegistration.AdmitDesktopFeatureAsync(context, next));
@@ -1032,6 +1054,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
             public ValueTask<ErrorOr<TResult>> Handle(TRequest request, CancellationToken cancellationToken)
             {
                 _state.Calls.Add(request!);
+                _state.LastRequestCulture = CultureInfo.CurrentCulture.Name;
                 if (_state.ThrowHandlers)
                     throw new InvalidOperationException("secret-database-connection");
                 return ValueTask.FromResult<ErrorOr<TResult>>(_result(request));
@@ -1053,6 +1076,7 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         public static readonly Guid Operation = Guid.Parse("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
         public const string Fingerprint = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
         public List<object> Calls { get; } = new();
+        public string? LastRequestCulture { get; set; }
         public List<string> PermissionChecks { get; } = new();
         public bool DenyPermissions { get; init; }
         public bool ThrowHandlers { get; init; }

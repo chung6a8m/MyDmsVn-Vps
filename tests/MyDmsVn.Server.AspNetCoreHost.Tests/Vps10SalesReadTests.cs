@@ -51,10 +51,11 @@ public sealed class Vps10SalesReadTests
         {
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(cultureName);
             CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(cultureName);
-            await using var fixture = await LiveFixture.StartAsync();
+            await using var fixture = await LiveFixture.StartAsync(requestCultureName: cultureName);
             using var list = await fixture.SendAsync("GET", Sales +
                 "?fromDate=2024-02-29&toDate=2024-03-01&customerId=101&warehouseId=102&employeeId=103&status=Posted&productId=104&search=%20a%2Bb%20&pageSize=200", null);
             Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+            Assert.Equal(cultureName, fixture.LastRequestCulture);
             var q = Assert.IsType<ListSalesReceiptsQuery>(fixture.LastRequest).Request;
             Assert.Equal(new DateTime(2024, 2, 29), q.FromDate);
             Assert.Equal(new DateTime(2024, 3, 1), q.ToDate);
@@ -69,6 +70,7 @@ public sealed class Vps10SalesReadTests
 
             using var detail = await fixture.SendAsync("GET", Sales + "/9223372036854775807", null);
             Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+            Assert.Equal(cultureName, fixture.LastRequestCulture);
             using var json = JsonDocument.Parse(await detail.Content.ReadAsStringAsync());
             var data = json.RootElement.GetProperty("data");
             Assert.Equal("2024-02-29", data.GetProperty("saleDate").GetString());
@@ -171,6 +173,44 @@ public sealed class Vps10SalesReadTests
         Assert.Equal(authenticated ? HttpStatusCode.Forbidden : HttpStatusCode.Unauthorized, response.StatusCode);
         if (authenticated) Assert.NotEmpty(fixture.PermissionChecks);
         Assert.Equal(0, fixture.HandlerCalls);
+    }
+
+    [Theory]
+    [InlineData("", "GET, POST")]
+    [InlineData("/1", "GET")]
+    public async Task Mixed_native_and_bridge_method_miss_preserves_allowed_verbs(string path, string expectedAllow)
+    {
+        await using var fixture = await LiveFixture.StartAsync();
+        using var response = await fixture.SendAsync("PATCH", Sales + path, null);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(expectedAllow, string.Join(", ", response.Content.Headers.Allow));
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Request.Invalid", json.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0, fixture.HandlerCalls);
+    }
+
+    [Fact]
+    public async Task Minimum_page_and_search_limit_after_trim_are_accepted()
+    {
+        await using var fixture = await LiveFixture.StartAsync();
+        var text = " " + new string('a', 256) + " ";
+        using var response = await fixture.SendAsync("GET", Sales +
+            "?pageSize=1&fromDate=0001-01-01&search=" + Uri.EscapeDataString(text), null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var q = Assert.IsType<ListSalesReceiptsQuery>(fixture.LastRequest).Request;
+        Assert.Equal(1, q.PageSize);
+        Assert.Equal(DateTime.MinValue, q.FromDate);
+        Assert.Equal(text, q.Search);
+    }
+
+    [Fact]
+    public void Page_mapper_retains_both_opaque_cursors_without_reencoding()
+    {
+        var page = new SalesReceiptListPage(Array.Empty<SalesReceiptListRow>(), "abc_-", "def_-");
+        var mapped = SalesHttpMapper.Page(page);
+        Assert.Empty(mapped.Items);
+        Assert.Equal("abc_-", mapped.NextCursor);
+        Assert.Equal("def_-", mapped.PreviousCursor);
     }
 
     [Fact]
