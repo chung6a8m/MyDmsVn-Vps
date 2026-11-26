@@ -141,6 +141,17 @@ internal static class NativeApiRegistration
             : null;
         if (required == null || schema.Properties == null) return;
         schema.Required = new HashSet<string>(required, StringComparer.Ordinal);
+        if (type == typeof(SecurityMutationBody))
+        {
+            // Legacy wire accepts omitted or explicit null optional IDs; only
+            // the Application command uses zero as the default sentinel.
+            foreach (var name in new[] { "targetId", "relatedId" })
+                if (schema.Properties.TryGetValue(name, out var id) && id is OpenApiSchema integer)
+                {
+                    integer.Type = JsonSchemaType.Integer | JsonSchemaType.Null;
+                    integer.Format = "int32";
+                }
+        }
         foreach (var name in new[] { "expectedRevision", "expectedRelatedRevision", "expectedTargetRevision" })
             if (schema.Properties.TryGetValue(name, out var value) && value is OpenApiSchema revision)
             {

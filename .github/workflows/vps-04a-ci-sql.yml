@@ -424,8 +424,8 @@ jobs:
           counters=ET.parse(path).getroot().find('./t:ResultSummary/t:Counters',ns)
           assert counters is not None
           actual={k:int(counters.attrib[k]) for k in ('total','executed','passed','failed','notExecuted')}
-          assert actual=={'total':1,'executed':1,'passed':1,'failed':0,'notExecuted':0},actual
-          print('VPS106B_SQL_SECURITY_PASS 1/1: independent permissions, trusted actor, revision conflict and SQL audit')
+          assert actual=={'total':2,'executed':2,'passed':2,'failed':0,'notExecuted':0},actual
+          print('VPS106B_SQL_SECURITY_PASS 2/2: role and user grants, trusted actor, revision conflict and exact SQL audit')
           PY
 
           # VPS-04B executes separately from the historical WEB6-disabled

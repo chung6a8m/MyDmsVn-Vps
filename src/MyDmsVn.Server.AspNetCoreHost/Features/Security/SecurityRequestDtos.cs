@@ -14,8 +14,8 @@ namespace MyDmsVn.Server.HttpHost.Features.Security;
 public sealed record SecurityMutationBody(
     [property: JsonRequired] int Target,
     [property: JsonRequired] int Operation,
-    int TargetId,
-    int RelatedId,
+    int? TargetId,
+    int? RelatedId,
     string? Name,
     string? DisplayName,
     string? Email,
@@ -29,7 +29,7 @@ public sealed record SecurityMutationBody(
 {
     internal MutateSecurityAdministrationCommand ToCommand() => new(
         (SecurityAdministrationTarget)Target, (SecurityAdministrationOperation)Operation,
-        TargetId, RelatedId, Name, DisplayName, Email, IsActive, Password, PermissionKey,
+        TargetId ?? 0, RelatedId ?? 0, Name, DisplayName, Email, IsActive, Password, PermissionKey,
         Decision, ExpectedRevision, ExpectedRelatedRevision, CorrelationId);
 
     // Never include the password or other user-supplied values in diagnostics.
@@ -73,8 +73,8 @@ internal static class SecurityRequestReader
             var target = EnumInteger(body, "target", 1);
             var operation = EnumInteger(body, "operation", 5);
             var correlationId = OptionalGuid(body, "correlationId");
-            return new SecurityMutationBody(target, operation, OptionalInt(body, "targetId") ?? 0,
-                OptionalInt(body, "relatedId") ?? 0, OptionalText(body, "name", 100),
+            return new SecurityMutationBody(target, operation, OptionalInt(body, "targetId"),
+                OptionalInt(body, "relatedId"), OptionalText(body, "name", 100),
                 OptionalText(body, "displayName", 100), OptionalText(body, "email", 254),
                 OptionalBool(body, "isActive"), OptionalText(body, "password", 72),
                 OptionalText(body, "permissionKey", 100), OptionalBool(body, "decision"),

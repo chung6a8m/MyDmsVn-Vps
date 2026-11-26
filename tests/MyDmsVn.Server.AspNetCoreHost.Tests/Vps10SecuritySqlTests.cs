@@ -138,7 +138,7 @@ public sealed class Vps10SecuritySqlTests
         Assert.True(roleId > 0);
         Assert.Equal(1L, await ScalarAsync("SELECT COUNT(*) FROM dbo.Roles WHERE RoleId=@role AND CreatedByUserId=@actor;",
             manager.UserId, roleId, createId));
-        Assert.Equal(1L, await ScalarAsync("SELECT COUNT(*) FROM dbo.SecurityAuditEvents WHERE TargetId=@role AND ActorUserId=@actor AND Operation=N'Create' AND CorrelationId=@correlation;",
+        Assert.Equal(1L, await ScalarAsync("SELECT COUNT(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'Role' AND TargetId=@role AND ActorUserId=@actor AND Operation=N'Create' AND CorrelationId=@correlation;",
             manager.UserId, roleId, createId));
 
         var assignment = Guid.NewGuid();
@@ -148,7 +148,7 @@ public sealed class Vps10SecuritySqlTests
         Assert.Equal(200, assigned.Status);
         Assert.Equal(1L, await ScalarAsync("SELECT COUNT(*) FROM dbo.RolePermissions WHERE RoleId=@role AND PermissionKey=N'Catalog.Products.Read' AND CreatedByUserId=@actor;",
             manager.UserId, roleId, assignment));
-        Assert.Equal(1L, await ScalarAsync("SELECT COUNT(*) FROM dbo.SecurityAuditEvents WHERE TargetId=@role AND ActorUserId=@actor AND Operation=N'SetPermission' AND CorrelationId=@correlation;",
+        Assert.Equal(1L, await ScalarAsync("SELECT COUNT(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'Role' AND TargetId=@role AND ActorUserId=@actor AND Operation=N'SetPermission' AND CorrelationId=@correlation;",
             manager.UserId, roleId, assignment));
 
         var json = JsonSerializer.Serialize(new { schemaVersion = 1, targetType = "Role", targetId = roleId,
@@ -181,12 +181,95 @@ public sealed class Vps10SecuritySqlTests
             manager.UserId, roleId, Guid.Empty));
         Assert.Equal(1L, await ScalarAsync("SELECT COUNT(*) FROM dbo.RolePermissions WHERE RoleId=@role AND PermissionKey=N'Catalog.Customers.Read' AND CreatedByUserId=@actor;",
             manager.UserId, roleId, Guid.Empty));
-        Assert.Equal(1L, await ScalarAsync("SELECT COUNT(*) FROM dbo.SecurityAuditEvents WHERE TargetId=@role AND ActorUserId=@actor AND Operation=N'PermissionImport';",
+        Assert.Equal(1L, await ScalarAsync("SELECT COUNT(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'Role' AND TargetId=@role AND ActorUserId=@actor AND Operation=N'PermissionImport';",
             manager.UserId, roleId, Guid.Empty));
-        Assert.Equal(3L, await ScalarAsync("SELECT COUNT(*) FROM dbo.SecurityAuditEvents WHERE TargetId=@role AND ActorUserId=@actor;",
+        Assert.Equal(3L, await ScalarAsync("SELECT COUNT(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'Role' AND TargetId=@role AND ActorUserId=@actor;",
+            manager.UserId, roleId, Guid.Empty));
+        Assert.Equal(3L, await ScalarAsync("SELECT COUNT_BIG(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'Role' AND TargetId=@role;",
             manager.UserId, roleId, Guid.Empty));
         using var stillDenied = await gateway.RequestAsync(HttpMethod.Get, path + "users", manager.Token);
         Assert.Equal(403, stillDenied.Status);
+    }
+
+    [Fact]
+    public async Task UserManagerDirectDenyAndImportAllowPreserveIndependentGrantsAndAudit()
+    {
+        Assert.Equal("approved-container-only", Required("VPS04A_CI_EPHEMERAL_SQL"));
+        Assert.Equal("approved-nonproduction-only", Required("VPS04A_LIVE_ALLOW_MUTATION"));
+        Assert.Equal("approved-ci-only", Required("VPS04A_CI_FAULT_APPROVED"));
+        Assert.Equal(Origin, Required("MYDMSVN_WEB_ORIGIN"));
+        Assert.Equal("web5", Required("MYDMSVN_WEB_OPERATION_MODE"));
+        Assert.Equal("enabled", Required("MYDMSVN_WEB_DESKTOP_API"));
+
+        using var gateway = new Gateway();
+        var manager = await gateway.LoginAsync("vps106b_ci_user");
+        const string path = "api/v1/security/";
+        using (var roles = await gateway.RequestAsync(HttpMethod.Get, path + "roles", manager.Token))
+            Assert.Equal(403, roles.Status);
+        using (var catalog = await gateway.RequestAsync(HttpMethod.Get, path + "permissions/catalog", manager.Token))
+            Assert.Equal(403, catalog.Status);
+        using var users = await gateway.RequestAsync(HttpMethod.Get, path + "users", manager.Token);
+        Assert.Equal(200, users.Status);
+        var subject = Assert.Single(users.Data.EnumerateArray(),
+            row => row.GetProperty("username").GetString() == "vps106b_ci_subject");
+        var targetId = subject.GetProperty("userId").GetInt32();
+        var revision = subject.GetProperty("assignmentRevision").GetInt64();
+        Assert.NotEqual(manager.UserId, targetId);
+        Assert.Equal(0L, await ScalarAsync("SELECT COUNT_BIG(*) FROM dbo.UserPermissions WHERE UserId=@role;",
+            manager.UserId, targetId, Guid.Empty));
+        Assert.Equal(0L, await ScalarAsync("SELECT COUNT_BIG(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'User' AND TargetId=@role;",
+            manager.UserId, targetId, Guid.Empty));
+
+        var correlation = Guid.NewGuid();
+        using (var result = await gateway.RequestAsync(HttpMethod.Post, path + "mutations", manager.Token,
+            new { target = 0, operation = 5, targetId, expectedRevision = revision,
+                permissionKey = "Catalog.Products.Read", decision = false, correlationId = correlation }))
+        {
+            Assert.Equal(200, result.Status);
+            Assert.Equal(revision + 1, result.Data.GetProperty("assignmentRevision").GetInt64());
+            Assert.True(result.Data.GetProperty("changed").GetBoolean());
+        }
+        Assert.Equal(1L, await ScalarAsync("SELECT COUNT_BIG(*) FROM dbo.UserPermissions WHERE UserId=@role AND PermissionKey=N'Catalog.Products.Read' AND Granted=0 AND CreatedByUserId=@actor;",
+            manager.UserId, targetId, correlation));
+        Assert.Equal(1L, await ScalarAsync("SELECT COUNT_BIG(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'User' AND TargetId=@role AND ActorUserId=@actor AND Operation=N'SetPermission' AND CorrelationId=@correlation AND AfterState=N'Permission=Catalog.Products.Read;Decision=Deny';",
+            manager.UserId, targetId, correlation));
+
+        var json = JsonSerializer.Serialize(new { schemaVersion = 1, targetType = "User", targetId,
+            entries = new[] { new { permissionKey = "Catalog.Customers.Read", decision = "Allow" } } });
+        using var preview = await gateway.RequestAsync(HttpMethod.Post, path + "import/preview", manager.Token,
+            new { targetType = 0, targetId, json });
+        Assert.Equal(200, preview.Status);
+        var expectedTargetRevision = preview.Data.GetProperty("targetRevision").GetInt64();
+        var expectedCatalogDigest = preview.Data.GetProperty("catalogDigest").GetString();
+        Assert.Equal(revision + 1, expectedTargetRevision);
+        Assert.False(string.IsNullOrWhiteSpace(expectedCatalogDigest));
+        Assert.Single(preview.Data.GetProperty("additions").EnumerateArray());
+        Assert.Equal(1L, await ScalarAsync("SELECT COUNT_BIG(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'User' AND TargetId=@role;",
+            manager.UserId, targetId, Guid.Empty));
+
+        var body = new { targetType = 0, targetId, json, expectedTargetRevision, expectedCatalogDigest };
+        using (var applied = await gateway.RequestAsync(HttpMethod.Post, path + "import/apply", manager.Token, body))
+        {
+            Assert.Equal(200, applied.Status);
+            Assert.Equal(revision + 2, applied.Data.GetProperty("targetRevision").GetInt64());
+            Assert.Equal(1, applied.Data.GetProperty("addedCount").GetInt32());
+        }
+        using (var stale = await gateway.RequestAsync(HttpMethod.Post, path + "import/apply", manager.Token, body))
+            Assert.Equal(409, stale.Status);
+        Assert.Equal(1L, await ScalarAsync("SELECT COUNT_BIG(*) FROM dbo.UserPermissions WHERE UserId=@role AND PermissionKey=N'Catalog.Customers.Read' AND Granted=1 AND CreatedByUserId=@actor;",
+            manager.UserId, targetId, Guid.Empty));
+        Assert.Equal(1L, await ScalarAsync("SELECT COUNT_BIG(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'User' AND TargetId=@role AND ActorUserId=@actor AND Operation=N'PermissionImport' AND AfterState=N'Permission=Catalog.Customers.Read;Decision=Allow';",
+            manager.UserId, targetId, Guid.Empty));
+        Assert.Equal(2L, await ScalarAsync("SELECT COUNT_BIG(*) FROM dbo.SecurityAuditEvents WHERE TargetType=N'User' AND TargetId=@role;",
+            manager.UserId, targetId, Guid.Empty));
+        var loggedIn = await gateway.LoginAsync("vps106b_ci_subject");
+        Assert.Equal(targetId, loggedIn.UserId);
+        using var allow = await gateway.RequestAsync(HttpMethod.Get, path + "permissions/check?key=Catalog.Customers.Read", loggedIn.Token);
+        using var deny = await gateway.RequestAsync(HttpMethod.Get, path + "permissions/check?key=Catalog.Products.Read", loggedIn.Token);
+        Assert.Equal(200, allow.Status);
+        Assert.Equal(200, deny.Status);
+        Assert.True(allow.Data.GetProperty("isAllowed").GetBoolean());
+        Assert.False(deny.Data.GetProperty("isAllowed").GetBoolean());
     }
 }
 #endif

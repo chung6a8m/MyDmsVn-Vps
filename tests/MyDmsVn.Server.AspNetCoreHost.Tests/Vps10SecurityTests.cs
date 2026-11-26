@@ -93,6 +93,42 @@ public sealed class Vps10SecurityTests
     }
 
     [Theory]
+    [InlineData("GET", "/api/v1/security/permissions/check", null, "key")]
+    [InlineData("GET", "/api/v1/foundation/status?clientName=%00", null, "clientName")]
+    [InlineData("GET", "/api/v1/security/permissions/check", "{}", null)]
+    [InlineData("POST", "/api/v1/security/mutations?extra=x", "{}", null)]
+    [InlineData("POST", "/api/v1/security/mutations", "{\"target\":1}", "operation")]
+    [InlineData("POST", "/api/v1/security/mutations", "{\"target\":2,\"operation\":0,\"correlationId\":\"bad\"}", "target")]
+    [InlineData("POST", "/api/v1/security/mutations", "{\"target\":1,\"operation\":0,\"correlationId\":\"bad\",\"targetId\":-1}", "correlationId")]
+    [InlineData("POST", "/api/v1/security/import/apply", "{\"targetType\":1,\"targetId\":3,\"json\":\"{}\",\"expectedTargetRevision\":null,\"expectedCatalogDigest\":\"digest\"}", "expectedTargetRevision")]
+    public async Task Error_field_and_precedence_match_legacy(string verb, string path, string? body, string? field)
+    {
+        await using var fixture = await LiveFixture.StartAsync(denyPermissions: true);
+        using var response = await fixture.SendAsync(verb, path, body);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var error = json.RootElement.GetProperty("error");
+        Assert.Equal("ValidationError", error.GetProperty("code").GetString());
+        var detail = error.GetProperty("details")[0];
+        Assert.Equal(field, detail.TryGetProperty("field", out var value) ? value.GetString() : null);
+        Assert.Equal(0, fixture.HandlerCalls);
+        Assert.Empty(fixture.PermissionChecks);
+    }
+
+    [Fact]
+    public async Task Explicit_null_optional_ids_map_to_the_legacy_zero_defaults()
+    {
+        await using var fixture = await LiveFixture.StartAsync();
+        using var response = await fixture.SendAsync("POST", "/api/v1/security/mutations",
+            "{\"target\":1,\"operation\":0,\"name\":\"Role\",\"targetId\":null,\"relatedId\":null,\"expectedRevision\":null}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var command = Assert.IsType<MutateSecurityAdministrationCommand>(fixture.LastRequest);
+        Assert.Equal(0, command.TargetId);
+        Assert.Equal(0, command.RelatedId);
+        Assert.Null(command.ExpectedRevision);
+    }
+
+    [Theory]
     [InlineData("vi-VN")]
     [InlineData("en-US")]
     [InlineData("de-DE")]
@@ -105,6 +141,8 @@ public sealed class Vps10SecurityTests
         using var apply = await fixture.SendAsync("POST", "/api/v1/security/import/apply", "{\"targetType\":1,\"targetId\":3,\"json\":\"{\\\"schemaVersion\\\":1,\\\"targetType\\\":\\\"Role\\\",\\\"targetId\\\":3,\\\"entries\\\":[]}\",\"expectedTargetRevision\":9007199254740993,\"expectedCatalogDigest\":\"digest\"}");
         Assert.Equal(HttpStatusCode.OK, apply.StatusCode);
         Assert.Equal(9007199254740993L, Assert.IsType<ApplyPermissionAssignmentImportCommand>(fixture.LastRequest).ExpectedTargetRevision);
+        using var applied = JsonDocument.Parse(await apply.Content.ReadAsStringAsync());
+        Assert.Equal(9007199254740993L, applied.RootElement.GetProperty("data").GetProperty("targetRevision").GetInt64());
         Assert.Equal(culture, fixture.LastRequestCulture);
     }
 }

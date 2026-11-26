@@ -142,7 +142,8 @@ internal static class Program
                     "GRANT SELECT ON dbo.Customers TO [" + OracleLogin + "]; " +
                     "GRANT SELECT ON dbo.Roles TO [" + OracleLogin + "]; " +
                     "GRANT SELECT ON dbo.RolePermissions TO [" + OracleLogin + "]; " +
-                    "GRANT SELECT ON dbo.SecurityAuditEvents TO [" + OracleLogin + "];");
+                    "GRANT SELECT ON dbo.SecurityAuditEvents TO [" + OracleLogin + "]; " +
+                    "GRANT SELECT ON dbo.UserPermissions TO [" + OracleLogin + "];");
             }
 
             var runtime = new SqlConnectionStringBuilder(admin.ConnectionString)
@@ -182,6 +183,7 @@ SELECT CASE WHEN
   ISNULL(HAS_PERMS_BY_NAME('dbo.Roles','OBJECT','SELECT'),0)<>1 OR
   ISNULL(HAS_PERMS_BY_NAME('dbo.RolePermissions','OBJECT','SELECT'),0)<>1 OR
   ISNULL(HAS_PERMS_BY_NAME('dbo.SecurityAuditEvents','OBJECT','SELECT'),0)<>1 OR
+  ISNULL(HAS_PERMS_BY_NAME('dbo.UserPermissions','OBJECT','SELECT'),0)<>1 OR
   ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceipts','OBJECT','INSERT'),0)<>0 OR
   ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceipts','OBJECT','UPDATE'),0)<>0 OR
   ISNULL(HAS_PERMS_BY_NAME('dbo.SalesReceipts','OBJECT','DELETE'),0)<>0 OR
@@ -209,14 +211,14 @@ SELECT CASE WHEN
         AND o.name IN(N'WebAuthSessions',N'WebOperationJournal',N'SalesReceipts',
           N'SalesReceiptLines',N'GoodsReceipts',N'GoodsReceiptLines',
           N'StockLedger',N'StockValuationEntries',N'StockBalances',N'Products',N'Warehouses',N'Employees',N'Customers',
-          N'Roles',N'RolePermissions',N'SecurityAuditEvents'))
+          N'Roles',N'RolePermissions',N'SecurityAuditEvents',N'UserPermissions'))
   )
 THEN 1 ELSE 0 END;", connection);
                 if (Convert.ToInt32(await probe.ExecuteScalarAsync(), CultureInfo.InvariantCulture) != 0)
                 {
                     try { _stage = "oracle-denied:" + await DiagnoseOracleAsync(connection); }
                     catch { _stage = "oracle-denied:diagnostic-unavailable"; }
-                    throw new InvalidOperationException("Oracle exceeds the sixteen explicit CI-only read tables.");
+                    throw new InvalidOperationException("Oracle exceeds the seventeen explicit CI-only read tables.");
                 }
             }
 
@@ -234,7 +236,7 @@ THEN 1 ELSE 0 END;", connection);
                 "VPS04A_CI_FRACTIONAL_WAREHOUSE_B=" + ids.FractionalWarehouseB.ToString(CultureInfo.InvariantCulture),
                 "VPS106A_CI_INACTIVE_USER_ID=" + ids.InactiveUser.ToString(CultureInfo.InvariantCulture),
             });
-            Console.WriteLine("PASS: isolated SQL schema13 (13/13 DbUp), runtime principal, sixteen-table CI-only read-only oracle and active fixtures.");
+            Console.WriteLine("PASS: isolated SQL schema13 (13/13 DbUp), runtime principal, seventeen-table CI-only read-only oracle and active fixtures.");
             return 0;
         }
         catch (Exception problem)
@@ -269,7 +271,7 @@ WHERE o.is_ms_shipped=0 AND o.parent_object_id=0 AND p.permission_name IN
     AND o.name IN(N'WebAuthSessions',N'WebOperationJournal',N'SalesReceipts',
       N'SalesReceiptLines',N'GoodsReceipts',N'GoodsReceiptLines',
       N'StockLedger',N'StockValuationEntries',N'StockBalances',N'Products',N'Warehouses',N'Employees',N'Customers',
-          N'Roles',N'RolePermissions',N'SecurityAuditEvents'))
+          N'Roles',N'RolePermissions',N'SecurityAuditEvents',N'UserPermissions'))
 ORDER BY o.name,p.permission_name;", connection);
         var result=Convert.ToString(await command.ExecuteScalarAsync(),CultureInfo.InvariantCulture);
         if (!string.IsNullOrEmpty(result))
@@ -465,7 +467,8 @@ WHERE o.is_ms_shipped=0 AND o.parent_object_id=0 AND p.permission_name IN
         foreach (var (username, permission) in new[]
         {
             ("vps106b_ci_read", "Security.Permissions.Read"),
-            ("vps106b_ci_role", "Security.Roles.Manage")
+            ("vps106b_ci_role", "Security.Roles.Manage"),
+            ("vps106b_ci_user", "Security.Users.Manage")
         })
         {
             var actor = await InsertUserAsync(connection, transaction, username, deniedPassword, hasher);
@@ -476,6 +479,7 @@ WHERE o.is_ms_shipped=0 AND o.parent_object_id=0 AND p.permission_name IN
             grant.Parameters.Add("@key", SqlDbType.NVarChar, 200).Value = permission;
             await grant.ExecuteNonQueryAsync();
         }
+        await InsertUserAsync(connection, transaction, "vps106b_ci_subject", deniedPassword, hasher);
         // Synthetic CI-only identities with independent Catalog grants.
         var catalogReader = await InsertUserAsync(connection, transaction, "vps106a_ci_read", deniedPassword, hasher);
         var catalogWriter = await InsertUserAsync(connection, transaction, "vps106a_ci_write", deniedPassword, hasher);
