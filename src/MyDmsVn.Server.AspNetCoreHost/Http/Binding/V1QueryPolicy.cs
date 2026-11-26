@@ -45,10 +45,15 @@ internal static class V1QueryPolicy
     internal static string? OptionalText(Dictionary<string, string> query, string field, int maximum)
     {
         if (!query.TryGetValue(field, out var value)) return null;
+        ValidateText(value, field, maximum);
+        return value;
+    }
+
+    internal static void ValidateText(string value, string field, int maximum)
+    {
         if (value.Length > maximum || value.IndexOf('\0') >= 0) throw new V1BindingException(field);
         try { Utf8.GetByteCount(value); }
         catch (EncoderFallbackException) { throw new V1BindingException(field); }
-        return value;
     }
 
     internal static int PositiveInt(string text, string field, int maximum)

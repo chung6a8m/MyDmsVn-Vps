@@ -344,7 +344,12 @@ public sealed class CoreApiBoundaryTests
         var valid = endpoints.Where(e => e.Order < int.MaxValue - 1).ToArray();
         var misses = endpoints.Where(e => e.Order == int.MaxValue - 1).ToArray();
         Assert.Equal(57, valid.Length);
-        Assert.Equal(valid.Select(e => e.RoutePattern.RawText).Distinct().Count(), misses.Length);
+        // MVC and bridge use different leading-slash conventions. Compare the
+        // logical templates, not two spellings of the same Sales GET/POST path.
+        static string Path(RouteEndpoint e) => "/" + e.RoutePattern.RawText!.TrimStart('/');
+        var validPaths = valid.Select(Path).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        var missPaths = misses.Select(Path).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        Assert.Equal(validPaths, missPaths);
         Assert.Contains(valid, e => e.RoutePattern.RawText == "/api/v3/operations/{operationId}/resend-eligibility" &&
             e.Order == 2);
         Assert.Contains(misses, e => e.RoutePattern.RawText == "/api/v1/catalog/products");

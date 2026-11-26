@@ -44,9 +44,11 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             "/api/v1/catalog/customers/lookup",
             "/api/v1/catalog/employees/lookup",
             "/api/v1/catalog/products/lookup",
-            "/api/v1/catalog/warehouses/lookup"
+            "/api/v1/catalog/warehouses/lookup",
+            "/api/v1/sales-receipts",
+            "/api/v1/sales-receipts/{saleId}"
         }, paths.EnumerateObject().Select(p => p.Name).OrderBy(p => p, StringComparer.Ordinal).ToArray());
-        foreach (var route in paths.EnumerateObject())
+        foreach (var route in paths.EnumerateObject().Where(p => p.Name.StartsWith("/api/v1/catalog/", StringComparison.Ordinal)))
         {
             var operation = route.Value.GetProperty("get");
             Assert.False(operation.TryGetProperty("requestBody", out _));
@@ -81,6 +83,42 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             Assert.True(responses.TryGetProperty("403", out _));
             Assert.True(responses.TryGetProperty("413", out _));
         }
+        var list = paths.GetProperty("/api/v1/sales-receipts").GetProperty("get");
+        var detail = paths.GetProperty("/api/v1/sales-receipts/{saleId}").GetProperty("get");
+        Assert.False(list.TryGetProperty("requestBody", out _));
+        Assert.False(detail.TryGetProperty("requestBody", out _));
+        var listParameters = list.GetProperty("parameters").EnumerateArray().ToArray();
+        Assert.Equal(10, listParameters.Length);
+        var size = Assert.Single(listParameters, p => p.GetProperty("name").GetString() == "pageSize");
+        Assert.Equal(1m, Resolve(document, size.GetProperty("schema")).GetProperty("minimum").GetDecimal());
+        Assert.Equal(200m, Resolve(document, size.GetProperty("schema")).GetProperty("maximum").GetDecimal());
+        var id = Assert.Single(detail.GetProperty("parameters").EnumerateArray());
+        Assert.Equal("saleId", id.GetProperty("name").GetString());
+        Assert.Equal("path", id.GetProperty("in").GetString());
+        var idSchema = Resolve(document, id.GetProperty("schema"));
+        Assert.Equal("string", idSchema.GetProperty("type").GetString());
+        Assert.Equal("^[1-9][0-9]{0,18}$", idSchema.GetProperty("pattern").GetString());
+        var detailEnvelope = Resolve(document, ResponseSchema(detail.GetProperty("responses"), "200"));
+        var detailData = RequiredObjectData(document, detailEnvelope);
+        var properties = detailData.GetProperty("properties");
+        var requiredDetail = detailData.GetProperty("required").EnumerateArray().Select(p => p.GetString()).ToArray();
+        Assert.Contains("saleId", requiredDetail);
+        Assert.Contains("lines", requiredDetail);
+        Assert.DoesNotContain("note", requiredDetail);
+        Assert.DoesNotContain("postedAtUtc", requiredDetail);
+        Assert.DoesNotContain("totalCost", requiredDetail);
+        Assert.Equal("string", Resolve(document, properties.GetProperty("note")).GetProperty("type").GetString());
+        Assert.Equal("date-time", Resolve(document, properties.GetProperty("postedAtUtc")).GetProperty("format").GetString());
+        Assert.Equal("string", Resolve(document, properties.GetProperty("saleId")).GetProperty("type").GetString());
+        Assert.Equal("string", Resolve(document, properties.GetProperty("totalAmount")).GetProperty("type").GetString());
+        Assert.Equal("date", Resolve(document, properties.GetProperty("saleDate")).GetProperty("format").GetString());
+        Assert.True(detail.GetProperty("responses").TryGetProperty("404", out _));
+        var listEnvelope = Resolve(document, ResponseSchema(list.GetProperty("responses"), "200"));
+        var listData = RequiredObjectData(document, listEnvelope);
+        Assert.Equal(new[] { "items" }, listData.GetProperty("required").EnumerateArray().Select(p => p.GetString()).ToArray());
+        var listProperties = listData.GetProperty("properties");
+        Assert.Equal("string", Resolve(document, listProperties.GetProperty("nextCursor")).GetProperty("type").GetString());
+        Assert.Equal("array", Resolve(document, listProperties.GetProperty("items")).GetProperty("type").GetString());
     }
 
     // Exercise the real routing/MVC middleware sequence over Kestrel; only the
@@ -129,6 +167,16 @@ public sealed class Vps10OpenApiAndFeatureGateTests
 
     private static JsonElement ResponseSchema(JsonElement responses, string code) =>
         responses.GetProperty(code).GetProperty("content").GetProperty("application/json").GetProperty("schema");
+
+    private static JsonElement RequiredObjectData(JsonElement document, JsonElement envelope)
+    {
+        Assert.Contains("data", envelope.GetProperty("required").EnumerateArray().Select(p => p.GetString()));
+        var data = envelope.GetProperty("properties").GetProperty("data");
+        Assert.False(data.TryGetProperty("oneOf", out _), data.GetRawText());
+        var resolved = Resolve(document, data);
+        Assert.Equal("object", resolved.GetProperty("type").GetString());
+        return resolved;
+    }
 
     private static JsonElement Resolve(JsonElement document, JsonElement schema)
     {

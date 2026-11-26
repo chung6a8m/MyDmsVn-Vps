@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Routing;
 using NativeLookup = MyDmsVn.Server.HttpHost.Features.Catalog.CatalogLookupController;
+using NativeSales = MyDmsVn.Server.HttpHost.Features.Sales.SalesReceiptsController;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -16,8 +17,11 @@ internal static class EndpointInventory
     internal sealed record Row(string HttpMethod, string Path, string Controller, string Action, int Order,
         string ActiveOwner, string ActualController, string ActualAction);
 
-    internal static bool IsNative(Net10RouteTable.Route route) =>
-        route.Controller == typeof(CatalogLookupController);
+    private static Type? NativeOwner(Net10RouteTable.Route route) =>
+        route.Controller == typeof(CatalogLookupController) ? typeof(NativeLookup) :
+        route.Controller == typeof(SalesReceiptsController) && route.Verb == "GET" ? typeof(NativeSales) : null;
+
+    internal static bool IsNative(Net10RouteTable.Route route) => NativeOwner(route) != null;
 
     internal static IReadOnlyList<Row> Read(IEnumerable<Endpoint> endpoints,
         IReadOnlyList<Net10RouteTable.Route> expected)
@@ -52,10 +56,10 @@ internal static class EndpointInventory
             var owner = native != null ? "native" : "bridge";
             if (IsNative(route))
             {
-                if (native == null || native.ControllerTypeInfo.AsType() != typeof(NativeLookup) ||
+                if (native == null || native.ControllerTypeInfo.AsType() != NativeOwner(route) ||
                     native.MethodInfo.Name != route.Action.Name ||
                     endpoint.Metadata.GetMetadata<V1DesktopApiRequiredAttribute>() != null)
-                    throw new InvalidOperationException("Native lookup ownership or feature gate drift.");
+                    throw new InvalidOperationException("Native WEB2 ownership or feature gate drift.");
             }
             else if (bridge != route)
                 throw new InvalidOperationException("Bridge route ownership drift.");

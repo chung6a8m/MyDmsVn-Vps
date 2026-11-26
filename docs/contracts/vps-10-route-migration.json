@@ -712,7 +712,7 @@
       "order": 0,
       "baselineController": "SalesReceiptsController",
       "baselineAction": "List",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.4A",
       "contractFamily": "web2-v1",
       "authentication": "bearer",
@@ -733,7 +733,7 @@
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.SalesReceiptsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Sales.SalesReceiptsController",
       "actualAction": "List"
     },
     {
@@ -743,7 +743,7 @@
       "order": 0,
       "baselineController": "SalesReceiptsController",
       "baselineAction": "Get",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.4A",
       "contractFamily": "web2-v1",
       "authentication": "bearer",
@@ -764,7 +764,7 @@
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.SalesReceiptsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Sales.SalesReceiptsController",
       "actualAction": "Get"
     },
     {

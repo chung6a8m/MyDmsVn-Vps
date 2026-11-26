@@ -13,7 +13,8 @@ internal static class V1ModelStateErrors
         // A binder's request-level error takes precedence over field details.
         var keys = context.ModelState.Where(pair => pair.Value?.Errors.Count > 0)
             .Select(pair => pair.Key).ToArray();
-        var field = keys.Contains("") ? null : keys.FirstOrDefault(key => key is "limit" or "search");
+        var field = keys.Contains("") ? null : keys.FirstOrDefault(key => key is "limit" or "search" or "fromDate" or "toDate" or "customerId" or "warehouseId" or
+            "employeeId" or "status" or "productId" or "pageSize" or "cursor" or "saleId");
         var correlation = context.HttpContext.RequestServices
             .GetRequiredService<RequestIdentityAdmission>().CorrelationId;
         return V1ApiResults.Invalid(field, correlation);
