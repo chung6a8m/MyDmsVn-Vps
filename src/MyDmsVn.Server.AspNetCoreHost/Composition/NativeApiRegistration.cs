@@ -29,6 +29,7 @@ internal static class NativeApiRegistration
             {
                 options.InputFormatters.Insert(0, new V1MutationRequestFormatter());
                 options.ModelBinderProviders.Insert(0, new CatalogLookupQueryBinderProvider());
+                options.ModelBinderProviders.Insert(0, new CatalogCrudQueryBinderProvider());
                 options.ModelBinderProviders.Insert(0, new V1SalesReadBinderProvider());
                 options.ModelBinderProviders.Insert(0, new V1Web3ReadBinderProvider());
                 options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
@@ -117,7 +118,10 @@ internal static class NativeApiRegistration
                     "Receipt detail requires canonical positive Int64 path text; no query or body. " +
                     "Receipt writes accept strict application/json UTF-8, no query; quantity and unitCost are invariant decimal strings; " +
                     "expectedVersion is canonical Base64 of eight bytes. WEB3 output uses explicit nullable fields and fixed decimal scale. " +
-                    "Stock card requires warehouseId/productId and accepts UTC Z instants only.";
+                    "Stock card requires warehouseId/productId and accepts UTC Z instants only. " +
+                    "Catalog CRUD requires DesktopApiEnabled and an active Bearer session; list defaults pageNumber=1, pageSize=50, includeInactive=false. " +
+                    "CRUD IDs are canonical positive Int32 path segments; mutations accept strict JSON with per-entity allowlists and no query. " +
+                    "Catalog writes are not journalled; no automatic resend.";
                 return Task.CompletedTask;
             });
         });

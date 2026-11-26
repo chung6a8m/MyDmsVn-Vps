@@ -76,7 +76,7 @@
       "order": 0,
       "baselineController": "CustomersController",
       "baselineAction": "List",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -99,7 +99,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.CustomersController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.CustomersController",
       "actualAction": "List"
     },
     {
@@ -140,7 +140,7 @@
       "order": 0,
       "baselineController": "CustomersController",
       "baselineAction": "Get",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -163,7 +163,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.CustomersController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.CustomersController",
       "actualAction": "Get"
     },
     {
@@ -173,7 +173,7 @@
       "order": 0,
       "baselineController": "EmployeesController",
       "baselineAction": "List",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -196,7 +196,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.EmployeesController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.EmployeesController",
       "actualAction": "List"
     },
     {
@@ -237,7 +237,7 @@
       "order": 0,
       "baselineController": "EmployeesController",
       "baselineAction": "Get",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -260,7 +260,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.EmployeesController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.EmployeesController",
       "actualAction": "Get"
     },
     {
@@ -270,7 +270,7 @@
       "order": 0,
       "baselineController": "ProductsController",
       "baselineAction": "List",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -293,7 +293,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.ProductsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.ProductsController",
       "actualAction": "List"
     },
     {
@@ -334,7 +334,7 @@
       "order": 0,
       "baselineController": "ProductsController",
       "baselineAction": "Get",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -357,7 +357,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.ProductsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.ProductsController",
       "actualAction": "Get"
     },
     {
@@ -367,7 +367,7 @@
       "order": 0,
       "baselineController": "WarehousesController",
       "baselineAction": "List",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -390,7 +390,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.WarehousesController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.WarehousesController",
       "actualAction": "List"
     },
     {
@@ -431,7 +431,7 @@
       "order": 0,
       "baselineController": "WarehousesController",
       "baselineAction": "Get",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -454,7 +454,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.WarehousesController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.WarehousesController",
       "actualAction": "Get"
     },
     {
@@ -1166,7 +1166,7 @@
       "order": 0,
       "baselineController": "CustomersController",
       "baselineAction": "Create",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1189,7 +1189,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.CustomersController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.CustomersController",
       "actualAction": "Create"
     },
     {
@@ -1199,7 +1199,7 @@
       "order": 0,
       "baselineController": "EmployeesController",
       "baselineAction": "Create",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1222,7 +1222,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.EmployeesController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.EmployeesController",
       "actualAction": "Create"
     },
     {
@@ -1232,7 +1232,7 @@
       "order": 0,
       "baselineController": "ProductsController",
       "baselineAction": "Create",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1255,7 +1255,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.ProductsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.ProductsController",
       "actualAction": "Create"
     },
     {
@@ -1265,7 +1265,7 @@
       "order": 0,
       "baselineController": "WarehousesController",
       "baselineAction": "Create",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1288,7 +1288,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.WarehousesController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.WarehousesController",
       "actualAction": "Create"
     },
     {
@@ -1529,7 +1529,7 @@
       "order": 0,
       "baselineController": "CustomersController",
       "baselineAction": "Update",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1552,7 +1552,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.CustomersController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.CustomersController",
       "actualAction": "Update"
     },
     {
@@ -1562,7 +1562,7 @@
       "order": 0,
       "baselineController": "CustomersController",
       "baselineAction": "SetActive",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1585,7 +1585,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.CustomersController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.CustomersController",
       "actualAction": "SetActive"
     },
     {
@@ -1595,7 +1595,7 @@
       "order": 0,
       "baselineController": "EmployeesController",
       "baselineAction": "Update",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1618,7 +1618,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.EmployeesController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.EmployeesController",
       "actualAction": "Update"
     },
     {
@@ -1628,7 +1628,7 @@
       "order": 0,
       "baselineController": "EmployeesController",
       "baselineAction": "SetActive",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1651,7 +1651,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.EmployeesController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.EmployeesController",
       "actualAction": "SetActive"
     },
     {
@@ -1661,7 +1661,7 @@
       "order": 0,
       "baselineController": "ProductsController",
       "baselineAction": "Update",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1684,7 +1684,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.ProductsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.ProductsController",
       "actualAction": "Update"
     },
     {
@@ -1694,7 +1694,7 @@
       "order": 0,
       "baselineController": "ProductsController",
       "baselineAction": "SetActive",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1717,7 +1717,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.ProductsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.ProductsController",
       "actualAction": "SetActive"
     },
     {
@@ -1727,7 +1727,7 @@
       "order": 0,
       "baselineController": "WarehousesController",
       "baselineAction": "Update",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1750,7 +1750,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.WarehousesController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.WarehousesController",
       "actualAction": "Update"
     },
     {
@@ -1760,7 +1760,7 @@
       "order": 0,
       "baselineController": "WarehousesController",
       "baselineAction": "SetActive",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6A",
       "contractFamily": "vps-02-desktop",
       "authentication": "bearer",
@@ -1783,7 +1783,7 @@
         ],
         "historicalSqlLedger": "ROUTE_ONLY"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.WarehousesController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Catalog.WarehousesController",
       "actualAction": "SetActive"
     },
     {

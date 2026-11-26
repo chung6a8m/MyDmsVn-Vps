@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.Extensions.DependencyInjection;
 using MyDmsVn.Server.HttpHost.Features.Sales;
 using MyDmsVn.Server.HttpHost.Features.Receipts;
+using MyDmsVn.Server.HttpHost.Features.Catalog;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -57,7 +58,7 @@ internal sealed class V1WriteMutationAttribute : Attribute, IAsyncResourceFilter
     }
 }
 
-// Native MVC System.Text.Json input formatter for Sales and Receipt mutations only.
+// Native MVC System.Text.Json input formatter for Sales, Receipt and Catalog mutations.
 // A single strict parse supplies both typed input and the immutable canonical
 // source. The explicit field traversal is needed for v1 error precedence, not
 // a new general serializer; other MVC routes keep the normal JSON formatter.
@@ -67,7 +68,7 @@ internal sealed class V1MutationRequestFormatter : InputFormatter
     internal const string ErrorPrefix = "vps10-mutation:";
 
     public V1MutationRequestFormatter() => SupportedMediaTypes.Add("application/json");
-    protected override bool CanReadType(Type type) => SalesRequestReader.Supports(type) || ReceiptRequestReader.Supports(type);
+    protected override bool CanReadType(Type type) => SalesRequestReader.Supports(type) || ReceiptRequestReader.Supports(type) || CatalogCrudRequestReader.Supports(type);
     public override bool CanRead(InputFormatterContext context) => CanReadType(context.ModelType);
 
     public override async Task<InputFormatterResult> ReadRequestBodyAsync(InputFormatterContext context)
@@ -94,11 +95,18 @@ internal sealed class V1MutationRequestFormatter : InputFormatter
             });
             if (document.RootElement.ValueKind != JsonValueKind.Object) throw new V1BindingException();
             ValidateTree(document.RootElement, 0);
-            var model = SalesRequestReader.Supports(context.ModelType)
-                ? SalesRequestReader.Read(context.ModelType, document.RootElement)
-                : ReceiptRequestReader.Read(context.ModelType, document.RootElement);
-            V1ValidatedRequestSource.Set(context.HttpContext, document);
-            document = null; // registered for disposal at response completion
+            var catalog = CatalogCrudRequestReader.Supports(context.ModelType);
+            var model = catalog ? CatalogCrudRequestReader.Read(context.ModelType, document.RootElement)
+                : SalesRequestReader.Supports(context.ModelType)
+                    ? SalesRequestReader.Read(context.ModelType, document.RootElement)
+                    : ReceiptRequestReader.Read(context.ModelType, document.RootElement);
+            // Catalog is unjournalled: do not retain its source or introduce an
+            // operation identity/automatic replay policy.
+            if (!catalog)
+            {
+                V1ValidatedRequestSource.Set(context.HttpContext, document);
+                document = null; // registered for disposal at response completion
+            }
             return await InputFormatterResult.SuccessAsync(model).ConfigureAwait(false);
         }
         catch (V1BindingException error)

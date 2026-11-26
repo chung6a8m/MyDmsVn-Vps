@@ -14,7 +14,7 @@ internal static class V1ModelStateErrors
         var keys = context.ModelState.Where(pair => pair.Value?.Errors.Count > 0)
             .Select(pair => pair.Key).ToArray();
         var field = keys.Contains("") ? null : keys.FirstOrDefault(key => key is "limit" or "search" or "fromDate" or "toDate" or "customerId" or "warehouseId" or
-            "employeeId" or "status" or "productId" or "pageSize" or "cursor" or "saleId" or "receiptId" or "pageNumber" or "fromUtc" or "toUtc");
+            "employeeId" or "status" or "productId" or "pageSize" or "cursor" or "saleId" or "receiptId" or "pageNumber" or "fromUtc" or "toUtc" or "id" or "includeInactive");
         var mutationError = keys.FirstOrDefault(key => key.StartsWith(V1MutationRequestFormatter.ErrorPrefix, System.StringComparison.Ordinal));
         if (mutationError != null)
         {
