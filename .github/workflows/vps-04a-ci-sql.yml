@@ -408,6 +408,26 @@ jobs:
           print('VPS106A_SQL_CATALOG_PASS 1/1: all four CRUD families, duplicate-code race, independent permissions and SQL rows')
           PY
 
+          # VPS-10.6B: actual HTTPS Security/Foundation on disposable SQL13.
+          # Independent permission principals and read-only audit oracle.
+          (cd src/MyDmsVn.Server.AspNetCoreHost && \
+            dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -p:Vps04ALive=true -c Release -f net10.0 --no-build --no-restore \
+            --filter 'FullyQualifiedName~Vps10SecuritySqlTests' \
+            --logger 'trx;LogFileName=vps106b-security-sql.trx' --results-directory "$GITHUB_WORKSPACE/vps04a-ci-trx")
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          path=Path('vps04a-ci-trx/vps106b-security-sql.trx')
+          assert path.is_file(),'Missing VPS-10.6B Security SQL TRX'
+          ns={'t':'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          counters=ET.parse(path).getroot().find('./t:ResultSummary/t:Counters',ns)
+          assert counters is not None
+          actual={k:int(counters.attrib[k]) for k in ('total','executed','passed','failed','notExecuted')}
+          assert actual=={'total':1,'executed':1,'passed':1,'failed':0,'notExecuted':0},actual
+          print('VPS106B_SQL_SECURITY_PASS 1/1: independent permissions, trusted actor, revision conflict and SQL audit')
+          PY
+
           # VPS-04B executes separately from the historical WEB6-disabled
           # assertions above. Exact SQL13, seeded journal and verified HTTPS
           # remain in this disposable GitHub-hosted Linux job only.
