@@ -30,7 +30,7 @@ The first wave preserves all 57 existing WEB2–WEB6/Desktop verb/path pairs acr
 | VPS-10.2 — Native lookup pilot | COMPLETE ONLY UPON [PR #35](https://github.com/chung6a8m/MyDmsVn-Vps/pull/35) independent review, final-HEAD required CI PASS AND MERGE; until then IN PROGRESS | [Pilot evidence and review fixes](../evidence/vps-10-2-native-lookup.md); 4 native / 53 bridge, 34 focused cases, frozen 293 differential, final SHA/CI and merge receipt in PR #35 |
 | VPS-10.3 — Desktop typed wire | COMPLETE ONLY UPON [PR #36](https://github.com/chung6a8m/MyDmsVn-Vps/pull/36) independent review, required final-HEAD CI PASS AND MERGE; until then IN PROGRESS | [Implementation and review evidence](../evidence/vps-10-3-desktop-typed-wire.md): typed Desktop DTOs, direct receipt mapping, live/replay text parity, 38 focused cases; exact final SHA/CI and merge receipt in PR #36 |
 | VPS-10.4A — Sales reads | COMPLETE ONLY UPON [PR #37](https://github.com/chung6a8m/MyDmsVn-Vps/pull/37) review, required final-HEAD CI PASS AND MERGE; until then IN PROGRESS | [Implementation and review evidence](../evidence/vps-10-4a-sales-reads.md); 6 native / 51 bridge, 48 focused cases, exact final SHA/CI and merge receipt in PR #37 |
-| VPS-10.4B — Sales writes | NOT STARTED | Three native write routes; typed binding, canonical context, SQL/concurrency/recovery |
+| VPS-10.4B — Sales writes | IN PROGRESS — source prepared on `vps-10.4b-native-sales-writes`; required final-HEAD CI, G4 and independent review/merge pending | [Sales mutation and canonical context evidence](../evidence/vps-10-4b-sales-writes.md); 9 native / 48 bridge; frozen 293 cases retained |
 | VPS-10.5A — Receipt/Inventory reads | NOT STARTED | Four native read routes; field-specific null/scale/UTC rules |
 | VPS-10.5B — Receipt writes | NOT STARTED | Three native write routes; strict version grammar, inventory/cost/replay gates |
 | VPS-10.6A — Catalog CRUD | NOT STARTED | Twenty native routes, per-entity permissions and concurrency; split PRs further if needed |
@@ -39,7 +39,7 @@ The first wave preserves all 57 existing WEB2–WEB6/Desktop verb/path pairs acr
 | VPS-10.6D — Operations | NOT STARTED | Seven native v1/v2/v3 operation routes; historical outcomes, pending state and resend policy |
 | VPS-10.7 — Bridge removal/handoff | NOT STARTED | All 57 actual native routes, complete OpenAPI, zero production bridge inputs and paired Desktop/Host evidence |
 
-**Current implementation increment: VPS-10.4A, based on merged PR #36 (`11e922ede88cfdd86975b88f16476fba7658e122`).** Update these rows and the increment's evidence in its implementation PR; do not create a second live status ledger in the design or detailed plan.
+**Current implementation increment: VPS-10.4B, based on merged PR #37 (`deae0d104334b6907f6b015170c23066118b6ee8`).** Update these rows and the increment's evidence in its implementation PR; do not create a second live status ledger in the design or detailed plan.
 
 ## Status rules
 

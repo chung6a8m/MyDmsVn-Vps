@@ -47,7 +47,7 @@ public sealed class SalesReceiptsController(IMediator mediator, IRequestCorrelat
     [ProducesResponseType(typeof(V1ErrorEnvelope), 410)]
     [ProducesResponseType(typeof(V1ErrorEnvelope), 503)]
     public Task<IActionResult> Create([FromBody] SalesCreateRequest request, CancellationToken cancellationToken) =>
-        ExecuteMutation(WebOperationKind.SalesCreate, null,
+        ExecuteMutation<SalesReceiptDto, SalesDetailResponse>(WebOperationKind.SalesCreate, null,
             async context => await mediator.Send(new CreateSalesReceiptDraftCommand(SalesHttpMapper.ToApplication(request), context),
                 cancellationToken).ConfigureAwait(false), SalesHttpMapper.Detail, cancellationToken);
 
@@ -60,7 +60,7 @@ public sealed class SalesReceiptsController(IMediator mediator, IRequestCorrelat
     [ProducesResponseType(typeof(V1ErrorEnvelope), 503)]
     public Task<IActionResult> Update([FromRoute(Name = "saleId")] long saleId, [FromBody] SalesUpdateRequest request,
         CancellationToken cancellationToken) =>
-        ExecuteMutation(WebOperationKind.SalesUpdate, saleId,
+        ExecuteMutation<SalesReceiptDto, SalesDetailResponse>(WebOperationKind.SalesUpdate, saleId,
             async context => await mediator.Send(new UpdateSalesReceiptDraftCommand(SalesHttpMapper.ToApplication(saleId, request), context),
                 cancellationToken).ConfigureAwait(false), SalesHttpMapper.Detail, cancellationToken);
 
@@ -73,7 +73,7 @@ public sealed class SalesReceiptsController(IMediator mediator, IRequestCorrelat
     [ProducesResponseType(typeof(V1ErrorEnvelope), 503)]
     public Task<IActionResult> Post([FromRoute(Name = "saleId")] long saleId, [FromBody] SalesPostRequest request,
         CancellationToken cancellationToken) =>
-        ExecuteMutation(WebOperationKind.SalesPost, saleId,
+        ExecuteMutation<PostSalesReceiptResponse, SalesPostResponse>(WebOperationKind.SalesPost, saleId,
             async context => await mediator.Send(new PostSalesReceiptCommand(SalesHttpMapper.ToApplication(saleId, request), context),
                 cancellationToken).ConfigureAwait(false), SalesHttpMapper.Post, cancellationToken);
 

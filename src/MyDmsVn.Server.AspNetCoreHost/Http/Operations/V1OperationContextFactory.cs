@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.DependencyInjection;
 using MyDmsVn.Server.Application.Operations;
 
 namespace MyDmsVn.Server.HttpHost;
@@ -16,7 +17,7 @@ public interface IV1OperationContextFactory
         long? targetId, CancellationToken cancellationToken);
 }
 
-internal sealed class V1OperationContextFactory(WebHostOptions options, RequestIdentityAdmission identity) : IV1OperationContextFactory
+internal sealed class V1OperationContextFactory : IV1OperationContextFactory
 {
     private static readonly UTF8Encoding Utf8 = new(false, true);
     private const string Key = "Idempotency-Key";
@@ -28,6 +29,7 @@ internal sealed class V1OperationContextFactory(WebHostOptions options, RequestI
     {
         cancellationToken.ThrowIfCancellationRequested();
         var request = context.Request;
+        var options = context.RequestServices.GetRequiredService<WebHostOptions>();
         if (!options.Web4Enabled)
         {
             if (request.Headers.ContainsKey(Key) || request.Headers.ContainsKey(Epoch) || request.Headers.ContainsKey(Fingerprint))
@@ -35,7 +37,7 @@ internal sealed class V1OperationContextFactory(WebHostOptions options, RequestI
             return ValueTask.FromResult<WebOperationContext?>(null);
         }
 
-        var session = identity.SessionId ?? throw new WebOperationException("Auth.Unauthorized");
+        var session = context.RequestServices.GetRequiredService<RequestIdentityAdmission>().SessionId ?? throw new WebOperationException("Auth.Unauthorized");
         var operationId = ReadGuid(request, Key, v4: true);
         var epoch = ReadGuid(request, Epoch, v4: false);
         var canonical = V1OperationCanonicalizer.Canonicalize(kind, targetId, V1ValidatedRequestSource.Get(context));
