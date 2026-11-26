@@ -16,6 +16,7 @@ using Microsoft.OpenApi;
 using MyDmsVn.Contracts;
 using MyDmsVn.Server.HttpHost.Features.Catalog;
 using MyDmsVn.Server.HttpHost.Features.Sales;
+using MyDmsVn.Server.HttpHost.Features.Inventory;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -29,6 +30,7 @@ internal static class NativeApiRegistration
                 options.InputFormatters.Insert(0, new V1SalesRequestFormatter());
                 options.ModelBinderProviders.Insert(0, new CatalogLookupQueryBinderProvider());
                 options.ModelBinderProviders.Insert(0, new V1SalesReadBinderProvider());
+                options.ModelBinderProviders.Insert(0, new V1Web3ReadBinderProvider());
                 options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
                 options.Filters.Add(new V1UnsupportedContentTypeFilter());
             })
@@ -85,11 +87,12 @@ internal static class NativeApiRegistration
                     schema.Type = JsonSchemaType.Object;
                     schema.Metadata?.Remove("x-is-nullable-property");
                 }
+                V1Web3OpenApi.Describe(schema, context.JsonTypeInfo.Type, context.JsonPropertyInfo?.Name, context.ParameterDescription?.Name);
                 DescribeSalesResponse(schema, context.JsonTypeInfo.Type);
                 DescribeSalesRequest(schema, context.JsonTypeInfo.Type);
                 // A URL segment is text. Avoid advertising a JSON integer that
                 // JavaScript clients could round before formatting the path.
-                if (context.ParameterDescription?.Name == "saleId" && context.JsonTypeInfo.Type == typeof(long))
+                if ((context.ParameterDescription?.Name is "saleId" or "receiptId") && context.JsonTypeInfo.Type == typeof(long))
                 {
                     schema.Type = JsonSchemaType.String;
                     schema.Format = null;
@@ -109,7 +112,11 @@ internal static class NativeApiRegistration
                     "Sales reads require an active Bearer session; list pageSize defaults to 25 (1–200), dates are calendar-only, " +
                     "search is limited after trimming, cursor is bound to filters/pageSize, detail accepts a positive canonical Int64 path and no query/body. " +
                     "Sales writes accept strict application/json UTF-8, no query; decimal and Int64 wire fields are strings. " +
-                    "WEB4-enabled writes require Idempotency-Key and X-MyDmsVn-Deployment-Epoch.";
+                    "WEB4-enabled writes require Idempotency-Key and X-MyDmsVn-Deployment-Epoch. " +
+                    "WEB3 collection reads require pageNumber (1–2147483647) and pageSize (1–200). " +
+                    "Receipt detail requires canonical positive Int64 path text; no query or body. " +
+                    "WEB3 output uses explicit nullable fields and fixed decimal scale. " +
+                    "Stock card requires warehouseId/productId and accepts UTC Z instants only.";
                 return Task.CompletedTask;
             });
         });

@@ -37,6 +37,9 @@ sources = [p for p in sources if not any(name in {"bin", "obj"} for name in p.pa
                # VPS-10.4A: exactly this native-only controller contributes one
                # generated IMediator injection and two Send calls, not MediatR.
                "src/MyDmsVn.Server.AspNetCoreHost/Features/Sales/SalesReceiptsController.cs",
+               # VPS-10.5A: only net10 generated Mediator read controllers.
+               "src/MyDmsVn.Server.AspNetCoreHost/Features/Receipts/GoodsReceiptsController.cs",
+               "src/MyDmsVn.Server.AspNetCoreHost/Features/Inventory/InventoryController.cs",
                # VPS-10.4B: only the new native-only HTTPS/SQL restart test
                # partial. Three Gateway.Send calls are HTTP, not legacy MediatR.
                "tests/MyDmsVn.Server.AspNetCoreHost.Tests/Vps04bWeb6LiveSqlTests.SalesRestart.cs",

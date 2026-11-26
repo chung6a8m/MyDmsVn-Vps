@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Routing;
 using NativeLookup = MyDmsVn.Server.HttpHost.Features.Catalog.CatalogLookupController;
 using NativeSales = MyDmsVn.Server.HttpHost.Features.Sales.SalesReceiptsController;
+using NativeReceipts = MyDmsVn.Server.HttpHost.Features.Receipts.GoodsReceiptsController;
+using NativeInventory = MyDmsVn.Server.HttpHost.Features.Inventory.InventoryController;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -19,7 +21,9 @@ internal static class EndpointInventory
 
     private static Type? NativeOwner(Net10RouteTable.Route route) =>
         route.Controller == typeof(CatalogLookupController) ? typeof(NativeLookup) :
-        route.Controller == typeof(SalesReceiptsController) ? typeof(NativeSales) : null;
+        route.Controller == typeof(SalesReceiptsController) ? typeof(NativeSales) :
+        route.Verb == "GET" && route.Controller == typeof(GoodsReceiptsController) ? typeof(NativeReceipts) :
+        route.Verb == "GET" && route.Controller == typeof(InventoryController) ? typeof(NativeInventory) : null;
 
     internal static bool IsNative(Net10RouteTable.Route route) => NativeOwner(route) != null;
 
