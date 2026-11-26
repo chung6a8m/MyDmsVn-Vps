@@ -19,13 +19,13 @@
 
 ## VPS-10 — Native ASP.NET Core Host & Typed HTTP Contracts
 
-**Design: APPROVED. Implementation: IN PROGRESS (VPS-10.0).** Owner approved the native-host/typed-DTO/invariant-wire direction and coordinated Desktop updates on `net48` on 2026-11-26 (Asia/Bangkok). [OWN-VPS-05](../decisions/OWN-VPS-05.md) records the authorization; the [target design](../architecture/native-aspnetcore10-host.md) and [implementation plan](vps-10-native-aspnetcore-host.md) define scope, source paths, interfaces, test cases and commands. Planning source: `6a9649430cfd8ff4576d5e351f4ef6d0080011a0`.
+**Design: APPROVED. Implementation: IN PROGRESS (VPS-10).** Owner approved the native-host/typed-DTO/invariant-wire direction and coordinated Desktop updates on `net48` on 2026-11-26 (Asia/Bangkok). [OWN-VPS-05](../decisions/OWN-VPS-05.md) records the authorization; the [target design](../architecture/native-aspnetcore10-host.md) and [implementation plan](vps-10-native-aspnetcore-host.md) define scope, source paths, interfaces, test cases and commands. Planning source: `6a9649430cfd8ff4576d5e351f4ef6d0080011a0`.
 
-The first wave preserves all 57 existing WEB2–WEB6/Desktop verb/path pairs across `/api/v1`, `/api/v2` and `/api/v3`. Desktop can be upgraded with the Host while keeping `net48`; persisted operations, replay and existing contracts remain compatible. This documentation checkpoint implements no production code and supplies no runtime PASS evidence. VPS-10 development can proceed with its DEV/disposable gates; VPS-08/VPS-09 operational status above is unchanged.
+The first wave preserves all 57 existing WEB2–WEB6/Desktop verb/path pairs across `/api/v1`, `/api/v2` and `/api/v3`. Desktop can be upgraded with the Host while keeping `net48`; persisted operations, replay and existing contracts remain compatible. VPS-10.0 changes characterization tests, CI and documentation only; no production route migration. Increment-specific acceptance is recorded in its linked PR. VPS-10 development can proceed with its DEV/disposable gates; VPS-08/VPS-09 operational status above is unchanged.
 
 | Increment | Current status | Next deliverable/gate |
 | --- | --- | --- |
-| VPS-10.0 — Contract baseline | IMPLEMENTED FOR REVIEW — final-HEAD CI and independent review required | [57-route migration manifest](../contracts/vps-10-route-migration.json), [baseline evidence](../evidence/vps-10-native-host.md); exact main baseline G0/G1/G2 PASS, new characterization and source pins await final-HEAD CI |
+| VPS-10.0 — Contract baseline | COMPLETE UPON [PR #33](https://github.com/chung6a8m/MyDmsVn-Vps/pull/33) independent review, final-HEAD CI PASS AND MERGE | [57-route migration manifest](../contracts/vps-10-route-migration.json), [baseline and review evidence](../evidence/vps-10-native-host.md); exact final SHA, 37 characterization cases, 293 differential cases, manifest gate and CI/merge receipt in PR #33 |
 | VPS-10.1 — Host composition | NOT STARTED | Typed configuration, DI and pre-listen checks; preserve middleware order and scoped identity |
 | VPS-10.2 — Native lookup pilot | NOT STARTED | Four lookup routes, native MVC binding/results, mixed inventory and OpenAPI subset; exact wire differential |
 | VPS-10.3 — Desktop typed wire | NOT STARTED | net48 DTO/converter adapter, remove response reparse, culture and pending/replay compatibility |
@@ -39,7 +39,7 @@ The first wave preserves all 57 existing WEB2–WEB6/Desktop verb/path pairs acr
 | VPS-10.6D — Operations | NOT STARTED | Seven native v1/v2/v3 operation routes; historical outcomes, pending state and resend policy |
 | VPS-10.7 — Bridge removal/handoff | NOT STARTED | All 57 actual native routes, complete OpenAPI, zero production bridge inputs and paired Desktop/Host evidence |
 
-**Next gate: VPS-10.0 independent review, final-HEAD CI and merge; then VPS-10.1.** Update these rows and the increment's evidence in its implementation PR; do not create a second live status ledger in the design or detailed plan.
+**Next implementation increment after PR #33 meets all gates and merges: VPS-10.1.** Update these rows and the increment's evidence in its implementation PR; do not create a second live status ledger in the design or detailed plan.
 
 ## Status rules
 
