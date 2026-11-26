@@ -1,4 +1,4 @@
-// VPS-04A: preserve legacy request admission/DI semantics in a native ASP.NET Core scope.
+// Scoped ASP.NET Core request identity and correlation admission.
 using System;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,11 +7,6 @@ using MyDmsVn.Server.Application;
 using MyDmsVn.Server.Application.Identity;
 
 namespace MyDmsVn.Server.HttpHost;
-
-internal static class Web2Pipeline
-{
-    internal const string ScopeKey = "mydmsvn.requestServices";
-}
 
 internal static class CoreRequestServices
 {

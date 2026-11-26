@@ -6,6 +6,8 @@
     <IsTestProject>true</IsTestProject>
     <Vps04Server>true</Vps04Server>
     <Vps06bMediator>true</Vps06bMediator>
+    <!-- Historical VPS-05 source oracle only; never compile these into the Host. -->
+    <DefineConstants>$(DefineConstants);VPS05_STJ_INGRESS;VPS05_STJ_EGRESS</DefineConstants>
     <!-- Live tests are absent from normal CI/discovery; explicit opt-in on approved SQL only. -->
     <DefineConstants Condition="'$(Vps04ALive)' == 'true'">$(DefineConstants);VPS04A_LIVE</DefineConstants>
     <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.vps06b.lock.json</NuGetLockFilePath>
@@ -25,5 +27,19 @@
   <ItemGroup>
     <ProjectReference Include="../../src/MyDmsVn.Server.AspNetCoreHost/MyDmsVn.Server.AspNetCoreHost.csproj" />
     <ProjectReference Condition="'$(Vps04ALive)' == 'true'" Include="../../tools/MyDmsVn.LocalSimulation/MyDmsVn.LocalSimulation.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Retain the exact historical STJ projection/strict-input/canonicalization
+         oracle used by VPS-05/VPS-10 regressions. These are test-only sources,
+         not a second runtime endpoint owner or a Host build input. -->
+    <Compile Include="../../src/MyDmsVn.Server.HttpHost/StrictWireJson.cs" Link="HistoricalOracle/StrictWireJson.cs" />
+    <Compile Include="../../src/MyDmsVn.Server.HttpHost/StrictJsonRequest.cs" Link="HistoricalOracle/StrictJsonRequest.cs" />
+    <Compile Include="../../src/MyDmsVn.Server.HttpHost/SalesHttpRequests.cs" Link="HistoricalOracle/SalesHttpRequests.cs" />
+    <Compile Include="../../src/MyDmsVn.Server.HttpHost/SalesWireInput.cs" Link="HistoricalOracle/SalesWireInput.cs" />
+    <Compile Include="../../src/MyDmsVn.Server.HttpHost/SalesWireOutput.cs" Link="HistoricalOracle/SalesWireOutput.cs" />
+    <Compile Include="../../src/MyDmsVn.Server.HttpHost/InventoryWireInput.cs" Link="HistoricalOracle/InventoryWireInput.cs" />
+    <Compile Include="../../src/MyDmsVn.Server.HttpHost/InventoryWireOutput.cs" Link="HistoricalOracle/InventoryWireOutput.cs" />
+    <Compile Include="../../src/MyDmsVn.Server.HttpHost/WebOperationWireInput.cs" Link="HistoricalOracle/WebOperationWireInput.cs" />
+    <Compile Include="../../src/MyDmsVn.Server.HttpHost/WebOperationResultCodec.cs" Link="HistoricalOracle/WebOperationResultCodec.cs" />
   </ItemGroup>
 </Project>

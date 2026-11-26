@@ -1,4 +1,4 @@
-// VPS-05A: System.Text.Json response boundary for the Linux net10 host.
+// Historical VPS-05 test-only System.Text.Json response oracle.
 // The separate legacy net48 HttpHost retains Newtonsoft.Json with no source edits.
 // VPS-05B: use the net10 strict STJ request DOM and explicit DTO calendar metadata.
 using System;

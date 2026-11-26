@@ -10,7 +10,7 @@
     <!-- The transitional net10 graph needs its own lock snapshots before locked-mode is enabled. -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.vps06b.lock.json</NuGetLockFilePath>
-    <DefineConstants>$(DefineConstants);VPS05_STJ_EGRESS;VPS05_STJ_INGRESS;VPS06B_MEDIATOR</DefineConstants>
+    <DefineConstants>$(DefineConstants);VPS06B_MEDIATOR</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
@@ -31,11 +31,5 @@
     <ProjectReference Include="../MyDmsVn.Server.Infrastructure/MyDmsVn.Server.Infrastructure.csproj">
       <AdditionalProperties>Vps04Server=true;Vps06bMediator=true</AdditionalProperties>
     </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <!-- Keep all existing JSON/business handlers byte-identical during the transport replatform. -->
-    <Compile Include="../MyDmsVn.Server.HttpHost/*.cs"
-             Exclude="../MyDmsVn.Server.HttpHost/Startup.cs;../MyDmsVn.Server.HttpHost/Web2Pipeline.cs;../MyDmsVn.Server.HttpHost/SpaAssets.cs;../MyDmsVn.Server.HttpHost/RequestServices.cs;../MyDmsVn.Server.HttpHost/ProtectedFileSecurityAuditSink.cs;../MyDmsVn.Server.HttpHost/SecurityAuditReadiness.cs;../MyDmsVn.Server.HttpHost/HttpJson.cs"
-             Link="Legacy/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

@@ -40,13 +40,7 @@ internal static class OperationRequest
     internal static ResendKey Resend(HttpRequest request, string operationId, bool eligibility)
     {
         var key = Key(request, operationId, "/api/v3/operations/", eligibility ? "/resend-eligibility" : "/resend-receipt");
-        var kind = Header(request, "X-MyDmsVn-Operation-Kind") switch
-        {
-            "Sales.Create" => WebOperationKind.SalesCreate, "Sales.Update" => WebOperationKind.SalesUpdate,
-            "Sales.Post" => WebOperationKind.SalesPost, "Receipt.Create" => WebOperationKind.ReceiptCreate,
-            "Receipt.Update" => WebOperationKind.ReceiptUpdate, "Receipt.Post" => WebOperationKind.ReceiptPost,
-            _ => throw new V1BindingException()
-        };
+        var kind = V1OperationCanonicalizer.ParseKind(Header(request, "X-MyDmsVn-Operation-Kind")!);
         var value = Header(request, "X-MyDmsVn-Operation-Target-Id", optional: true);
         var create = kind is WebOperationKind.SalesCreate or WebOperationKind.ReceiptCreate;
         long? target = null;
@@ -100,7 +94,6 @@ public sealed class OperationReadBoundary
         if (!enabled) return V1ApiResults.Error(404, "NotFound", "The resource was not found.", correlation);
         try { return await read().ConfigureAwait(false); }
         catch (V1BindingException) { return Invalid(correlation); }
-        catch (WireInputException) { return Invalid(correlation); }
         catch (WebOperationException error) { return V1ApiResults.OperationError(error.Code, correlation); }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (Exception) { return V1ApiResults.OperationError("Operation.Unavailable", correlation); }
