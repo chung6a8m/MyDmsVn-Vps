@@ -30,7 +30,7 @@ public sealed class Vps05cRouteWireCompatibilityTests
     {
         get
         {
-            using var inventory = JsonDocument.Parse(Net10RouteTable.ToInventoryJson());
+            using var inventory = JsonDocument.Parse(NativeEndpointRoutes.ToInventoryJson());
             var cases = new TheoryData<string, string>();
             foreach (var route in inventory.RootElement.EnumerateArray())
                 cases.Add(route.GetProperty("httpMethod").GetString()!, route.GetProperty("path").GetString()!);
@@ -82,7 +82,7 @@ public sealed class Vps05cRouteWireCompatibilityTests
     [Fact]
     public void Net10Compiled57SignaturesEqualIndependentFrozenVps01AndVps02Inventory()
     {
-        using var registered = JsonDocument.Parse(Net10RouteTable.ToInventoryJson());
+        using var registered = JsonDocument.Parse(NativeEndpointRoutes.ToInventoryJson());
         var actual = registered.RootElement.EnumerateArray()
             .Select(route => route.GetProperty("httpMethod").GetString() + " " + route.GetProperty("path").GetString())
             .OrderBy(s => s, StringComparer.Ordinal).ToArray();

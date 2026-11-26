@@ -27,9 +27,9 @@ public sealed class Vps10OpenApiAndFeatureGateTests
         var builder = NewBuilder(environment);
         builder.Services.AddVps10NativeApi();
         await using var app = builder.Build();
-        Net10RouteTable.Map(app);
+        NativeEndpointRoutes.Map(app);
         NativeApiRegistration.MapNativeOpenApi(app);
-        Net10RouteTable.MapFallback(app);
+        NativeEndpointRoutes.MapFallback(app);
         await app.StartAsync();
         using var client = Client(app);
         using var response = await client.GetAsync("/openapi/v1-native.json");

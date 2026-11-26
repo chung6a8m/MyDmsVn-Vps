@@ -17,8 +17,8 @@ public sealed class Vps10EndpointInventoryTests
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddVps10NativeApi();
         var app = builder.Build();
-        Net10RouteTable.Map(app);
-        Net10RouteTable.MapFallback(app);
+        NativeEndpointRoutes.Map(app);
+        NativeEndpointRoutes.MapFallback(app);
         return app;
     }
 
@@ -30,7 +30,7 @@ public sealed class Vps10EndpointInventoryTests
     {
         using var app = Build();
         var endpoints = Endpoints(app);
-        var inventory = Net10RouteTable.ReadInventory(endpoints);
+        var inventory = NativeEndpointRoutes.ReadInventory(endpoints);
         Assert.Equal(57, inventory.Count);
         Assert.Equal(57, inventory.Count(row => row.ActiveOwner == "native"));
         Assert.Equal(0, inventory.Count(row => row.ActiveOwner == "bridge"));
@@ -78,7 +78,7 @@ public sealed class Vps10EndpointInventoryTests
     [InlineData("order")]
     [InlineData("verb")]
     [InlineData("owner")]
-    public void Mixed_inventory_rejects_actual_endpoint_drift(string mutation)
+    public void Native_inventory_rejects_actual_endpoint_drift(string mutation)
     {
         using var app = Build();
         var endpoints = Endpoints(app);
@@ -101,6 +101,6 @@ public sealed class Vps10EndpointInventoryTests
             "late-duplicate" => endpoints.Append(builder.Build()),
             _ => remaining.Append(builder.Build())
         };
-        Assert.Throws<InvalidOperationException>(() => Net10RouteTable.ReadInventory(mutated));
+        Assert.Throws<InvalidOperationException>(() => NativeEndpointRoutes.ReadInventory(mutated));
     }
 }

@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -328,7 +329,7 @@ public sealed class CoreApiBoundaryTests
     public void FallbackRouteIncludesUnknownApiPathsWithFileExtensions()
     {
         using var app = WebApplication.CreateBuilder().Build();
-        Net10RouteTable.MapFallback(app);
+        NativeEndpointRoutes.MapFallback(app);
         var endpoints = ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
         Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "{**path}" &&
@@ -340,7 +341,7 @@ public sealed class CoreApiBoundaryTests
     {
         var context = NewRequest("GET", "/api/v1/unknown.json");
         context.RequestServices.GetRequiredService<RequestIdentityAdmission>().BeginCorrelation("fallback_01");
-        await Net10RouteTable.FallbackAsync(context);
+        await NativeEndpointRoutes.FallbackAsync(context);
         Assert.Equal(404, context.Response.StatusCode);
         Assert.StartsWith("application/json", context.Response.ContentType!);
         using var document = JsonDocument.Parse(((MemoryStream)context.Response.Body).ToArray());
@@ -349,13 +350,13 @@ public sealed class CoreApiBoundaryTests
     }
 
     [Fact]
-    public async Task LegacyRequestUriKeepsEscapedPathDelimitersSeparateFromQuery()
+    public void NativeEncodedUriKeepsEscapedPathDelimitersSeparateFromQuery()
     {
         var context = NewRequest("GET", "/api/v1/sales-receipts/a?b#c");
         context.Request.QueryString = new QueryString("?feature=sales");
-        using var message = await Net10RouteTable.CreateMessage(context);
-        Assert.Equal("/api/v1/sales-receipts/a%3Fb%23c", message.RequestUri!.AbsolutePath);
-        Assert.Equal("?feature=sales", message.RequestUri.Query);
+        var uri = new Uri(context.Request.GetEncodedUrl(), UriKind.Absolute);
+        Assert.Equal("/api/v1/sales-receipts/a%3Fb%23c", uri.AbsolutePath);
+        Assert.Equal("?feature=sales", uri.Query);
     }
 
     [Fact]
@@ -364,7 +365,7 @@ public sealed class CoreApiBoundaryTests
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddVps10NativeApi();
         using var app = builder.Build();
-        Net10RouteTable.Map(app);
+        NativeEndpointRoutes.Map(app);
         var endpoints = ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
         var valid = endpoints.Where(e => e.Order < int.MaxValue - 1).ToArray();
@@ -386,7 +387,7 @@ public sealed class CoreApiBoundaryTests
     {
         var context = NewRequest("PATCH", "/api/v1/catalog/products");
         context.RequestServices.GetRequiredService<RequestIdentityAdmission>().BeginCorrelation("method_01");
-        await Net10RouteTable.MethodNotAllowedAsync(context, new[] { "GET", "POST" });
+        await NativeEndpointRoutes.MethodNotAllowedAsync(context, new[] { "GET", "POST" });
         Assert.Equal(405, context.Response.StatusCode);
         Assert.Equal("GET, POST", context.Response.Headers.Allow.ToString());
         Assert.StartsWith("application/json", context.Response.ContentType!);
@@ -424,8 +425,8 @@ public sealed class CoreApiBoundaryTests
                 .BeginCorrelation("routing_01");
             await next().ConfigureAwait(false);
         });
-        Net10RouteTable.Map(app);
-        Net10RouteTable.MapFallback(app);
+        NativeEndpointRoutes.Map(app);
+        NativeEndpointRoutes.MapFallback(app);
         await app.StartAsync();
         try
         {
@@ -455,9 +456,9 @@ public sealed class CoreApiBoundaryTests
     }
 
     [Fact]
-    public void ReflectedNet10RoutesRemainUniqueAndCounted()
+    public void ActualNativeRoutesRemainUniqueAndCounted()
     {
-        using var document = JsonDocument.Parse(Net10RouteTable.ToInventoryJson());
+        using var document = JsonDocument.Parse(NativeEndpointRoutes.ToInventoryJson());
         var values = document.RootElement.EnumerateArray().ToArray();
         Assert.Equal(57, values.Length);
         Assert.Equal(57, values.Select(e => e.GetProperty("httpMethod").GetString() + " " +
@@ -466,18 +467,22 @@ public sealed class CoreApiBoundaryTests
     }
 
     [Theory]
-    [InlineData("", "")]
-    [InlineData("?limit=25", "limit=25")]
-    [InlineData("?search=abc%2Fdef&limit=25", "search=abc%2Fdef&limit=25")]
-    [InlineData("?limit=25&limit=50", "limit=25&limit=50")]
-    public void NativeQueryAdapterUsesFrozenOwinRawValueNotAspNetCoreQuestionMark(
-        string coreQuery, string expectedLegacyValue)
+    [InlineData("", null, null, false)]
+    [InlineData("?limit=25", "25", null, false)]
+    [InlineData("?search=abc%2Fdef&limit=25", "25", "abc/def", false)]
+    [InlineData("?limit=25&limit=50", null, null, true)]
+    public void NativeRawQueryPolicyPreservesEscapingAndRejectsDuplicates(
+        string coreQuery, string? limit, string? search, bool invalid)
     {
-        // WEB2/3 strict query grammar reads IOwinRequest.QueryString.Value,
-        // not HttpRequest.Query (which would silently lose duplicates).
         var context = NewRequest(path: "/api/v1/catalog/products/lookup");
         context.Request.QueryString = new QueryString(coreQuery);
-        var adapter = new Microsoft.Owin.CoreContextAdapter(context, null!, null!);
-        Assert.Equal(expectedLegacyValue, adapter.Request.QueryString.Value);
+        if (invalid)
+        {
+            Assert.Throws<V1BindingException>(() => V1QueryPolicy.Read(context.Request, "search", "limit"));
+            return;
+        }
+        var query = V1QueryPolicy.Read(context.Request, "search", "limit");
+        Assert.Equal(limit, query.GetValueOrDefault("limit"));
+        Assert.Equal(search, query.GetValueOrDefault("search"));
     }
 }

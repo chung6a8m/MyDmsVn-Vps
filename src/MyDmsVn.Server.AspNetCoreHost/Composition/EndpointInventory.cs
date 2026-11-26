@@ -5,62 +5,26 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Routing;
-using NativeLookup = MyDmsVn.Server.HttpHost.Features.Catalog.CatalogLookupController;
-using NativeProducts = MyDmsVn.Server.HttpHost.Features.Catalog.ProductsController;
-using NativeWarehouses = MyDmsVn.Server.HttpHost.Features.Catalog.WarehousesController;
-using NativeEmployees = MyDmsVn.Server.HttpHost.Features.Catalog.EmployeesController;
-using NativeCustomers = MyDmsVn.Server.HttpHost.Features.Catalog.CustomersController;
-using NativeSales = MyDmsVn.Server.HttpHost.Features.Sales.SalesReceiptsController;
-using NativeReceipts = MyDmsVn.Server.HttpHost.Features.Receipts.GoodsReceiptsController;
-using NativeInventory = MyDmsVn.Server.HttpHost.Features.Inventory.InventoryController;
-using NativeSecurity = MyDmsVn.Server.HttpHost.Features.Security.SecurityController;
-using NativeFoundation = MyDmsVn.Server.HttpHost.Features.Foundation.FoundationController;
-using NativeAuth = MyDmsVn.Server.HttpHost.Features.Auth.AuthController;
-using NativeOperations = MyDmsVn.Server.HttpHost.Features.Operations.OperationsController;
-using NativeResolution = MyDmsVn.Server.HttpHost.Features.Operations.ResolutionController;
-using NativeResend = MyDmsVn.Server.HttpHost.Features.Operations.ResendController;
-using NativeHealth = MyDmsVn.Server.HttpHost.Features.Auth.HealthController;
 
 namespace MyDmsVn.Server.HttpHost;
 
-// Read actual route endpoints, not an inventory that merely reports the
-// historical controller definitions. Compatibility identity is kept separately.
+// Read the actual MVC endpoints; compatibility names are frozen data, not
+// source-linked types. No reflection discovery or action invocation.
 internal static class EndpointInventory
 {
     internal sealed record Row(string HttpMethod, string Path, string Controller, string Action, int Order,
         string ActiveOwner, string ActualController, string ActualAction);
 
-    private static Type? NativeOwner(Net10RouteTable.Route route) =>
-        route.Controller == typeof(CatalogLookupController) ? typeof(NativeLookup) :
-        route.Controller == typeof(ProductsController) ? typeof(NativeProducts) :
-        route.Controller == typeof(WarehousesController) ? typeof(NativeWarehouses) :
-        route.Controller == typeof(EmployeesController) ? typeof(NativeEmployees) :
-        route.Controller == typeof(CustomersController) ? typeof(NativeCustomers) :
-        route.Controller == typeof(SalesReceiptsController) ? typeof(NativeSales) :
-        route.Controller == typeof(GoodsReceiptsController) ? typeof(NativeReceipts) :
-        route.Controller == typeof(SecurityParityController) ? typeof(NativeSecurity) :
-        route.Controller == typeof(FoundationParityController) ? typeof(NativeFoundation) :
-        route.Controller == typeof(AuthController) ? typeof(NativeAuth) :
-        route.Controller == typeof(HealthController) ? typeof(NativeHealth) :
-        route.Controller == typeof(OperationsController) ? typeof(NativeOperations) :
-        route.Controller == typeof(OperationResolutionController) ? typeof(NativeResolution) :
-        route.Controller == typeof(Web6ResendEligibilityController) ? typeof(NativeResend) :
-        route.Verb == "GET" && route.Controller == typeof(InventoryController) ? typeof(NativeInventory) : null;
-
-    internal static bool IsNative(Net10RouteTable.Route route) => NativeOwner(route) != null;
-
-    internal static IReadOnlyList<Row> Read(IEnumerable<Endpoint> endpoints,
-        IReadOnlyList<Net10RouteTable.Route> expected)
+    internal static IReadOnlyList<Row> Read(IEnumerable<Endpoint> endpoints)
     {
+        var expected = NativeRouteContract.Routes.ToDictionary(r => (r.Verb, r.Path));
+        if (expected.Count != 57) throw new InvalidOperationException("Frozen API route inventory drift.");
         var rows = new List<Row>();
         foreach (var endpoint in endpoints.OfType<RouteEndpoint>())
         {
-            // Only our explicitly marked auxiliary routes are exempt. A high
-            // Order alone must never hide an additional business endpoint.
-            if (endpoint.Metadata.GetMetadata<Net10RouteTable.AuxiliaryRoute>() != null)
+            if (endpoint.Metadata.GetMetadata<NativeEndpointRoutes.AuxiliaryRoute>() != null)
             {
                 if (endpoint.Order < int.MaxValue - 1 ||
-                    endpoint.Metadata.GetMetadata<Net10RouteTable.Route>() != null ||
                     endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() != null ||
                     endpoint.Metadata.GetMetadata<IHttpMethodMetadata>() != null)
                     throw new InvalidOperationException("Invalid auxiliary route metadata.");
@@ -71,34 +35,17 @@ internal static class EndpointInventory
             if (verbs == null || verbs.Count != 1)
                 throw new InvalidOperationException("A business endpoint lacks exactly one HTTP verb.");
             var verb = verbs[0];
-            var route = expected.SingleOrDefault(r => r.Path == path && r.Verb == verb);
-            if (route == null || endpoint.Order != route.Order)
+            if (!expected.TryGetValue((verb, path), out var route) || endpoint.Order != route.Order)
                 throw new InvalidOperationException("API route verb, template or order drift.");
 
-            var bridge = endpoint.Metadata.GetMetadata<Net10RouteTable.Route>();
             var native = endpoint.Metadata.GetMetadata<ControllerActionDescriptor>();
-            if ((bridge == null) == (native == null))
-                throw new InvalidOperationException("An API endpoint must have exactly one active owner.");
-            var owner = native != null ? "native" : "bridge";
-            if (IsNative(route))
-            {
-                if (native == null || native.ControllerTypeInfo.AsType() != NativeOwner(route) ||
-                    native.MethodInfo.Name != route.Action.Name ||
-                    (endpoint.Metadata.GetMetadata<V1DesktopApiRequiredAttribute>() != null) !=
-                        (route.Controller == typeof(ProductsController) ||
-                         route.Controller == typeof(WarehousesController) ||
-                         route.Controller == typeof(EmployeesController) ||
-                         route.Controller == typeof(CustomersController) ||
-                         route.Controller == typeof(SecurityParityController) ||
-                         route.Controller == typeof(FoundationParityController)))
-                    throw new InvalidOperationException("Native WEB2 ownership or feature gate drift.");
-            }
-            else if (bridge != route)
-                throw new InvalidOperationException("Bridge route ownership drift.");
+            if (native == null || native.ControllerTypeInfo.AsType().FullName != route.NativeController ||
+                native.MethodInfo.Name != route.NativeAction ||
+                (endpoint.Metadata.GetMetadata<V1DesktopApiRequiredAttribute>() != null) != route.DesktopApiRequired)
+                throw new InvalidOperationException("Native API ownership or feature gate drift.");
 
-            rows.Add(new Row(verb, path, route.Controller.Name, route.Action.Name, endpoint.Order, owner,
-                (native?.ControllerTypeInfo.AsType() ?? bridge!.Controller).FullName!,
-                native?.MethodInfo.Name ?? bridge!.Action.Name));
+            rows.Add(new Row(verb, path, route.BaselineController, route.BaselineAction, endpoint.Order,
+                "native", native.ControllerTypeInfo.AsType().FullName!, native.MethodInfo.Name));
         }
         if (rows.Count != expected.Count || rows.Select(row => (row.HttpMethod, row.Path)).Distinct().Count() != expected.Count)
             throw new InvalidOperationException("Missing or duplicate active API endpoints.");
