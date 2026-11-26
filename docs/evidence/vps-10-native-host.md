@@ -44,9 +44,11 @@ Source review and manifest construction use the pinned GitHub tree. No full chec
 
 Bridge debt remains by design: legacy controller source links, reflection dispatch, HttpRequestMessage/HttpResponseMessage conversion, StrictWireJson/WireDom, and Desktop response DOM normalization. VPS-10.0 locks behavior before removing them. No assertion of improved speed.
 
-## After changes / acceptance
+## Independent review and acceptance
 
-- New `Vps10ContractCharacterizationTests`: 37 planned VSTest cases, manifest completeness and variant coverage, live raw HTTP binding/error tests and canonical culture vectors. The frozen 293-case selector remains separate.
-- G0/G1/G2 final-head execution: pending GitHub Actions evidence. Review final HEAD and record counts/CI URLs before marking COMPLETE; if failures, repair tests against independent contract evidence rather than changing the API.
+- Code HEAD `36dd3e519eeba9f9f634a4d62ebd0bc09452ff6d`: [Linux run 45749993349](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/45749993349), actual logs show Application 366/366, Host 736/736, local simulation 17/17, characterization 37/37 and frozen differential 293/293, all zero failed/skipped; compiled inventory 57/57. All 11 PR-triggered workflows reported success. Protected jobs skipped remain NOT VERIFIED. This is pre-review-fix evidence, not final-HEAD acceptance.
+- F01 (P2): count/variant checks did not bind the case ID and sample path to the actual verb/template; swaps between same-shaped routes could pass. Independent source comparison found the current 57 mappings correct. Added a CI gate that reads the three representative case tables from the pinned baseline, compares current case definitions, and validates each case/verb/sample against its logical route. A count-preserving swapped lookup mapping is required to fail.
+- F02 (P2): pin checks accepted an empty or edited pin dictionary; canonical and historical SQL coverage links were not checked against their sources. The review fix requires all six pins to agree with the exact baseline Git objects and current HEAD, verifies six canonical scopes and all 57 SQL classifications from pinned sources, and runs negative controls for missing pin, wrong SQL classification and missing canonical scope. No golden inputs, production routes, test selectors or protected admission gates changed.
+- Final review-fix HEAD must pass G0/G1/G2, the 37-case selector, strengthened manifest gate and all applicable regression workflows before merge. Final SHA, actual counts, CI links and independent review/merge receipt are recorded in [PR #33](https://github.com/chung6a8m/MyDmsVn-Vps/pull/33); pre-fix counts cannot substitute.
 - G3/G4 regression workflows remain unchanged; production VPS-08/VPS-09 gates are explicitly out of scope.
 
