@@ -43,6 +43,8 @@ sources = [p for p in sources if not any(name in {"bin", "obj"} for name in p.pa
                # VPS-10.4B: only the new native-only HTTPS/SQL restart test
                # partial. Three Gateway.Send calls are HTTP, not legacy MediatR.
                "tests/MyDmsVn.Server.AspNetCoreHost.Tests/Vps04bWeb6LiveSqlTests.SalesRestart.cs",
+               # VPS-10.5B: native-only real HTTPS Gateway.Send calls, not MediatR.
+               "tests/MyDmsVn.Server.AspNetCoreHost.Tests/Vps04bWeb6LiveSqlTests.ReceiptRestart.cs",
            }]
 # Keep the 06A negative/frozen lexical inventory of the net48/legacy code
 # path. Conditional VPS-06B native source does not alter that original baseline.

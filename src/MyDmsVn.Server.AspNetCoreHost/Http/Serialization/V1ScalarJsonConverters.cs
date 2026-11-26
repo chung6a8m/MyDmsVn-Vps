@@ -52,4 +52,18 @@ internal static class V1ScalarJsonConverters
         }
         catch (FormatException) { throw new V1BindingException("expectedVersion"); }
     }
+
+    // Receipt is deliberately stricter than the historically permissive Sales token.
+    internal static string ReceiptVersion(JsonElement value)
+    {
+        var text = Text(value, "expectedVersion");
+        try
+        {
+            if (text.Length != 12) throw new FormatException();
+            var bytes = Convert.FromBase64String(text);
+            if (bytes.Length != 8 || Convert.ToBase64String(bytes) != text) throw new FormatException();
+            return text;
+        }
+        catch (FormatException) { throw new V1BindingException("expectedVersion"); }
+    }
 }

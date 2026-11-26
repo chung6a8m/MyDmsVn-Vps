@@ -32,14 +32,14 @@ The first wave preserves all 57 existing WEB2–WEB6/Desktop verb/path pairs acr
 | VPS-10.4A — Sales reads | COMPLETE ONLY UPON [PR #37](https://github.com/chung6a8m/MyDmsVn-Vps/pull/37) review, required final-HEAD CI PASS AND MERGE; until then IN PROGRESS | [Implementation and review evidence](../evidence/vps-10-4a-sales-reads.md); 6 native / 51 bridge, 48 focused cases, exact final SHA/CI and merge receipt in PR #37 |
 | VPS-10.4B — Sales writes | COMPLETE ONLY UPON [PR #38](https://github.com/chung6a8m/MyDmsVn-Vps/pull/38) independent review, required final-HEAD CI PASS AND MERGE; until then IN PROGRESS | [Sales mutation and canonical context evidence](../evidence/vps-10-4b-sales-writes.md); 9 native / 48 bridge; frozen 293 cases retained |
 | VPS-10.5A — Receipt/Inventory reads | COMPLETE ONLY UPON [PR #39](https://github.com/chung6a8m/MyDmsVn-Vps/pull/39) independent review, required final-HEAD CI PASS AND MERGE; until then IN PROGRESS | [Implementation and review evidence](../evidence/vps-10-5a-receipt-inventory-reads.md): 13 native / 44 bridge; 63 focused cases; exact final SHA/CI and merge receipt in PR #39 |
-| VPS-10.5B — Receipt writes | NOT STARTED | Three native write routes; strict version grammar, inventory/cost/replay gates |
+| VPS-10.5B — Receipt writes | COMPLETE ONLY UPON [PR #40](https://github.com/chung6a8m/MyDmsVn-Vps/pull/40) independent review, required final-HEAD CI PASS AND MERGE; until then IN PROGRESS | [Implementation evidence](../evidence/vps-10-5b-receipt-writes.md): 16 native / 41 bridge; 61 focused cases; 3 new disposable HTTPS/SQL race/rollback/replay facts required |
 | VPS-10.6A — Catalog CRUD | NOT STARTED | Twenty native routes, per-entity permissions and concurrency; split PRs further if needed |
 | VPS-10.6B — Security/Foundation | NOT STARTED | Eight native routes, trusted identity, authorization and audit parity |
 | VPS-10.6C — Auth/Health | NOT STARTED | Six native routes, refresh/revoke/cookie/session/readiness parity |
 | VPS-10.6D — Operations | NOT STARTED | Seven native v1/v2/v3 operation routes; historical outcomes, pending state and resend policy |
 | VPS-10.7 — Bridge removal/handoff | NOT STARTED | All 57 actual native routes, complete OpenAPI, zero production bridge inputs and paired Desktop/Host evidence |
 
-**Current implementation increment: VPS-10.5A, based on merged PR #38 (`ade2f7cb0f67f4cd0945f673d41d56df6c1b2e77`).** Update these rows and the increment's evidence in its implementation PR; do not create a second live status ledger in the design or detailed plan.
+**Current implementation increment: VPS-10.5B, based on merged PR #39 (`a8a83e137bb194e523b439175fe8e51f641fb4f7`).** Update these rows and the increment's evidence in its implementation PR; do not create a second live status ledger in the design or detailed plan.
 
 ## Status rules
 

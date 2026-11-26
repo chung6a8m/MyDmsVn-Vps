@@ -341,6 +341,25 @@ jobs:
           assert counts == {'total':63,'executed':63,'passed':63,'failed':0,'notExecuted':0}, counts
           print(f'PASS VPS-10.5A Receipt/Inventory reads: {counts}')
           PY
+      - name: Require VPS-10.5B native Receipt writes (61 cases)
+        working-directory: src/MyDmsVn.Server.AspNetCoreHost
+        run: |
+          dotnet test ../../tests/MyDmsVn.Server.AspNetCoreHost.Tests/MyDmsVn.Server.AspNetCoreHost.Tests.csproj \
+            -p:Vps04Server=true -p:Vps06bMediator=true -c Release -f net10.0 --no-build --no-restore -v minimal \
+            --filter FullyQualifiedName~Vps10ReceiptWriteTests \
+            --logger "trx;LogFileName=vps10-receipt-writes.trx" --results-directory "$GITHUB_WORKSPACE/vps04a-trx"
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          path = Path(os.environ['GITHUB_WORKSPACE'])/'vps04a-trx/vps10-receipt-writes.trx'
+          counters = ET.parse(path).getroot().find('./t:ResultSummary/t:Counters', ns)
+          assert counters is not None, 'Missing VPS-10.5B TRX counters'
+          counts = {k: int(v) for k, v in counters.attrib.items() if k in ('total','executed','passed','failed','notExecuted')}
+          assert counts == {'total':61,'executed':61,'passed':61,'failed':0,'notExecuted':0}, counts
+          print(f'PASS VPS-10.5B Receipt writes: {counts}')
+          PY
       - name: Require VPS-10.4B Sales writes (43 cases)
         working-directory: src/MyDmsVn.Server.AspNetCoreHost
         run: |

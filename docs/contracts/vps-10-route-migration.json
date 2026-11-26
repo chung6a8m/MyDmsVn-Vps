@@ -1298,7 +1298,7 @@
       "order": 0,
       "baselineController": "GoodsReceiptsController",
       "baselineAction": "Create",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.5B",
       "contractFamily": "web3-v1",
       "authentication": "bearer",
@@ -1321,7 +1321,7 @@
         ],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.GoodsReceiptsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Receipts.GoodsReceiptsController",
       "actualAction": "Create"
     },
     {
@@ -1331,7 +1331,7 @@
       "order": 0,
       "baselineController": "GoodsReceiptsController",
       "baselineAction": "Post",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.5B",
       "contractFamily": "web3-v1",
       "authentication": "bearer",
@@ -1354,7 +1354,7 @@
         ],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.GoodsReceiptsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Receipts.GoodsReceiptsController",
       "actualAction": "Post"
     },
     {
@@ -1793,7 +1793,7 @@
       "order": 0,
       "baselineController": "GoodsReceiptsController",
       "baselineAction": "Update",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.5B",
       "contractFamily": "web3-v1",
       "authentication": "bearer",
@@ -1816,7 +1816,7 @@
         ],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.GoodsReceiptsController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Receipts.GoodsReceiptsController",
       "actualAction": "Update"
     },
     {

@@ -147,8 +147,11 @@ internal sealed class ReceiptIdBinder : IModelBinder
         try
         {
             var request = context.HttpContext.Request;
-            V1QueryPolicy.Read(request);
-            await V1QueryPolicy.RequireEmptyBodyAsync(request).ConfigureAwait(false);
+            if (request.Method == "GET")
+            {
+                V1QueryPolicy.Read(request);
+                await V1QueryPolicy.RequireEmptyBodyAsync(request).ConfigureAwait(false);
+            }
             context.Result = ModelBindingResult.Success(V1ScalarBinders.PositiveLong(
                 request.RouteValues["receiptId"] as string ?? "", "receiptId"));
         }
