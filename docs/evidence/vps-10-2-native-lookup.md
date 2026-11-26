@@ -21,3 +21,7 @@ These are metadata provenance only, not a build dependency, and **not locally ge
 This editing environment has no .NET SDK and cannot clone/restore via direct network. Source is submitted through GitHub API. Compile, targeted tests, live differential, Windows build and SQL gates are NOT RUN locally. Inspect the actual final PR HEAD's CI and any findings before independent review and merge.
 
 Required next: successful locked restore, 33/33 new targeted cases, 37/37 characterization, 26/26 composition, 293/293 frozen live differential, 57 actual routes with exactly 4 native and 53 bridge, unchanged Windows and SQL gates, all 11 required workflows on final HEAD, independent review. VPS-08/09 protected deployment and production acceptance remain NOT VERIFIED. No merge or release is authorized by this draft.
+
+## CI finding (initial source HEAD)
+
+Initial HEAD `49af9d4eb24f02be5227813b23de253596ed7435` failed VPS-06A frozen lexical inventory: the net10-only native controller adds exactly 2 IMediator occurrences and 1 Send call. The legacy inventory must remain frozen at 171 sender references / 495 sends. Exclude only that exact new native controller source path, following the VPS-10.1 composition-test precedent; leave all expected legacy counts and production generated-Mediator verification unchanged. Source correction awaits final-HEAD CI. See https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/45754613604.
