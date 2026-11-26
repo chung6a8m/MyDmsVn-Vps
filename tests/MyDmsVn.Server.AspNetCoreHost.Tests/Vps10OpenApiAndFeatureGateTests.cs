@@ -47,6 +47,8 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             "/api/v1/catalog/warehouses/lookup",
             "/api/v1/goods-receipts",
             "/api/v1/goods-receipts/{receiptId}",
+            "/api/v1/goods-receipts/{receiptId}/draft",
+            "/api/v1/goods-receipts/{receiptId}/post",
             "/api/v1/inventory/balances",
             "/api/v1/inventory/stock-card",
             "/api/v1/sales-receipts",
@@ -89,9 +91,31 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             Assert.True(responses.TryGetProperty("403", out _));
             Assert.True(responses.TryGetProperty("413", out _));
         }
-        // WEB3 reads are native; receipt writes remain on the bridge.
+        // WEB3 reads and receipt writes are native.
         var receiptListPath = paths.GetProperty("/api/v1/goods-receipts");
-        Assert.False(receiptListPath.TryGetProperty("post", out _));
+        var receiptCreate = receiptListPath.GetProperty("post");
+        var receiptUpdate = paths.GetProperty("/api/v1/goods-receipts/{receiptId}/draft").GetProperty("put");
+        var receiptPost = paths.GetProperty("/api/v1/goods-receipts/{receiptId}/post").GetProperty("post");
+        foreach (var mutation in new[] { receiptCreate, receiptUpdate, receiptPost })
+        {
+            Assert.True(mutation.TryGetProperty("requestBody", out _));
+            Assert.True(mutation.GetProperty("responses").TryGetProperty("409", out _));
+            var body = Resolve(document, mutation.GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("schema"));
+            var fields = body.GetProperty("properties");
+            if (fields.TryGetProperty("lines", out var lines))
+            {
+                var line = Resolve(document, Resolve(document, lines).GetProperty("items"));
+                foreach (var amount in new[] { "quantity", "unitCost" })
+                    Assert.Equal("string", Resolve(document, line.GetProperty("properties").GetProperty(amount)).GetProperty("type").GetString());
+            }
+            if (fields.TryGetProperty("expectedVersion", out var versionProperty))
+            {
+                var version = Resolve(document, versionProperty);
+                Assert.Equal("string", version.GetProperty("type").GetString());
+                Assert.Equal(12, version.GetProperty("minLength").GetInt32());
+                Assert.Equal(12, version.GetProperty("maxLength").GetInt32());
+            }
+        }
         var receiptDetail = paths.GetProperty("/api/v1/goods-receipts/{receiptId}").GetProperty("get");
         var receiptId = Assert.Single(receiptDetail.GetProperty("parameters").EnumerateArray());
         Assert.Equal("receiptId", receiptId.GetProperty("name").GetString());
