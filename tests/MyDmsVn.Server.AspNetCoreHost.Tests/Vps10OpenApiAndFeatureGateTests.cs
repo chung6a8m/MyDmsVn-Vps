@@ -41,6 +41,11 @@ public sealed class Vps10OpenApiAndFeatureGateTests
         var paths = document.GetProperty("paths");
         Assert.Equal(new[]
         {
+            "/api/v1/auth/capabilities",
+            "/api/v1/auth/login",
+            "/api/v1/auth/logout",
+            "/api/v1/auth/me",
+            "/api/v1/auth/refresh",
             "/api/v1/catalog/customers",
             "/api/v1/catalog/customers/lookup",
             "/api/v1/catalog/customers/{id}",
@@ -62,6 +67,7 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             "/api/v1/goods-receipts/{receiptId}",
             "/api/v1/goods-receipts/{receiptId}/draft",
             "/api/v1/goods-receipts/{receiptId}/post",
+            "/api/v1/health",
             "/api/v1/inventory/balances",
             "/api/v1/inventory/stock-card",
             "/api/v1/sales-receipts",
@@ -76,6 +82,15 @@ public sealed class Vps10OpenApiAndFeatureGateTests
             "/api/v1/security/roles",
             "/api/v1/security/users"
         }, paths.EnumerateObject().Select(p => p.Name).OrderBy(p => p, StringComparer.Ordinal).ToArray());
+        var login = paths.GetProperty("/api/v1/auth/login").GetProperty("post");
+        var loginSchema = Resolve(document, login.GetProperty("requestBody").GetProperty("content")
+            .GetProperty("application/json").GetProperty("schema"));
+        Assert.Equal(new[] { "password", "username" }, loginSchema.GetProperty("required").EnumerateArray()
+            .Select(p => p.GetString()).OrderBy(p => p, StringComparer.Ordinal).ToArray());
+        Assert.Equal("string", Resolve(document, loginSchema.GetProperty("properties").GetProperty("password")).GetProperty("type").GetString());
+        Assert.False(paths.GetProperty("/api/v1/auth/refresh").GetProperty("post").TryGetProperty("requestBody", out _));
+        Assert.False(paths.GetProperty("/api/v1/auth/logout").GetProperty("post").TryGetProperty("requestBody", out _));
+        Assert.True(paths.GetProperty("/api/v1/health").GetProperty("get").GetProperty("responses").TryGetProperty("503", out _));
         foreach (var route in paths.EnumerateObject().Where(p => p.Name.StartsWith("/api/v1/catalog/", StringComparison.Ordinal) && p.Name.EndsWith("/lookup", StringComparison.Ordinal)))
         {
             var operation = route.Value.GetProperty("get");

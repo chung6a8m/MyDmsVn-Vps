@@ -39,6 +39,8 @@ sources = [p for p in sources if not any(name in {"bin", "obj"} for name in p.pa
                "src/MyDmsVn.Server.AspNetCoreHost/Features/Catalog/WarehousesController.cs",
                "src/MyDmsVn.Server.AspNetCoreHost/Features/Catalog/EmployeesController.cs",
                "src/MyDmsVn.Server.AspNetCoreHost/Features/Catalog/CustomersController.cs",
+               # VPS-10.6C native-only generated Mediator.
+               "src/MyDmsVn.Server.AspNetCoreHost/Features/Auth/AuthController.cs",
                # VPS-10.6B native-only generated Mediator.
                "src/MyDmsVn.Server.AspNetCoreHost/Features/Security/SecurityController.cs",
                "src/MyDmsVn.Server.AspNetCoreHost/Features/Foundation/FoundationController.cs",

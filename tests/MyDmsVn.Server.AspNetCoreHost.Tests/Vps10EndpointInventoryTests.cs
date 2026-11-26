@@ -26,15 +26,15 @@ public sealed class Vps10EndpointInventoryTests
         ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints).ToArray();
 
     [Fact]
-    public void Actual_endpoints_have_44_MVC_and_13_bridge_owners()
+    public void Actual_endpoints_have_50_MVC_and_7_bridge_owners()
     {
         using var app = Build();
         var endpoints = Endpoints(app);
         var inventory = Net10RouteTable.ReadInventory(endpoints);
         Assert.Equal(57, inventory.Count);
-        Assert.Equal(44, inventory.Count(row => row.ActiveOwner == "native"));
-        Assert.Equal(13, inventory.Count(row => row.ActiveOwner == "bridge"));
-        Assert.Equal(44, endpoints.Count(endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() != null));
+        Assert.Equal(50, inventory.Count(row => row.ActiveOwner == "native"));
+        Assert.Equal(7, inventory.Count(row => row.ActiveOwner == "bridge"));
+        Assert.Equal(50, endpoints.Count(endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() != null));
         Assert.All(inventory.Where(row => row.ActiveOwner == "native"), row =>
         {
             var expected = row.Path.StartsWith("/api/v1/catalog/", StringComparison.Ordinal)
@@ -47,7 +47,11 @@ public sealed class Vps10EndpointInventoryTests
                             ? "MyDmsVn.Server.HttpHost.Features.Security.SecurityController"
                             : row.Path.StartsWith("/api/v1/foundation/", StringComparison.Ordinal)
                                 ? "MyDmsVn.Server.HttpHost.Features.Foundation.FoundationController"
-                                : "MyDmsVn.Server.HttpHost.Features.Sales.SalesReceiptsController";
+                                : row.Path.StartsWith("/api/v1/auth/", StringComparison.Ordinal)
+                                    ? "MyDmsVn.Server.HttpHost.Features.Auth.AuthController"
+                                    : row.Path == "/api/v1/health"
+                                        ? "MyDmsVn.Server.HttpHost.Features.Auth.HealthController"
+                                        : "MyDmsVn.Server.HttpHost.Features.Sales.SalesReceiptsController";
             Assert.Equal(expected, row.ActualController);
             Assert.Equal(expected.Split('.').Last() switch
             {

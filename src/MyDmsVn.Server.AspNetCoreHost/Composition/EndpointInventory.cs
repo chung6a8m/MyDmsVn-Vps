@@ -15,6 +15,8 @@ using NativeReceipts = MyDmsVn.Server.HttpHost.Features.Receipts.GoodsReceiptsCo
 using NativeInventory = MyDmsVn.Server.HttpHost.Features.Inventory.InventoryController;
 using NativeSecurity = MyDmsVn.Server.HttpHost.Features.Security.SecurityController;
 using NativeFoundation = MyDmsVn.Server.HttpHost.Features.Foundation.FoundationController;
+using NativeAuth = MyDmsVn.Server.HttpHost.Features.Auth.AuthController;
+using NativeHealth = MyDmsVn.Server.HttpHost.Features.Auth.HealthController;
 
 namespace MyDmsVn.Server.HttpHost;
 
@@ -35,6 +37,8 @@ internal static class EndpointInventory
         route.Controller == typeof(GoodsReceiptsController) ? typeof(NativeReceipts) :
         route.Controller == typeof(SecurityParityController) ? typeof(NativeSecurity) :
         route.Controller == typeof(FoundationParityController) ? typeof(NativeFoundation) :
+        route.Controller == typeof(AuthController) ? typeof(NativeAuth) :
+        route.Controller == typeof(HealthController) ? typeof(NativeHealth) :
         route.Verb == "GET" && route.Controller == typeof(InventoryController) ? typeof(NativeInventory) : null;
 
     internal static bool IsNative(Net10RouteTable.Route route) => NativeOwner(route) != null;

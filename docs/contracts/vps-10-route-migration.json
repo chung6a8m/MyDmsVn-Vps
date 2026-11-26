@@ -18,7 +18,7 @@
       "order": 0,
       "baselineController": "AuthController",
       "baselineAction": "Capabilities",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6C",
       "contractFamily": "web2-v1",
       "authentication": "bearer",
@@ -36,7 +36,7 @@
         "desktopMethods": [],
         "historicalSqlLedger": "GROUP_EAD_SQL"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.AuthController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Auth.AuthController",
       "actualAction": "Capabilities"
     },
     {
@@ -46,7 +46,7 @@
       "order": 0,
       "baselineController": "AuthController",
       "baselineAction": "Me",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6C",
       "contractFamily": "web2-v1",
       "authentication": "bearer",
@@ -66,7 +66,7 @@
         ],
         "historicalSqlLedger": "GROUP_EAD_SQL"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.AuthController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Auth.AuthController",
       "actualAction": "Me"
     },
     {
@@ -559,7 +559,7 @@
       "order": 0,
       "baselineController": "HealthController",
       "baselineAction": "Get",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6C",
       "contractFamily": "web2-health",
       "authentication": "anonymous",
@@ -574,7 +574,7 @@
         "desktopMethods": [],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.HealthController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Auth.HealthController",
       "actualAction": "Get"
     },
     {
@@ -1079,7 +1079,7 @@
       "order": 0,
       "baselineController": "AuthController",
       "baselineAction": "Login",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6C",
       "contractFamily": "web2-v1",
       "authentication": "cookie-endpoint",
@@ -1100,7 +1100,7 @@
         ],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.AuthController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Auth.AuthController",
       "actualAction": "Login"
     },
     {
@@ -1110,7 +1110,7 @@
       "order": 0,
       "baselineController": "AuthController",
       "baselineAction": "Logout",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6C",
       "contractFamily": "web2-v1",
       "authentication": "cookie-endpoint",
@@ -1127,7 +1127,7 @@
         "desktopMethods": [],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.AuthController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Auth.AuthController",
       "actualAction": "Logout"
     },
     {
@@ -1137,7 +1137,7 @@
       "order": 0,
       "baselineController": "AuthController",
       "baselineAction": "Refresh",
-      "activeOwner": "bridge",
+      "activeOwner": "native",
       "owningIncrement": "VPS-10.6C",
       "contractFamily": "web2-v1",
       "authentication": "cookie-endpoint",
@@ -1156,7 +1156,7 @@
         "desktopMethods": [],
         "historicalSqlLedger": "PRIOR_LIVE_BOUNDED"
       },
-      "actualController": "MyDmsVn.Server.HttpHost.AuthController",
+      "actualController": "MyDmsVn.Server.HttpHost.Features.Auth.AuthController",
       "actualAction": "Refresh"
     },
     {

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using MyDmsVn.Server.Application.Identity;
 
 namespace MyDmsVn.Server.HttpHost;
@@ -64,27 +65,16 @@ internal static class CoreApiBoundary
             var authorization = HeaderValues(context, "Authorization");
             if (!anonymous || !cookieEndpoint && authorization != null)
             {
-                var token = ReadBearer(authorization);
-                var validated = token == null ? null
-                    : new BearerTokenValidator(options, context.RequestServices.GetRequiredService<IUtcClock>()).Validate(token);
-                if (validated == null)
-                {
-                    using var denied = Unauthorized(correlation);
-                    await Net10RouteTable.WriteAsync(context, denied).ConfigureAwait(false);
-                    return;
-                }
-
-                var user = await context.RequestServices.GetRequiredService<IWebAuthSessionStore>()
-                    .GetActiveUserAsync(validated.SessionId, validated.UserId, context.RequestAborted)
+                var admitted = await NativeAuthenticationRegistration.ValidateAsync(context, options, authorization)
                     .ConfigureAwait(false);
-                if (user == null || !user.IsAuthenticated || !user.IsActive || user.UserId != validated.UserId)
+                if (admitted == null)
                 {
                     using var denied = Unauthorized(correlation);
                     await Net10RouteTable.WriteAsync(context, denied).ConfigureAwait(false);
                     return;
                 }
-                actor = user;
-                sessionId = validated.SessionId;
+                actor = admitted.User;
+                sessionId = admitted.SessionId;
             }
 
             identity.Admit(actor, sessionId);
@@ -114,6 +104,9 @@ internal static class CoreApiBoundary
             // new 500 envelope: an unadmitted refresh cookie would misrepresent success.
             context.Response.Headers.Clear();
             SetHeaders(context, correlation);
+            // Report the handled failure once without exception text, SQL, claims or credentials.
+            context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("MyDmsVn.HttpAdmission")
+                .LogError("API request failed before response start. CorrelationId: {CorrelationId}", correlation);
             // SQL errors, key material, claims and tokens must not enter the error response.
             using var failure = HttpJson.Error(500, "InternalError",
                 "An unexpected error occurred.", correlation);
@@ -127,16 +120,6 @@ internal static class CoreApiBoundary
     private static string SafeCorrelation(IList<string>? values) =>
         values?.Count == 1 && Regex.IsMatch(values[0], @"\A[A-Za-z0-9_-]{1,128}\z")
             ? values[0] : Guid.NewGuid().ToString("N");
-
-    private static string? ReadBearer(IList<string>? values)
-    {
-        if (values == null || values.Count != 1) return null;
-        var text = values[0];
-        if (!text.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) || text.Length <= 7)
-            return null;
-        var token = text.Substring(7);
-        return token.Any(c => char.IsWhiteSpace(c) || c == ',') ? null : token;
-    }
 
     private static HttpResponseMessage Unauthorized(string correlation)
     {

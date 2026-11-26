@@ -916,7 +916,8 @@ public sealed class Vps05cDesktopRouteLiveParityTests
         }
 
         public async Task<HttpResponseMessage> SendControlAsync(string method, string path, string? body,
-            bool authenticated, bool cookie)
+            bool authenticated, bool cookie, string? extraHeader = null, string[]? extraValues = null,
+            string contentType = "application/json")
         {
             using var request = new HttpRequestMessage(new HttpMethod(method), path);
             request.Headers.Add("X-Correlation-ID", Correlation);
@@ -929,7 +930,8 @@ public sealed class Vps05cDesktopRouteLiveParityTests
                 request.Headers.Add("X-Requested-With", "XMLHttpRequest");
             }
             if (cookie) request.Headers.Add("Cookie", "__Host-mydmsvn-rt=22222222-2222-4222-8222-222222222222");
-            if (body != null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+            if (extraHeader != null) request.Headers.TryAddWithoutValidation(extraHeader, extraValues!);
+            if (body != null) request.Content = new StringContent(body, Encoding.UTF8, contentType);
             return await _client.SendAsync(request);
         }
 

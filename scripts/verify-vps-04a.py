@@ -46,11 +46,11 @@ assert expected == actual, (
 migration = json.loads((manifest / "vps-10-route-migration.json").read_text(encoding="utf-8-sig"))
 by_route = {(r["httpMethod"], r["path"]): r for r in migration["routes"]}
 assert len(by_route) == len(migration["routes"]) == 57
-assert sum(r["activeOwner"] == "native" for r in migration["routes"]) == 44
+assert sum(r["activeOwner"] == "native" for r in migration["routes"]) == 50
 for endpoint in actual_routes:
     row = by_route[endpoint["httpMethod"], endpoint["path"]]
     for key in ("order", "activeOwner", "actualController", "actualAction"):
         assert row[key] == endpoint[key], (row["id"], key, row[key], endpoint[key])
     assert row["baselineController"] == endpoint["controller"]
     assert row["baselineAction"] == endpoint["action"]
-print("PASS: actual net10 endpoint map 57/57, native 44, bridge 13; not live SQL/HTTP or production acceptance")
+print("PASS: actual net10 endpoint map 57/57, native 50, bridge 7; not live SQL/HTTP or production acceptance")
