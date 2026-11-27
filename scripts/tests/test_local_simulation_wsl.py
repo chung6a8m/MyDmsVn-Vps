@@ -81,6 +81,8 @@ class LocalSimulationWslTests(unittest.TestCase):
     def test_install_claims_identity_before_user_and_runtime_acquisition(self):
         source = HELPER.read_text(encoding="utf-8")
         install = source.split("install_lab()", 1)[1].split("install_prerequisites()", 1)[0]
+        self.assertIn('"$SOURCE_SHA" >/etc/mydmsvn-local-sim/source-sha', install)
+        self.assertIn('"releases/$RELEASE_ID" /opt/mydmsvn-local-sim/current', install)
         marker = install.index("/etc/mydmsvn-local-sim/instance-id")
         self.assertLess(marker, install.index("useradd --system"))
         self.assertLess(marker, install.index('cp -R --no-preserve=ownership,mode -- "$state/runtime/."'))
@@ -154,6 +156,7 @@ reload_nginx_after_reset
                 [
                     f"INSTANCE_ID={self.instance_id}",
                     "SOURCE_SHA=" + "a" * 40,
+                    "RELEASE_ID=" + "b" * 40,
                     "PUBLIC_ORIGIN=https://localhost:50443",
                     "SQL_SERVER=127.0.0.1,11433",
                 ]

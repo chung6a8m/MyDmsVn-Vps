@@ -25,10 +25,12 @@ load_instance() {
   regular_file "$file"
   INSTANCE_ID="$(read_setting "$file" INSTANCE_ID)"
   SOURCE_SHA="$(read_setting "$file" SOURCE_SHA)"
+  RELEASE_ID="$(read_setting "$file" RELEASE_ID)"
   PUBLIC_ORIGIN="$(read_setting "$file" PUBLIC_ORIGIN)"
   SQL_SERVER="$(read_setting "$file" SQL_SERVER)"
   [[ "$INSTANCE_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]] || fail 'LocalSimulation.InstanceInvalid'
   [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'LocalSimulation.SourceShaInvalid'
+  [[ "$RELEASE_ID" =~ ^[0-9a-f]{40}$ ]] || fail 'LocalSimulation.ReleaseIdentityMismatch'
   [[ "$PUBLIC_ORIGIN" == 'https://localhost:50443' ]] || fail 'LocalSimulation.OriginInvalid'
   [[ "$SQL_SERVER" == '127.0.0.1,11433' ]] || fail 'LocalSimulation.SqlServerInvalid'
 }
@@ -130,11 +132,11 @@ install_lab() {
   install -d -o root -g root -m 0700 /etc/mydmsvn-local-sim/credentials /etc/mydmsvn-local-sim/tls
   install -d -o mydmsvn-local-sim -g mydmsvn-local-sim -m 0700 /var/lib/mydmsvn-local-sim /var/lib/mydmsvn-local-sim/audit
   install -o mydmsvn-local-sim -g mydmsvn-local-sim -m 0600 /dev/null /var/lib/mydmsvn-local-sim/audit/security.jsonl
-  [[ ! -e "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA" ]] || fail 'LocalSimulation.ReleaseExists'
-  install -d -o root -g root -m 0700 "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA"
-  cp -R --no-preserve=ownership,mode -- "$publish/." "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA/"
-  protect_installation_tree "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA"
-  ln -sfn "releases/$SOURCE_SHA" /opt/mydmsvn-local-sim/current
+  [[ ! -e "/opt/mydmsvn-local-sim/releases/$RELEASE_ID" ]] || fail 'LocalSimulation.ReleaseExists'
+  install -d -o root -g root -m 0700 "/opt/mydmsvn-local-sim/releases/$RELEASE_ID"
+  cp -R --no-preserve=ownership,mode -- "$publish/." "/opt/mydmsvn-local-sim/releases/$RELEASE_ID/"
+  protect_installation_tree "/opt/mydmsvn-local-sim/releases/$RELEASE_ID"
+  ln -sfn "releases/$RELEASE_ID" /opt/mydmsvn-local-sim/current
   install -o root -g root -m 0644 "$rendered/mydmsvn-local-sim.service" /etc/systemd/system/mydmsvn-local-sim.service
   install -o root -g root -m 0755 "$rendered/mydmsvn-local-sim-start" /usr/local/libexec/mydmsvn-local-sim-start
   install -o root -g mydmsvn-local-sim -m 0640 "$rendered/runtime.env" /etc/mydmsvn-local-sim/runtime.env

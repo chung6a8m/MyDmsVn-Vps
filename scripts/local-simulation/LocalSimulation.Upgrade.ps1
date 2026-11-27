@@ -88,8 +88,6 @@ function Enter-LocalSimulationResetFence {
     if ($Receipt.phase -eq 'upgrade-pending') {
         throw [InvalidOperationException]::new('LocalSimulation.UpgradeFenceRetained')
     }
-    if ($null -eq $Receipt.artifacts -or 'candidate' -notin $Receipt.artifacts.PSObject.Properties.Name) { return }
-
     $slot = Get-LocalSimulationPendingSlot
     $system = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
     $security = [Security.AccessControl.MutexSecurity]::new()
@@ -248,7 +246,7 @@ function Invoke-LocalSimulationUpgrade {
         $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
         $sidHash = Get-ByteSha256 ([Text.Encoding]::UTF8.GetBytes($sid))
         if ($Action -eq 'PlanUpgrade') {
-            if ($interrupted -or $Candidate.identity.sourceSha -in @($activeRelease.candidate.sourceSha, $Receipt.sourceSha)) {
+            if ($interrupted -or $Candidate.identity.sourceSha -in @($activeRelease.candidate.sourceSha, (Get-LocalSimulationInitialReleaseId $Receipt))) {
                 throw [InvalidOperationException]::new('LocalSimulation.ReleaseIdentityMismatch')
             }
             $wsl = Get-LocalSimulationUpgradeProof $RepoRoot $Receipt $activeRelease 'current'
@@ -271,7 +269,7 @@ function Invoke-LocalSimulationUpgrade {
         }
 
         if ($Action -eq 'Upgrade' -and -not $interrupted) {
-            if ($Candidate.identity.sourceSha -in @($activeRelease.candidate.sourceSha, $Receipt.sourceSha)) {
+            if ($Candidate.identity.sourceSha -in @($activeRelease.candidate.sourceSha, (Get-LocalSimulationInitialReleaseId $Receipt))) {
                 throw [InvalidOperationException]::new('LocalSimulation.ReleaseIdentityMismatch')
             }
             $wsl = Get-LocalSimulationUpgradeProof $RepoRoot $Receipt $activeRelease 'current'
@@ -309,8 +307,7 @@ function Invoke-LocalSimulationUpgrade {
             $rollback = $Action -eq 'RollbackUpgrade'
             $target = if ($rollback) { $previous.from } else { $previous.to }
             $other = if ($rollback) { $previous.to } else { $previous.from }
-            $targetTree = if ($target.releaseId -eq $Receipt.sourceSha) { Join-Path $StateRoot 'artifacts' }
-                          else { Join-Path $StateRoot "artifacts\releases\$($target.releaseId)" }
+            $targetTree = Get-LocalSimulationArtifactRoot $StateRoot $Receipt $target.releaseId
             Get-CandidateTree $targetTree 'desktop' $target.candidate.sourceSha $target.candidate.desktopManifestSha256 | Out-Null
             Assert-ArtifactManifest (Join-Path $targetTree 'host') $target.hostSha256
             $currentReleaseId = (@(Invoke-WslHelper $RepoRoot 'upgrade-current' @($Receipt.instanceId, $Receipt.sourceSha, $target.releaseId, $other.releaseId) -Sudo) -join '').Trim()

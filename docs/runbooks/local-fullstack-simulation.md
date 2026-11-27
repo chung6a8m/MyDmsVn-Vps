@@ -44,7 +44,7 @@ $pair = @{
 .\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action Initialize -OutputFormat Json @pair
 ```
 
-Dry run checks the pair without provisioning. Initialize copies and rechecks the exact pair, publishes the SQL tooling from the clean checkout, and records the candidate separately from the tooling source in the bound receipt. Start and Verify still require the owning tooling checkout. Use the `desktopPath` returned by Initialize for the attended workflow.
+Dry run checks the pair without provisioning. Initialize copies and rechecks the exact pair, publishes the SQL tooling from the clean checkout, and records the candidate separately from the tooling source in the bound receipt. The initial prebuilt release uses the candidate SHA, so an upgrade can activate a different pair built from the owning tooling SHA. Start and Verify still require the owning tooling checkout. Use the `desktopPath` returned by Initialize for the attended workflow.
 
 ## Operate and verify
 
@@ -105,7 +105,7 @@ $receipt.instanceId
 
 Reset validates the receipt path, instance ID, Docker engine and labels, WSL marker/source link, and CA file/store subject and thumbprint before any deletion. It refuses missing/malformed receipts, mismatched identities, paths outside the ignored state tree, ancestor or leaf reparse points, and `-DryRun`. It removes only owned resources; unrelated Docker containers, volumes, WSL services, files, and certificates are preserved. A partial failed initialization is reset with the same command only when its acquisition marker proves ownership; otherwise state is retained for diagnosis.
 
-For a prebuilt pair, Reset takes the Desktop's owner/origin pending-write mutex before checking the slot and holds it through cleanup. If a write holds the mutex, Reset returns `LocalSimulation.UpgradeFenceBusy` before removing resources. If the slot contains an intent or cannot be inspected safely, keep the lab and resolve the pending state before retrying.
+For both source-built and prebuilt labs, Reset takes the Desktop's owner/origin pending-write mutex before checking the slot and holds it through teardown. If a write holds the mutex, Reset returns `LocalSimulation.UpgradeFenceBusy` before removing resources. If the slot contains an intent or cannot be inspected safely, keep the lab and resolve the pending state before retrying.
 
 ## Troubleshooting
 

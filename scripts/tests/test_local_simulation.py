@@ -214,7 +214,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertFalse(self.state.exists())
 
     def candidate_fixture(self, source="b" * 40, extra_path=None):
-        candidate = self.outside / "candidate"
+        candidate = self.outside / ("candidate-" + source)
         candidate.mkdir()
         digests = []
         for kind, filenames in (
@@ -428,6 +428,92 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertEqual("LocalSimulation.UpgradeArgumentsInvalid", json.loads(result.stdout)["code"])
         self.assertFalse(self.state.exists())
 
+    @unittest.skipUnless(os.name == "nt", "Windows operator identity")
+    def test_upgrade_to_tooling_sha_and_rollback_to_distinct_initial_release(self):
+        baseline, baseline_hashes = self.candidate_fixture("a" * 40)
+        target, target_hashes = self.candidate_fixture("b" * 40)
+        self.state.mkdir(parents=True)
+        command = r"""
+            $ErrorActionPreference = 'Stop'
+            $module = Import-Module $env:MYDMSVN_TEST_RUNTIME -Force -DisableNameChecking -PassThru
+            & $module {
+                function Assert-LocalSimulationIdentity {}
+                function Get-Process {}
+                function Open-LocalSimulationPendingFence { [IO.File]::OpenRead($pendingFile) }
+                function Get-LocalSimulationUpgradeDockerProof { [ordered]@{id='docker'} }
+                function Invoke-SqlHelper { @{databaseSchema=13;database='lab';instanceId='instance';databaseGuid='sql';deploymentEpoch='epoch'} }
+                function Get-LocalSimulationUpgradeProof {
+                    @{pid=$script:hostPid;auditSize=3;auditPrefixSha256='prefix';continuitySha256='audit'}
+                }
+                function Get-LocalSimulationUpgradeTemplateHashes {}
+                function Convert-ToWslPath($path) { $path }
+                function Save-LocalSimulationUpgradeReceipt {}
+                function Invoke-WebRequest { @{StatusCode=200} }
+                function Invoke-WslHelper($root, $verb, $arguments, [switch]$Sudo) {
+                    if ($arguments[1] -cne $tooling) { throw 'Lost owning tooling SHA' }
+                    if ($verb -eq 'upgrade-current') { return $script:active }
+                    if ($verb -ne 'upgrade-activate' -or $arguments[2] -cne $script:active) { throw 'Invalid activation' }
+                    Assert-ArtifactManifest $arguments[6] $arguments[5]
+                    $script:active = $arguments[3]
+                    $script:hostPid++
+                }
+                $state = $env:MYDMSVN_TEST_STATE
+                $tooling = 'b' * 40
+                $initial = 'a' * 40
+                $script:active = $initial
+                $script:hostPid = 41
+                $baseline = Get-LocalSimulationCandidate $env:MYDMSVN_TEST_BASELINE $initial `
+                    $env:MYDMSVN_TEST_BASELINE_DESKTOP $env:MYDMSVN_TEST_BASELINE_HOST
+                $target = Get-LocalSimulationCandidate $env:MYDMSVN_TEST_TARGET $tooling `
+                    $env:MYDMSVN_TEST_TARGET_DESKTOP $env:MYDMSVN_TEST_TARGET_HOST
+                $root = Join-Path $state artifacts
+                [IO.Directory]::CreateDirectory($root) | Out-Null
+                $hostHash = Copy-LocalSimulationCandidate $baseline $root
+                $receipt = [pscustomobject]@{
+                    phase='ready';sourceSha=$tooling;instanceId='instance'
+                    wsl=[pscustomobject]@{initialReleaseId=$initial}
+                    artifacts=[pscustomobject]@{candidate=$baseline.identity;hostSha256=$hostHash}
+                }
+                $pendingFile = Join-Path $state 'fixture.intent'
+                [IO.File]::WriteAllText($pendingFile, 'synthetic pending fixture')
+                $pendingHash = Get-FileSha256 $pendingFile
+                foreach ($action in 'PlanUpgrade','Upgrade','VerifyUpgrade','RollbackUpgrade') {
+                    $pair = if ($action -in 'PlanUpgrade','Upgrade') { $target } else { $null }
+                    $result = Invoke-LocalSimulationUpgrade $action '.' $state $receipt $pair 'epoch' $pendingHash
+                    $expected = if ($action -in 'PlanUpgrade','RollbackUpgrade') { $initial } else { $tooling }
+                    $expectedRoot = if ($expected -eq $initial) { $root } else { Join-Path $root "releases\$tooling" }
+                    if ($script:active -cne $expected -or $result.pendingSha256 -cne $pendingHash -or
+                        (Get-LocalSimulationReleaseId $receipt) -cne $expected -or $receipt.sourceSha -cne $tooling -or
+                        (Get-FileSha256 $pendingFile) -cne $pendingHash -or $result.deploymentEpoch -cne 'epoch') {
+                        throw 'Release or pending continuity lost'
+                    }
+                    if ($action -ne 'PlanUpgrade' -and ($result.candidate.sourceSha -cne $expected -or
+                        $result.hostAfterPid -ne $script:hostPid -or $result.auditPrefixSha256 -cne 'prefix' -or
+                        $result.desktopPath -cne (Join-Path $expectedRoot 'desktop\MyDmsVn.Desktop.App.exe'))) {
+                        throw 'Result does not identify active pair'
+                    }
+                    $result.status
+                }
+                if ($script:hostPid -ne 43) { throw 'Expected exactly two Host switches' }
+            }
+        """
+        env = self.process_env | {
+            "MYDMSVN_TEST_RUNTIME": str(RUNTIME_MODULE),
+            "MYDMSVN_TEST_STATE": str(self.state),
+            "MYDMSVN_TEST_BASELINE": str(baseline),
+            "MYDMSVN_TEST_BASELINE_DESKTOP": baseline_hashes[0],
+            "MYDMSVN_TEST_BASELINE_HOST": baseline_hashes[1],
+            "MYDMSVN_TEST_TARGET": str(target),
+            "MYDMSVN_TEST_TARGET_DESKTOP": target_hashes[0],
+            "MYDMSVN_TEST_TARGET_HOST": target_hashes[1],
+        }
+        result = subprocess.run(
+            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT, env=env, text=True, capture_output=True,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(["PLANNED", "VERIFIED", "VERIFIED", "ROLLED_BACK"], result.stdout.split())
+
     def test_reset_refuses_an_interrupted_upgrade_without_touching_bound_state(self):
         receipt = self.write_receipt(phase="upgrade-pending")
         self.write_binding(receipt)
@@ -438,49 +524,101 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertEqual("LocalSimulation.UpgradeFenceRetained", json.loads(result.stdout)["code"])
         self.assertEqual("retain", marker.read_text(encoding="utf-8"))
 
+    def run_reset_with_fixture_slot(self, receipt, mode="empty", operator=SCRIPT, use_default_root=False):
+        # Override the slot only inside this test process. Never create or lease the workstation's pending file.
+        driver = self.outside / "reset-driver.ps1"
+        driver.write_text(r"""
+            $ErrorActionPreference = 'Stop'
+            $owner = [Security.Principal.WindowsIdentity]::GetCurrent().User
+            $system = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
+            $homePath = $env:LOCALAPPDATA
+            $mutexName = 'Global\MyDmsVn-Vps.PendingWrite.' + [guid]::NewGuid().ToString('N')
+            $directory = Join-Path $homePath 'MyDmsVn-Vps\PendingWrites'
+            $pending = Join-Path $directory 'fixture.intent'
+            if ($env:MYDMSVN_TEST_MODE -eq 'occupied') {
+                [IO.Directory]::CreateDirectory($directory) | Out-Null
+                $acl = [Security.AccessControl.DirectorySecurity]::new()
+                $acl.SetOwner($owner)
+                $acl.SetAccessRuleProtection($true, $false)
+                foreach ($sid in $owner, $system) {
+                    $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'Allow'))
+                }
+                Set-Acl -LiteralPath $directory -AclObject $acl
+                [IO.File]::WriteAllText($pending, 'retain fixture intent')
+            }
+            function Import-Module($Name, [switch]$Force, [switch]$DisableNameChecking) {
+                $module = Microsoft.PowerShell.Core\Import-Module $Name -Force:$Force -DisableNameChecking:$DisableNameChecking -Global -PassThru
+                & $module {
+                    param($FixtureOwner, $FixtureHome, $FixturePending, $FixtureMutex)
+                    $script:testSlot = @{owner=$FixtureOwner;home=$FixtureHome;path=$FixturePending;mutexName=$FixtureMutex}
+                    function script:Get-LocalSimulationPendingSlot { $script:testSlot }
+                } $owner $homePath $pending $mutexName
+                if ($env:MYDMSVN_TEST_MODE -ne 'empty') {
+                    function global:Reset-MyDmsVnLocalSimulationExternal { throw 'Unexpected external teardown' }
+                }
+            }
+            $mutex = $null
+            try {
+                if ($env:MYDMSVN_TEST_MODE -eq 'busy') {
+                    $acl = [Security.AccessControl.MutexSecurity]::new()
+                    $acl.SetOwner($owner)
+                    $acl.SetAccessRuleProtection($true, $false)
+                    foreach ($sid in $owner, $system) {
+                        $acl.AddAccessRule([Security.AccessControl.MutexAccessRule]::new($sid, 'FullControl', 'Allow'))
+                    }
+                    $created = $false
+                    $mutex = [Threading.MutexAcl]::Create($false, $mutexName, [ref]$created, $acl)
+                    # A separate PowerShell pipeline must own the mutex since it is recursive on one thread.
+                    $worker = [PowerShell]::Create()
+                    $ready = [Threading.ManualResetEventSlim]::new()
+                    $done = [Threading.ManualResetEventSlim]::new()
+                    $null = $worker.AddScript({ param($mutex,$ready,$done)
+                        if (!$mutex.WaitOne(0)) { throw 'Fixture mutex busy' }
+                        try { $ready.Set(); $done.Wait() } finally { $mutex.ReleaseMutex() }
+                    }).AddArgument($mutex).AddArgument($ready).AddArgument($done)
+                    $running = $worker.BeginInvoke()
+                    if (!$ready.Wait(5000)) { throw 'Could not start fixture writer' }
+                }
+                $operatorArgs = @{Action='Reset';OutputFormat='Json';ConfirmInstanceId=$env:MYDMSVN_TEST_INSTANCE}
+                if ($env:MYDMSVN_TEST_STATE) { $operatorArgs.StateRoot = $env:MYDMSVN_TEST_STATE }
+                & $env:MYDMSVN_TEST_OPERATOR @operatorArgs
+                exit $LASTEXITCODE
+            }
+            finally {
+                if ($mutex) { $done.Set(); $worker.EndInvoke($running); $worker.Dispose(); $mutex.Dispose() }
+            }
+        """, encoding="utf-8")
+        env = self.process_env | {
+            "MYDMSVN_TEST_OPERATOR": str(operator),
+            "MYDMSVN_TEST_STATE": "" if use_default_root else str(self.state),
+            "MYDMSVN_TEST_INSTANCE": receipt["instanceId"],
+            "MYDMSVN_TEST_MODE": mode,
+        }
+        return subprocess.run([powershell(), "-NoLogo", "-NoProfile", "-File", str(driver)],
+                              cwd=ROOT, env=env, text=True, capture_output=True)
+
+    @unittest.skipUnless(os.name == "nt", "Windows pending-write ACL and mutex")
+    def test_source_built_reset_refuses_pending_and_writer_contention(self):
+        for mode, expected in (("busy", "UpgradeFenceBusy"), ("occupied", "UpgradeFenceRetained")):
+            receipt = self.write_receipt()
+            if not self.binding.exists():
+                self.write_binding(receipt)
+            with self.subTest(mode=mode):
+                result = self.run_reset_with_fixture_slot(receipt, mode)
+                self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+                self.assertEqual("LocalSimulation." + expected, json.loads(result.stdout)["code"])
+                self.assertTrue((self.state / "receipt.json").exists())
+                self.assertTrue(self.binding.exists())
+        self.assertEqual("retain fixture intent", (self.local_app_data / "MyDmsVn-Vps" / "PendingWrites" /
+                                                  "fixture.intent").read_text(encoding="utf-8"))
+
     @unittest.skipUnless(os.name == "nt", "Windows pending-write mutex")
     def test_reset_refuses_while_desktop_holds_the_pending_write_mutex(self):
         receipt = self.write_receipt()
         receipt["artifacts"]["candidate"] = {}
         (self.state / "receipt.json").write_text(json.dumps(receipt), encoding="utf-8")
         self.write_binding(receipt)
-        command = r"""
-            $ErrorActionPreference = 'Stop'
-            $owner = [Security.Principal.WindowsIdentity]::GetCurrent().User
-            $system = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
-            $binding = "MyDmsVn-Vps|pending-v1|$($owner.Value)|https://localhost:50443"
-            $slot = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
-                [Text.Encoding]::UTF8.GetBytes($binding))).ToLowerInvariant()
-            $acl = [Security.AccessControl.MutexSecurity]::new()
-            $acl.SetOwner($owner)
-            $acl.SetAccessRuleProtection($true, $false)
-            foreach ($sid in $owner, $system) {
-                $acl.AddAccessRule([Security.AccessControl.MutexAccessRule]::new($sid, 'FullControl', 'Allow'))
-            }
-            $created = $false
-            $mutex = [Threading.MutexAcl]::Create($false, "Global\MyDmsVn-Vps.PendingWrite.$slot", [ref]$created, $acl)
-            try {
-                if (!$mutex.WaitOne(0)) { throw 'Unexpected pending writer' }
-                try {
-                    $args = @('-NoProfile','-File',$env:MYDMSVN_TEST_OPERATOR,'-Action','Reset',
-                        '-StateRoot',$env:MYDMSVN_TEST_STATE,'-OutputFormat','Json',
-                        '-ConfirmInstanceId',$env:MYDMSVN_TEST_INSTANCE)
-                    & (Get-Process -Id $PID).Path @args
-                    exit $LASTEXITCODE
-                }
-                finally { $mutex.ReleaseMutex() }
-            }
-            finally { $mutex.Dispose() }
-        """
-        env = self.process_env | {
-            "MYDMSVN_TEST_OPERATOR": str(SCRIPT),
-            "MYDMSVN_TEST_STATE": str(self.state),
-            "MYDMSVN_TEST_INSTANCE": receipt["instanceId"],
-        }
-        result = subprocess.run(
-            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
-            cwd=ROOT, env=env, text=True, capture_output=True,
-        )
+        result = self.run_reset_with_fixture_slot(receipt, "busy")
         self.assertEqual(2, result.returncode, result.stdout + result.stderr)
         self.assertEqual("LocalSimulation.UpgradeFenceBusy", json.loads(result.stdout)["code"])
         self.assertTrue(self.state.exists())
@@ -881,7 +1019,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         receipt = self.write_receipt()
         self.write_binding(receipt)
 
-        result = self.run_operator("Reset", "-ConfirmInstanceId", receipt["instanceId"])
+        result = self.run_reset_with_fixture_slot(receipt)
 
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertEqual("RESET", json.loads(result.stdout)["status"])
@@ -921,17 +1059,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
             )
             self.assertEqual(0, registered.returncode, registered.stdout + registered.stderr)
 
-            result = subprocess.run(
-                [
-                    powershell(), "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                    "-File", str(isolated_operator), "-Action", "Reset",
-                    "-ConfirmInstanceId", receipt["instanceId"], "-OutputFormat", "Json",
-                ],
-                cwd=isolated_repo,
-                env=self.process_env,
-                text=True,
-                capture_output=True,
-            )
+            result = self.run_reset_with_fixture_slot(receipt, operator=isolated_operator, use_default_root=True)
 
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
             self.assertFalse(active_state.exists())
@@ -1045,7 +1173,7 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         )
         self.assertEqual(0, updated.returncode, updated.stdout + updated.stderr)
 
-        result = self.run_operator("Reset", "-ConfirmInstanceId", receipt["instanceId"])
+        result = self.run_reset_with_fixture_slot(receipt)
 
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertFalse(self.state.exists())

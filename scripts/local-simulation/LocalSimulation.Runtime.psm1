@@ -597,19 +597,31 @@ function Get-DockerInspectObject {
     catch { throw [InvalidOperationException]::new($FailureCode) }
 }
 
+function Get-LocalSimulationInitialReleaseId {
+    param([pscustomobject] $Receipt)
+    # Receipts created before the separate release ID used the owning tooling SHA in the initial path.
+    if ('initialReleaseId' -notin $Receipt.wsl.PSObject.Properties.Name) { return $Receipt.sourceSha }
+    if ($Receipt.wsl.initialReleaseId -cnotmatch '^[0-9a-f]{40}$') { throw [InvalidOperationException]::new('LocalSimulation.ReleaseIdentityMismatch') }
+    return $Receipt.wsl.initialReleaseId
+}
+
 function Get-LocalSimulationReleaseId {
     param([pscustomobject] $Receipt)
-    if ('releaseId' -notin $Receipt.wsl.PSObject.Properties.Name) { return $Receipt.sourceSha }
+    if ('releaseId' -notin $Receipt.wsl.PSObject.Properties.Name) { return (Get-LocalSimulationInitialReleaseId $Receipt) }
     if ($Receipt.wsl.releaseId -cnotmatch '^[0-9a-f]{40}$') { throw [InvalidOperationException]::new('LocalSimulation.ReleaseIdentityMismatch') }
     return $Receipt.wsl.releaseId
 }
 
+function Get-LocalSimulationArtifactRoot {
+    param([string] $StateRoot, [pscustomobject] $Receipt, [string] $Release)
+    $base = Join-Path $StateRoot 'artifacts'
+    if ($Release -eq (Get-LocalSimulationInitialReleaseId $Receipt)) { return $base }
+    return (Join-Path (Join-Path $base 'releases') $Release)
+}
+
 function Get-LocalSimulationActiveArtifactRoot {
     param([string] $StateRoot, [pscustomobject] $Receipt)
-    $base = Join-Path $StateRoot 'artifacts'
-    $release = Get-LocalSimulationReleaseId $Receipt
-    if ($release -eq $Receipt.sourceSha) { return $base }
-    return (Join-Path (Join-Path $base 'releases') $release)
+    return (Get-LocalSimulationArtifactRoot $StateRoot $Receipt (Get-LocalSimulationReleaseId $Receipt))
 }
 
 function Get-LocalSimulationWslIdentityArgs {
@@ -688,7 +700,12 @@ function Initialize-MyDmsVnLocalSimulation {
         artifacts = [ordered]@{ bashSha256 = Get-FileSha256 (Join-Path $RepoRoot 'scripts\local-simulation\mydmsvn-local-sim'); sqlHelperSha256 = $null; hostSha256 = $null }
         certificateThumbprint = $null
     }
-    if ($null -ne $Candidate) { $receipt.artifacts.candidate = $Candidate.identity }
+    $initialReleaseId = $sourceSha
+    if ($null -ne $Candidate) {
+        $receipt.artifacts.candidate = $Candidate.identity
+        $initialReleaseId = $Candidate.identity.sourceSha
+    }
+    $receipt.wsl.initialReleaseId = $initialReleaseId
     $receiptPath = Join-Path $StateRoot 'receipt.json'
     Write-Receipt $receiptPath $receipt
     New-LocalSimulationRegistration $StateRoot $receipt $receiptPath
@@ -756,7 +773,7 @@ function Initialize-MyDmsVnLocalSimulation {
 
     $runtimeSql = "Server=127.0.0.1,11433;Initial Catalog=MyDmsVnVps_LocalSimulation;User ID=mydmsvn_local_sim_runtime;Password=$($secretValues.runtime_password);Encrypt=True;TrustServerCertificate=False;Pooling=False"
     Write-Utf8File (Join-Path $StateRoot 'secrets\sql_connection_string') $runtimeSql
-    $instanceEnv = "INSTANCE_ID=$instanceId`nSOURCE_SHA=$sourceSha`nPUBLIC_ORIGIN=https://localhost:50443`nSQL_SERVER=127.0.0.1,11433`n"
+    $instanceEnv = "INSTANCE_ID=$instanceId`nSOURCE_SHA=$sourceSha`nRELEASE_ID=$initialReleaseId`nPUBLIC_ORIGIN=https://localhost:50443`nSQL_SERVER=127.0.0.1,11433`n"
     Write-Utf8File (Join-Path $StateRoot 'instance.env') $instanceEnv
     $rendered = Join-Path $StateRoot 'rendered'
     $renderedWsl = Convert-ToWslPath $rendered
@@ -766,8 +783,9 @@ function Initialize-MyDmsVnLocalSimulation {
     $receipt.wsl.installed = $true
     Write-BoundReceipt $StateRoot $receiptPath $receipt
     Invoke-WslHelper $RepoRoot 'install' @($stateWsl, $renderedWsl, $hostWsl, $instanceId) -Sudo | Out-Null
-    Invoke-WslHelper $RepoRoot 'start' @($instanceId, $sourceSha, [string]$receipt.artifacts.hostSha256) -Sudo | Out-Null
-    Invoke-WslHelper $RepoRoot 'verify' @($instanceId, $sourceSha, [string]$receipt.artifacts.hostSha256) -Sudo | Out-Null
+    $identityArgs = @($instanceId, $sourceSha, [string]$receipt.artifacts.hostSha256, $initialReleaseId)
+    Invoke-WslHelper $RepoRoot 'start' $identityArgs -Sudo | Out-Null
+    Invoke-WslHelper $RepoRoot 'verify' $identityArgs -Sudo | Out-Null
     $receipt.phase = 'ready'
     Write-BoundReceipt $StateRoot $receiptPath $receipt
     return [ordered]@{ action = 'Initialize'; status = 'READY'; instanceId = $instanceId; desktopPath = (Join-Path $StateRoot 'artifacts\desktop\MyDmsVn.Desktop.App.exe') }
