@@ -396,6 +396,8 @@ namespace MyDmsVn.Desktop.Session.Tests
         [Theory]
         [InlineData("Auth.Unauthorized", "Auth.Unauthorized")]
         [InlineData("Validation.Required", "Validation.Required")]
+        [InlineData("Operation.FenceUnavailable", "Operation.FenceUnavailable")]
+        [InlineData("Request.TooLarge", "Request.TooLarge")]
         [InlineData("Auth.unrecognized_private_value", "UnrecognizedErrorCode")]
         [InlineData("eyJhbGciOiJIUzI1NiJ9.c2VjcmV0.c2ln", "UnrecognizedErrorCode")]
         public void Operation_and_logout_diagnostics_only_keep_recognized_codes(string code, string expected)

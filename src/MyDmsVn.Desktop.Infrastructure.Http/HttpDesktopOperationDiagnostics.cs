@@ -50,9 +50,10 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         {
             "Auth.Forbidden" or "Auth.InvalidCredentials" or "Deployment.EpochMismatch" or
                 "Idempotency.FingerprintMismatch" or "Idempotency.KeyConflict" or
-                "Operation.NotObserved" or "Operation.ResultExpired" or "Operation.ResultUnavailable" or
-                "Operation.Unavailable" => code,
+                "Operation.FenceUnavailable" or "Operation.NotObserved" or "Operation.ResultExpired" or
+                "Operation.ResultUnavailable" or "Operation.Unavailable" => code,
             "Request.CustomerId" or "Request.EmployeeId" or "Request.Lines" or "Request.WarehouseId" or
+                "Request.TooLarge" or
                 "Validation.Error" or "Validation.GreaterThan" or "Validation.GreaterThanOrEqual" or
                 "Validation.InvalidCharacter" or "Validation.InvalidRange" or "Validation.InvalidValue" or
                 "Validation.InvalidVersion" or "Validation.MaximumLength" or "Validation.PrecisionScale" or
