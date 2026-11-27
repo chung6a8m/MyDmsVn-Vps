@@ -378,18 +378,26 @@ if ($Action -eq 'Reset') {
 
     Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
     Invoke-RuntimeAction { Assert-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
-    Invoke-RuntimeAction { Assert-LocalSimulationResetFence $receipt } | Out-Null
-    Invoke-RuntimeAction { Reset-MyDmsVnLocalSimulationExternal -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
-    Invoke-RuntimeAction { Complete-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
+    $resetFence = Invoke-RuntimeAction { Enter-LocalSimulationResetFence $receipt }
+    try {
+        Invoke-RuntimeAction { Reset-MyDmsVnLocalSimulationExternal -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
+        Invoke-RuntimeAction { Complete-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
 
-    $deleteTarget = (Get-Item -LiteralPath $resolvedStateRoot -Force).FullName
-    if (-not $deleteTarget.Equals($resolvedStateRoot, [StringComparison]::OrdinalIgnoreCase) -or
-        -not (Test-PathWithinAllowedStateParent)) {
-        Refuse 'LocalSimulation.DeleteTargetRefused'
+        $deleteTarget = (Get-Item -LiteralPath $resolvedStateRoot -Force).FullName
+        if (-not $deleteTarget.Equals($resolvedStateRoot, [StringComparison]::OrdinalIgnoreCase) -or
+            -not (Test-PathWithinAllowedStateParent)) {
+            Refuse 'LocalSimulation.DeleteTargetRefused'
+        }
+        Invoke-RuntimeAction { Assert-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
+        Remove-Item -LiteralPath $deleteTarget -Recurse -Force
+        Invoke-RuntimeAction { Remove-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
     }
-    Invoke-RuntimeAction { Assert-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
-    Remove-Item -LiteralPath $deleteTarget -Recurse -Force
-    Invoke-RuntimeAction { Remove-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
+    finally {
+        if ($null -ne $resetFence) {
+            try { $resetFence.ReleaseMutex() }
+            finally { $resetFence.Dispose() }
+        }
+    }
     Write-Outcome -Value @{ action = 'Reset'; status = 'RESET'; instanceId = $ConfirmInstanceId } -ExitCode 0
 }
 

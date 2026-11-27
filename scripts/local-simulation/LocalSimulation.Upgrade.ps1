@@ -1,10 +1,18 @@
-function Get-LocalSimulationPendingPath {
+function Get-LocalSimulationPendingSlot {
     $homeDirectory = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
-    if ([string]::IsNullOrWhiteSpace($homeDirectory)) { throw [InvalidOperationException]::new('LocalSimulation.UpgradePendingOwnerMismatch') }
-    $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    $binding = "MyDmsVn-Vps|pending-v1|$sid|https://localhost:50443"
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    try { $owner = $identity.User }
+    finally { $identity.Dispose() }
+    if ($null -eq $owner -or -not [IO.Path]::IsPathFullyQualified($homeDirectory)) {
+        throw [InvalidOperationException]::new('LocalSimulation.UpgradePendingOwnerMismatch')
+    }
+    $binding = "MyDmsVn-Vps|pending-v1|$($owner.Value)|https://localhost:50443"
     $slot = Get-ByteSha256 ([Text.Encoding]::UTF8.GetBytes($binding))
-    return (Join-Path $homeDirectory "MyDmsVn-Vps\PendingWrites\$slot.intent")
+    return @{
+        owner = $owner; home = $homeDirectory
+        path = Join-Path $homeDirectory "MyDmsVn-Vps\PendingWrites\$slot.intent"
+        mutexName = "Global\MyDmsVn-Vps.PendingWrite.$slot"
+    }
 }
 
 function Assert-LocalSimulationPendingAcl {
@@ -30,7 +38,7 @@ function Assert-LocalSimulationPendingAcl {
 }
 
 function Open-LocalSimulationPendingFence {
-    $path = Get-LocalSimulationPendingPath
+    $path = (Get-LocalSimulationPendingSlot).path
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw [InvalidOperationException]::new('LocalSimulation.UpgradePendingMissing') }
     Assert-CandidateDirectory (Split-Path -Parent $path)
     $file = Get-Item -LiteralPath $path -Force
@@ -54,12 +62,77 @@ function Get-LocalSimulationPendingHash {
     finally { $sha.Dispose() }
 }
 
-function Assert-LocalSimulationResetFence {
+function Assert-LocalSimulationResetSlotEmpty {
+    param($Slot)
+    try {
+        Assert-CandidateDirectory $Slot.home
+        $directory = $Slot.home
+        foreach ($segment in 'MyDmsVn-Vps', 'PendingWrites') {
+            $directory = Join-Path $directory $segment
+            $attributes = [IO.File]::GetAttributes($directory)
+            if (($attributes -band [IO.FileAttributes]::ReparsePoint) -or
+                -not ($attributes -band [IO.FileAttributes]::Directory)) {
+                throw [InvalidOperationException]::new('LocalSimulation.UpgradePendingOwnerMismatch')
+            }
+        }
+        Assert-LocalSimulationPendingAcl $directory
+        $null = [IO.File]::GetAttributes($Slot.path)
+    }
+    catch [IO.FileNotFoundException], [IO.DirectoryNotFoundException] { return }
+    catch { throw [InvalidOperationException]::new('LocalSimulation.UpgradePendingOwnerMismatch', $_.Exception) }
+    throw [InvalidOperationException]::new('LocalSimulation.UpgradeFenceRetained')
+}
+
+function Enter-LocalSimulationResetFence {
     param([pscustomobject] $Receipt)
-    if ($Receipt.phase -eq 'upgrade-pending' -or
-        ('candidate' -in $Receipt.artifacts.PSObject.Properties.Name -and
-         (Test-Path -LiteralPath (Get-LocalSimulationPendingPath)))) {
+    if ($Receipt.phase -eq 'upgrade-pending') {
         throw [InvalidOperationException]::new('LocalSimulation.UpgradeFenceRetained')
+    }
+    if ($null -eq $Receipt.artifacts -or 'candidate' -notin $Receipt.artifacts.PSObject.Properties.Name) { return }
+
+    $slot = Get-LocalSimulationPendingSlot
+    $system = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
+    $security = [Security.AccessControl.MutexSecurity]::new()
+    $security.SetOwner($slot.owner)
+    $security.SetAccessRuleProtection($true, $false)
+    foreach ($sid in $slot.owner, $system) {
+        $security.AddAccessRule([Security.AccessControl.MutexAccessRule]::new($sid, 'FullControl', 'Allow'))
+    }
+    # Match WindowsHttpPendingWriteStore so admission and teardown serialize with Save/Clear.
+    $mutex = $null
+    $acquired = $false
+    try {
+        try {
+            $created = $false
+            $mutex = [Threading.MutexAcl]::Create($false, $slot.mutexName, [ref]$created, $security)
+            $acl = [Threading.ThreadingAclExtensions]::GetAccessControl($mutex)
+            if (-not $acl.AreAccessRulesProtected -or $acl.GetOwner([Security.Principal.SecurityIdentifier]) -ne $slot.owner) {
+                throw [InvalidOperationException]::new('LocalSimulation.UpgradePendingOwnerMismatch')
+            }
+            $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+            foreach ($rule in $acl.GetAccessRules($true, $false, [Security.Principal.SecurityIdentifier])) {
+                if ($rule.IdentityReference -notin @($slot.owner, $system) -or
+                    $rule.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow -or
+                    ($rule.MutexRights -band [Security.AccessControl.MutexRights]::FullControl) -ne [Security.AccessControl.MutexRights]::FullControl) {
+                    throw [InvalidOperationException]::new('LocalSimulation.UpgradePendingOwnerMismatch')
+                }
+                [void]$seen.Add($rule.IdentityReference.Value)
+            }
+            if (-not ($seen.Contains($slot.owner.Value) -and $seen.Contains($system.Value))) {
+                throw [InvalidOperationException]::new('LocalSimulation.UpgradePendingOwnerMismatch')
+            }
+            try { $acquired = $mutex.WaitOne(0) }
+            catch [Threading.AbandonedMutexException] { $acquired = $true }
+        }
+        catch { throw [InvalidOperationException]::new('LocalSimulation.UpgradePendingOwnerMismatch', $_.Exception) }
+        if (-not $acquired) { throw [InvalidOperationException]::new('LocalSimulation.UpgradeFenceBusy') }
+        Assert-LocalSimulationResetSlotEmpty $slot
+        return $mutex
+    }
+    catch {
+        try { if ($acquired) { $mutex.ReleaseMutex() } }
+        finally { if ($null -ne $mutex) { $mutex.Dispose() } }
+        throw
     }
 }
 
@@ -236,6 +309,10 @@ function Invoke-LocalSimulationUpgrade {
             $rollback = $Action -eq 'RollbackUpgrade'
             $target = if ($rollback) { $previous.from } else { $previous.to }
             $other = if ($rollback) { $previous.to } else { $previous.from }
+            $targetTree = if ($target.releaseId -eq $Receipt.sourceSha) { Join-Path $StateRoot 'artifacts' }
+                          else { Join-Path $StateRoot "artifacts\releases\$($target.releaseId)" }
+            Get-CandidateTree $targetTree 'desktop' $target.candidate.sourceSha $target.candidate.desktopManifestSha256 | Out-Null
+            Assert-ArtifactManifest (Join-Path $targetTree 'host') $target.hostSha256
             $currentReleaseId = (@(Invoke-WslHelper $RepoRoot 'upgrade-current' @($Receipt.instanceId, $Receipt.sourceSha, $target.releaseId, $other.releaseId) -Sudo) -join '').Trim()
             if ($currentReleaseId -ne $target.releaseId -and $currentReleaseId -ne $other.releaseId) {
                 throw [InvalidOperationException]::new('LocalSimulation.ReleaseIdentityMismatch')
@@ -248,9 +325,6 @@ function Invoke-LocalSimulationUpgrade {
                 $Receipt.phase = 'upgrade-pending'
                 Save-LocalSimulationUpgradeReceipt $StateRoot $Receipt
             }
-            $targetTree = if ($target.releaseId -eq $Receipt.sourceSha) { Join-Path $StateRoot 'artifacts' }
-                          else { Join-Path $StateRoot "artifacts\releases\$($target.releaseId)" }
-            Assert-ArtifactManifest (Join-Path $targetTree 'host') $target.hostSha256
             $publish = Convert-ToWslPath (Join-Path $targetTree 'host')
             $args = @($Receipt.instanceId, $Receipt.sourceSha, $other.releaseId, $target.releaseId,
                       $other.hostSha256, $target.hostSha256, $publish)

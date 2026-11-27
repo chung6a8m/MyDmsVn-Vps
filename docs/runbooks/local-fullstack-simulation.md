@@ -91,6 +91,8 @@ If interrupted, keep the bound instance and rerun Upgrade with the same expected
 
 Keep the lab and diagnostics if an identity check fails. The pending upgrade phase blocks normal lifecycle actions and reset until the cutover is verified or safely rolled back.
 
+Resume and rollback revalidate the Desktop files against the target release's pinned manifest before switching the Host. If this check fails, preserve the pending record and restore the verified target artifacts before retrying.
+
 ## Reset
 
 Read the instance ID, review it, and pass the exact value:
@@ -102,6 +104,8 @@ $receipt.instanceId
 ```
 
 Reset validates the receipt path, instance ID, Docker engine and labels, WSL marker/source link, and CA file/store subject and thumbprint before any deletion. It refuses missing/malformed receipts, mismatched identities, paths outside the ignored state tree, ancestor or leaf reparse points, and `-DryRun`. It removes only owned resources; unrelated Docker containers, volumes, WSL services, files, and certificates are preserved. A partial failed initialization is reset with the same command only when its acquisition marker proves ownership; otherwise state is retained for diagnosis.
+
+For a prebuilt pair, Reset takes the Desktop's owner/origin pending-write mutex before checking the slot and holds it through cleanup. If a write holds the mutex, Reset returns `LocalSimulation.UpgradeFenceBusy` before removing resources. If the slot contains an intent or cannot be inspected safely, keep the lab and resolve the pending state before retrying.
 
 ## Troubleshooting
 

@@ -438,6 +438,128 @@ class LocalSimulationOperatorTests(unittest.TestCase):
         self.assertEqual("LocalSimulation.UpgradeFenceRetained", json.loads(result.stdout)["code"])
         self.assertEqual("retain", marker.read_text(encoding="utf-8"))
 
+    @unittest.skipUnless(os.name == "nt", "Windows pending-write mutex")
+    def test_reset_refuses_while_desktop_holds_the_pending_write_mutex(self):
+        receipt = self.write_receipt()
+        receipt["artifacts"]["candidate"] = {}
+        (self.state / "receipt.json").write_text(json.dumps(receipt), encoding="utf-8")
+        self.write_binding(receipt)
+        command = r"""
+            $ErrorActionPreference = 'Stop'
+            $owner = [Security.Principal.WindowsIdentity]::GetCurrent().User
+            $system = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
+            $binding = "MyDmsVn-Vps|pending-v1|$($owner.Value)|https://localhost:50443"
+            $slot = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+                [Text.Encoding]::UTF8.GetBytes($binding))).ToLowerInvariant()
+            $acl = [Security.AccessControl.MutexSecurity]::new()
+            $acl.SetOwner($owner)
+            $acl.SetAccessRuleProtection($true, $false)
+            foreach ($sid in $owner, $system) {
+                $acl.AddAccessRule([Security.AccessControl.MutexAccessRule]::new($sid, 'FullControl', 'Allow'))
+            }
+            $created = $false
+            $mutex = [Threading.MutexAcl]::Create($false, "Global\MyDmsVn-Vps.PendingWrite.$slot", [ref]$created, $acl)
+            try {
+                if (!$mutex.WaitOne(0)) { throw 'Unexpected pending writer' }
+                try {
+                    $args = @('-NoProfile','-File',$env:MYDMSVN_TEST_OPERATOR,'-Action','Reset',
+                        '-StateRoot',$env:MYDMSVN_TEST_STATE,'-OutputFormat','Json',
+                        '-ConfirmInstanceId',$env:MYDMSVN_TEST_INSTANCE)
+                    & (Get-Process -Id $PID).Path @args
+                    exit $LASTEXITCODE
+                }
+                finally { $mutex.ReleaseMutex() }
+            }
+            finally { $mutex.Dispose() }
+        """
+        env = self.process_env | {
+            "MYDMSVN_TEST_OPERATOR": str(SCRIPT),
+            "MYDMSVN_TEST_STATE": str(self.state),
+            "MYDMSVN_TEST_INSTANCE": receipt["instanceId"],
+        }
+        result = subprocess.run(
+            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT, env=env, text=True, capture_output=True,
+        )
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        self.assertEqual("LocalSimulation.UpgradeFenceBusy", json.loads(result.stdout)["code"])
+        self.assertTrue(self.state.exists())
+
+    def test_resume_and_rollback_refuse_changed_desktop_before_host_activation(self):
+        candidate, digests = self.candidate_fixture()
+        destination = self.state / "artifacts" / "releases" / ("b" * 40)
+        shutil.copytree(candidate, destination)
+        retained = self.state / "artifacts" / "desktop"
+        shutil.copytree(candidate / "desktop", retained)
+        manifest = retained / "vps03-desktop-manifest.json"
+        manifest.write_bytes(manifest.read_bytes().replace(b"b" * 40, b"a" * 40))
+        retained_digest = hashlib.sha256(manifest.read_bytes()).hexdigest()
+        for desktop in (retained, destination / "desktop"):
+            executable = desktop / "MyDmsVn.Desktop.App.exe"
+            executable.write_bytes(b"x" * executable.stat().st_size)
+        command = r"""
+            $ErrorActionPreference = 'Stop'
+            Import-Module $env:MYDMSVN_TEST_RUNTIME -Force -DisableNameChecking
+            & (Get-Module LocalSimulation.Runtime) {
+                function Assert-LocalSimulationIdentity {}
+                function Get-Process {}
+                function Open-LocalSimulationPendingFence { [IO.MemoryStream]::new() }
+                function Get-LocalSimulationPendingHash { 'pending' }
+                function Get-LocalSimulationUpgradeDockerProof { @{id='docker'} }
+                function Invoke-SqlHelper { @{databaseSchema=13;database='lab';instanceId='instance';databaseGuid='sql';deploymentEpoch='epoch'} }
+                function Get-LocalSimulationUpgradeProof { @{pid=42;auditSize=0;auditPrefixSha256='prefix';continuitySha256='audit'} }
+                function Assert-ArtifactManifest {}
+                function Convert-ToWslPath { '/fixture' }
+                function Get-LocalSimulationUpgradeTemplateHashes {}
+                function Save-LocalSimulationUpgradeReceipt {}
+                function Invoke-WslHelper($root, $verb, $arguments, [switch]$Sudo) {
+                    if ($verb -eq 'upgrade-current') { return ('a' * 40) }
+                    throw 'Unexpected Host activation'
+                }
+                $from = @{releaseId='a'*40;hostSha256='host-a';candidate=@{
+                    sourceSha='a'*40;desktopManifestSha256=$env:MYDMSVN_TEST_RETAINED_HASH
+                }}
+                $to = @{releaseId='b'*40;hostSha256='host-b';candidate=@{
+                    sourceSha='b'*40;desktopManifestSha256=$env:MYDMSVN_TEST_TARGET_HASH
+                }}
+                $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+                foreach ($action in 'Upgrade','RollbackUpgrade') {
+                    $receipt = [pscustomobject]@{
+                        phase='upgrade-pending';sourceSha='a'*40;instanceId='instance'
+                        wsl=[pscustomobject]@{releaseId='a'*40}
+                        artifacts=[pscustomobject]@{candidate=$from.candidate;hostSha256=$from.hostSha256}
+                        upgrade=[pscustomobject]@{
+                            action='Upgrade';id='journal';from=$from;to=$to;database=(Invoke-SqlHelper)
+                            docker=(Get-LocalSimulationUpgradeDockerProof);audit=(Get-LocalSimulationUpgradeProof)
+                            pendingSha256='pending';sidSha256=(Get-ByteSha256 ([Text.Encoding]::UTF8.GetBytes($sid)))
+                        }
+                    }
+                    try {
+                        $upgradeArgs = @($action, '.', $env:MYDMSVN_TEST_STATE, $receipt,
+                            [pscustomobject]@{identity=$to.candidate}, 'epoch', 'pending')
+                        Invoke-LocalSimulationUpgrade @upgradeArgs | Out-Null
+                        throw 'Unverified Desktop accepted'
+                    }
+                    catch {
+                        if ($_.Exception.Message -ne 'LocalSimulation.CandidateArtifactMismatch') { throw }
+                        $action
+                    }
+                }
+            }
+        """
+        env = self.process_env | {
+            "MYDMSVN_TEST_RUNTIME": str(RUNTIME_MODULE),
+            "MYDMSVN_TEST_STATE": str(self.state),
+            "MYDMSVN_TEST_RETAINED_HASH": retained_digest,
+            "MYDMSVN_TEST_TARGET_HASH": digests[0],
+        }
+        result = subprocess.run(
+            [powershell(), "-NoLogo", "-NoProfile", "-Command", command],
+            cwd=ROOT, env=env, text=True, capture_output=True,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(["Upgrade", "RollbackUpgrade"], result.stdout.split())
+
     def test_upgrade_sql_identity_comparison_rejects_database_or_epoch_changes(self):
         command = (
             "$ErrorActionPreference='Stop'; "
