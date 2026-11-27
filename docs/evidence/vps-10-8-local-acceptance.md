@@ -43,6 +43,8 @@ The [earlier receipt](https://github.com/chung6a8m/MyDmsVn-Vps/issues/45#issueco
 
 G5 recorded 10/10 successful checks. U01–U04 recorded 4/4 with zero failures or skips. U06 recorded one end-to-end run with its required checks. The receipt records cleanup of the owned upgrade clones and preservation of the independent 50443 pending record.
 
+The artifact-pair tests used the disposable upgrade lanes on 50446–50448. The receipt does not establish an end-to-end execution of the new 50443 operator commands `PlanUpgrade`, `Upgrade`, `VerifyUpgrade` or `RollbackUpgrade`. Runtime acceptance of that harness remains outstanding.
+
 ## Diagnostics, draft recovery and review scope
 
 When refresh failed before Save could be sent, the same actor recovered the unsent draft in the same Desktop process. No automatic Sales write occurred. One manual Save created one POST, one draft and one committed journal entry. Recovery after an application exit or crash remains unverified. Keep Issue #45 open and apply its recurrence criteria if a draft is lost or corrupted, Save replays automatically, SQL shows duplicate or incorrect effects, or explicit Sign out fails to revoke the exact session. The original `d90b90c` incident lacks a correlated refresh or transport trace. Further fault simulations for that historical incident are paused. [Draft recovery](https://github.com/chung6a8m/MyDmsVn-Vps/issues/45#issuecomment-7208778114) · [Single manual Save](https://github.com/chung6a8m/MyDmsVn-Vps/issues/45#issuecomment-7208813838) · [Residual risk and recurrence criteria](https://github.com/chung6a8m/MyDmsVn-Vps/issues/45#issuecomment-7211085001).
