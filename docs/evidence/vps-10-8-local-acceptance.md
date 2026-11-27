@@ -62,3 +62,29 @@ GitHub recorded 11/11 successful workflow conclusions for the lab code SHA. The 
 | Protected SQL and VPS-08 staging | `approved-linux-sql` and `protected-staging` were **SKIPPED** on `25e4690`. The protected environment still needs the VPS08-01..08 deployment, reboot, fault rollback and reconciliation receipts. [VPS-08 workflow](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/45858028256) · [Issue #11](https://github.com/chung6a8m/MyDmsVn-Vps/issues/11). |
 | VPS-09 protected integrated acceptance | Protected jobs were **SKIPPED** on `25e4690`. Obtain the exact-identified candidate's 293 real-SQL HTTPS variants, 12 Oracle scenarios, attended Windows x86 Desktop to deployed Linux Host and SQL, and recovery, rollback and cleanup receipts. [VPS-09 workflow](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/45858080622) · [Issue #12](https://github.com/chung6a8m/MyDmsVn-Vps/issues/12). |
 | Release authority | A signed Owner release decision and any production rollout authorization remain outstanding. The [OWN-VPS-04 exception](../decisions/OWN-VPS-04.md) applies only to the candidate pinned for Issue #12. [OWN-VPS-05](../decisions/OWN-VPS-05.md) approves the design. |
+
+## Source-only closeout — 27 November 2026 (UTC+7)
+
+- Owner explicitly authorized **source-only merge** after the blocked physical acceptance attempts. [Dated Owner decision](https://github.com/chung6a8m/MyDmsVn-Vps/pull/50#issuecomment-7215805901). This is not a waiver of physical acceptance, a production release, or a new architecture decision.
+- [PR #50](https://github.com/chung6a8m/MyDmsVn-Vps/pull/50) merged on main as `e7d4923803eaac8644448ebee67974823456937d`, from base `9b0714b0cd66e1d1e13551cbbe54cb6631b55976` and reviewed HEAD `0b69763363bac60ac58450244244340777e8ba0a`. The merge and reviewed HEAD have the same Git tree `0b44ffb3c6b6068ab80ba4b60796309774db9eda`. [Merge commit](https://github.com/chung6a8m/MyDmsVn-Vps/commit/e7d4923803eaac8644448ebee67974823456937d).
+- [Independent review](https://github.com/chung6a8m/MyDmsVn-Vps/pull/50#pullrequestreview-6084766074) P1 release identity and P1 Reset fence were fixed and both threads resolved on the reviewed HEAD. Re-review passed. Windows operator 48/48 and Linux shell 18/18 are fixture/component gates, not live harness acceptance.
+- Exact PR HEAD: 11/11 workflows successful, 32 passing jobs, 0 failing, 6 protected skips (approved-linux-sql, protected-staging, four VPS-09 protected jobs). [Operator CI](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/45959418268), [disposable SQL CI](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/45959418349), [PR checks](https://github.com/chung6a8m/MyDmsVn-Vps/pull/50/checks). Main push triggered ten workflows on the merge SHA; their own completion receipt remains separate from these PR results ([Linux push](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/45981553701), [SQL push](https://github.com/chung6a8m/MyDmsVn-Vps/actions/runs/45981554018)). No main-CI PASS is inferred.
+- PR #48 and #49 original HEADs are ancestors of the merge; no separate merge required. [#48](https://github.com/chung6a8m/MyDmsVn-Vps/pull/48) was marked merged by GitHub; [#49](https://github.com/chung6a8m/MyDmsVn-Vps/pull/49) was closed as superseded. Original review and CI history retained.
+
+### Final reviewed candidate evidence and remaining debt
+
+The [latest independent acceptance receipt](https://github.com/chung6a8m/MyDmsVn-Vps/pull/50#issuecomment-7213466668) and [earlier same-SHA receipt](https://github.com/chung6a8m/MyDmsVn-Vps/pull/50#issuecomment-7213051368) identify the exact `0b69763` candidate. Preserve the older `25e4690` and `39cb43d` observations above; do not transfer their physical PASS to `0b69763` or the merge SHA.
+
+| Gate | Executed / expected | Disposition |
+| --- | --- | --- |
+| Exact CI artifact admission | 2/2 archives; 39/39 Desktop + 61/61 Host files | PASS (receipt) |
+| G5 attended physical | 0/10 | BLOCKED; route inventory alone is not G5-10 PASS |
+| U01–U06 paired real-SQL | 0/6 groups | BLOCKED |
+| Operator commands on 50443 | 0/4 | BLOCKED |
+| Live release identity | Not executed | NOT VERIFIED |
+| Source-built/prebuilt Reset safety | 0/8 live combinations | BLOCKED |
+| Live cleanup and SQL reconciliation | Not executed; no lane allocated | NOT VERIFIED |
+| Protected staging / integrated acceptance | 6 protected skips on PR HEAD | NOT VERIFIED |
+| Production release authorization | Not granted | PENDING |
+
+Preflight returned exit 2: existing lab registration and Docker volume, failed WSL service and degraded systemd, no separate Windows/VM or self-hosted runner. Baseline B Desktop artifact also needs independently verifiable provenance; its original run returned zero artifacts in the last receipt. Existing 50443 pending ciphertext and lab inventory were preserved; no disposable runtime lane was provisioned. Owner next action: provide isolated Windows/WSL2/Docker/SQL resources, healthy systemd and a verified B pair. Codex/operator executes exact-candidate physical gates with trusted TLS and independent read-only SQL checks, then independent review reconciles the receipts. Keep [#45 OPEN](https://github.com/chung6a8m/MyDmsVn-Vps/issues/45#issuecomment-7215825785); preserve the existing lab and pending record, and pause historical fault simulation unless the recorded recurrence criteria are met. VPS-08/#11 and VPS-09/#12 remain independent outstanding release gates. No production deployment.
