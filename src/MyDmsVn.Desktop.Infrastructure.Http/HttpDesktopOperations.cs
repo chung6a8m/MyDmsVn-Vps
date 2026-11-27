@@ -165,9 +165,16 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             Action? beforeReauthentication = preserveDraft == null ? null : () =>
             {
                 // Refresh failed before the transport attempted this request.
-                Clear(record);
-                notDispatched = true;
                 preserveDraft();
+                try { _store.Clear(record); }
+                catch (Exception error) when (error is IOException || error is UnauthorizedAccessException ||
+                    error is InvalidOperationException || error is CryptographicException)
+                {
+                    // Keep the durable fence and surface UNKNOWN if cleanup failed.
+                    return;
+                }
+                notDispatched = true;
+                NotifyPendingCleared();
             };
             try
             {
@@ -420,6 +427,11 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         private void Clear(HttpPendingWriteRecord record)
         {
             _store.Clear(record);
+            NotifyPendingCleared();
+        }
+
+        private void NotifyPendingCleared()
+        {
             _pending = null;
             PendingChanged?.Invoke(this, EventArgs.Empty);
         }

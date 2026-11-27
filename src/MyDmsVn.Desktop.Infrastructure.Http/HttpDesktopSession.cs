@@ -78,6 +78,12 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             if (changed) SessionChanged?.Invoke(this, EventArgs.Empty);
         }
 
+        internal bool IsAuthenticating(long generation)
+        {
+            lock (_sync)
+                return _state == DesktopSessionState.Authenticating && _version == generation;
+        }
+
         internal bool TrySignIn(long generation, CurrentUserDto user, string token,
             DateTime expiresUtc, CancellationToken cancellationToken)
         {

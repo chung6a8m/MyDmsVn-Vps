@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using MyDmsVn.Contracts;
 using Serilog;
 using Serilog.Formatting.Json;
@@ -10,7 +9,6 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 {
     internal static class HttpDesktopOperationDiagnostics
     {
-        private static readonly Regex ErrorCodePattern = new("\\A[A-Za-z][A-Za-z0-9_.]{0,95}\\z");
         private static readonly Lazy<ILogger> Logger = new Lazy<ILogger>(CreateLogger);
 
         internal static void RecordResponse(Guid operationId, int status, ApiError? error)
@@ -47,8 +45,30 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             _ => "UnrecognizedErrorCode",
         };
 
-        private static string? SafeCode(string? value) =>
-            value == null || ErrorCodePattern.IsMatch(value) ? value : "UnrecognizedErrorCode";
+        // Operation responses and their detail codes are also remote text.
+        private static string? SafeCode(string? code) => code switch
+        {
+            "Auth.Forbidden" or "Auth.InvalidCredentials" or "Deployment.EpochMismatch" or
+                "Idempotency.FingerprintMismatch" or "Idempotency.KeyConflict" or
+                "Operation.NotObserved" or "Operation.ResultExpired" or "Operation.ResultUnavailable" or
+                "Operation.Unavailable" => code,
+            "Request.CustomerId" or "Request.EmployeeId" or "Request.Lines" or "Request.WarehouseId" or
+                "Validation.Error" or "Validation.GreaterThan" or "Validation.GreaterThanOrEqual" or
+                "Validation.InvalidCharacter" or "Validation.InvalidRange" or "Validation.InvalidValue" or
+                "Validation.InvalidVersion" or "Validation.MaximumLength" or "Validation.PrecisionScale" or
+                "Validation.Range" or "Validation.Required" => code,
+            "SalesReceipt.AggregateOutOfRange" or "SalesReceipt.AlreadyPosted" or "SalesReceipt.AmountOutOfRange" or
+                "SalesReceipt.ConcurrencyConflict" or "SalesReceipt.DuplicateLineIdentity" or
+                "SalesReceipt.InsufficientStock" or "SalesReceipt.InvalidLineIdentity" or
+                "SalesReceipt.InvalidLineOwnership" or "SalesReceipt.InvalidStoredAmount" or
+                "SalesReceipt.InvalidStoredLines" or "SalesReceipt.InvalidUnit" or "SalesReceipt.NotFound" or
+                "SalesReceipt.UnitChanged" or "SalesReceipt.ValuationOutOfRange" => code,
+            "GoodsReceipt.AlreadyPosted" or "GoodsReceipt.ConcurrencyConflict" or "GoodsReceipt.DuplicateProduct" or
+                "GoodsReceipt.Employee" or "GoodsReceipt.InvalidLine" or "GoodsReceipt.InvalidLineCount" or
+                "GoodsReceipt.InvalidQuantity" or "GoodsReceipt.InvalidUnitCost" or "GoodsReceipt.NotFound" or
+                "GoodsReceipt.Product" or "GoodsReceipt.ValuationOutOfRange" or "GoodsReceipt.Warehouse" => code,
+            _ => RefreshErrorCode(code),
+        };
 
         private static ILogger CreateLogger()
         {

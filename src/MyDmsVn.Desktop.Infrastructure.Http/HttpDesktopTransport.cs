@@ -29,7 +29,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         private readonly HttpDesktopSession _session;
         private readonly HttpClient _client;
         private readonly CookieContainer? _cookies;
-        private readonly SemaphoreSlim _refreshGate = new SemaphoreSlim(1, 1);
+        // Serialize every request that can read or change the refresh-cookie family.
+        private readonly SemaphoreSlim _authGate = new SemaphoreSlim(1, 1);
         private readonly object _lifetime = new object();
         private bool _disposed;
 
@@ -68,15 +69,22 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 return Fail<CurrentUserDto>(ApiStatusCode.Conflict, "Auth.AlreadyAuthenticated",
                     "Sign out before signing in as another user.");
 
+            var entered = false;
             try
             {
+                await _authGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                entered = true;
+                if (!_session.IsAuthenticating(generation))
+                    return SessionChanged<CurrentUserDto>();
+
+                ClearRefreshCookie();
                 var result = await AuthAsync("login", credentials, cancellationToken)
                     .ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!result.IsSuccess)
                 {
-                    _session.CancelLogin(generation);
                     ClearRefreshCookie();
+                    _session.CancelLogin(generation);
                     return ApiResponse<CurrentUserDto>.Failure(result.Error!);
                 }
 
@@ -85,25 +93,22 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     !_session.TrySignIn(generation, ticket.User!, ticket.AccessToken!,
                         ticket.ExpiresAtUtc, cancellationToken))
                 {
-                    _session.CancelLogin(generation);
                     ClearRefreshCookie();
-                    return Fail<CurrentUserDto>(ApiStatusCode.Unauthorized, "Auth.SessionChanged",
-                        "The login response is no longer current. Sign in again.");
+                    _session.CancelLogin(generation);
+                    return SessionChanged<CurrentUserDto>();
                 }
 
                 return ApiResponse<CurrentUserDto>.Success(ticket.User!);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                _session.CancelLogin(generation);
-                ClearRefreshCookie();
-                throw;
-            }
             catch
             {
+                if (entered) ClearRefreshCookie();
                 _session.CancelLogin(generation);
-                ClearRefreshCookie();
                 throw;
+            }
+            finally
+            {
+                if (entered) _authGate.Release();
             }
         }
 
@@ -153,7 +158,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         private async Task<bool> RefreshAsync(long generation, CancellationToken cancellationToken,
             Action? beforeConnectionReauthentication)
         {
-            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await _authGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             RefreshAttempt? attempt = null;
             try
             {
@@ -202,7 +207,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             }
             finally
             {
-                _refreshGate.Release();
+                _authGate.Release();
             }
         }
 
@@ -224,26 +229,20 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
         private async Task RevokeAsync()
         {
-            using var timeout = new CancellationTokenSource(_options.RequestTimeout);
-            var entered = false;
+            // Earlier auth requests have their own full-response deadline. Logout
+            // starts its request deadline only after the prior cookie writer settles.
+            await _authGate.WaitAsync().ConfigureAwait(false);
             try
             {
-                await _refreshGate.WaitAsync(timeout.Token).ConfigureAwait(false);
-                entered = true;
                 var response = await RequestAsync<object>(HttpMethod.Post, "/api/v1/auth/logout",
-                    null, null, cookieEndpoint: true, timeout.Token).ConfigureAwait(false);
+                    null, null, cookieEndpoint: true, CancellationToken.None).ConfigureAwait(false);
                 HttpDesktopOperationDiagnostics.RecordLogout(response.IsSuccess ? "Acknowledged" : "Unconfirmed",
                     response.Error?.Code);
             }
-            catch (OperationCanceledException) when (timeout.IsCancellationRequested)
-            {
-                HttpDesktopOperationDiagnostics.RecordLogout("Unconfirmed", "Http.Timeout");
-            }
             finally
             {
-                ClearRefreshCookie();
-                if (entered)
-                    _refreshGate.Release();
+                try { ClearRefreshCookie(); }
+                finally { _authGate.Release(); }
             }
         }
 
@@ -305,10 +304,15 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     request.Content = new StringContent(V1WireMapper.SerializeRequest(body), Encoding.UTF8, "application/json");
                 }
 
+                using var authDeadline = cookieEndpoint
+                    ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+                    : null;
+                authDeadline?.CancelAfter(_options.RequestTimeout);
+                var requestToken = authDeadline?.Token ?? cancellationToken;
                 try
                 {
                     using (var response = await _client.SendAsync(
-                        request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                        request, HttpCompletionOption.ResponseHeadersRead, requestToken)
                         .ConfigureAwait(false))
                     {
                         if (refreshAttempt != null)
@@ -326,8 +330,10 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
                         if (response.Content?.Headers.ContentType?.MediaType != "application/json")
                             return Observe(InvalidResponse<T>());
-                        var json = await ReadBoundedAsync(response.Content, cancellationToken)
-                            .ConfigureAwait(false);
+                        var read = ReadBoundedAsync(response.Content, requestToken);
+                        var json = authDeadline == null
+                            ? await read.ConfigureAwait(false)
+                            : await AwaitAuthBodyAsync(read, requestToken).ConfigureAwait(false);
                         var status = (ApiStatusCode)(int)response.StatusCode;
                         ApiResponse<T> decoded;
                         try
@@ -351,7 +357,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 {
                     throw;
                 }
-                catch (TaskCanceledException)
+                catch (OperationCanceledException error) when (authDeadline?.IsCancellationRequested == true ||
+                    error is TaskCanceledException)
                 {
                     return Fail<T>(ApiStatusCode.InternalServerError,
                         "Http.Timeout", "The server did not respond before the timeout.");
@@ -373,6 +380,26 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     return InvalidResponse<T>();
                 }
             }
+        }
+
+        private static async Task<string> AwaitAuthBodyAsync(Task<string> read, CancellationToken token)
+        {
+            if (!read.IsCompleted)
+            {
+                // Framework response streams may ignore cancellation of a pending read.
+                // Stop awaiting it at the deadline so the caller can dispose the response
+                // and release the cookie gate. Observe any fault from that abandoned read.
+                var canceled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                using (token.Register(() => canceled.TrySetResult(true)))
+                {
+                    if (await Task.WhenAny(read, canceled.Task).ConfigureAwait(false) != read)
+                        _ = read.ContinueWith(task => { _ = task.Exception; }, CancellationToken.None,
+                            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                            TaskScheduler.Default);
+                }
+            }
+            token.ThrowIfCancellationRequested();
+            return await read.ConfigureAwait(false);
         }
 
         private static async Task<string> ReadBoundedAsync(
@@ -429,7 +456,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 _disposed = true;
             }
             _client.Dispose();
-            _refreshGate.Dispose();
+            _authGate.Dispose();
         }
 
         private sealed class RefreshAttempt
