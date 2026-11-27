@@ -115,6 +115,304 @@ namespace MyDmsVn.Desktop.Session.Tests
         }
 
         [Fact]
+        public async Task Sign_out_completes_server_logout_when_the_ui_thread_is_waiting()
+        {
+            var completed = false;
+            var session = new HttpDesktopSession(DesktopSessionOptions.Default, new Clock());
+            using (var transport = new HttpDesktopTransport(new HttpDesktopOptions(Origin), session,
+                new ReplyHandler(async (request, cancellationToken) =>
+                {
+                    if (request.RequestUri!.AbsolutePath == "/api/v1/auth/login")
+                        return Json(HttpStatusCode.OK, LoginJson);
+
+                    Assert.Equal("/api/v1/auth/logout", request.RequestUri.AbsolutePath);
+                    Assert.Equal(DesktopSessionState.LoggingOut, session.State);
+                    Assert.Null(session.CurrentUser);
+                    var responseReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    using (cancellationToken.Register(() => responseReady.TrySetCanceled()))
+                    {
+                        var context = SynchronizationContext.Current;
+                        if (context == null)
+                            responseReady.TrySetResult(true);
+                        else
+                            context.Post(_ => responseReady.TrySetResult(true), null);
+                        await responseReady.Task.ConfigureAwait(false);
+                    }
+                    completed = true;
+                    return Json(HttpStatusCode.OK, "{\"data\":{}}");
+                })))
+            {
+                var login = await transport.LoginAsync(new LoginRequest("operator", "secret"), CancellationToken.None);
+                Assert.True(login.IsSuccess);
+
+                var originalContext = SynchronizationContext.Current;
+                try
+                {
+                    SynchronizationContext.SetSynchronizationContext(new WaitingUiContext());
+                    session.SignOut();
+                }
+                finally
+                {
+                    SynchronizationContext.SetSynchronizationContext(originalContext);
+                }
+
+                Assert.True(completed, "The logout HTTP request must finish before SignOut returns.");
+                Assert.Equal(DesktopSessionState.Unauthenticated, session.State);
+            }
+        }
+
+        [Fact]
+        public async Task Sign_out_waits_for_an_in_flight_refresh_before_sending_logout()
+        {
+            var refreshStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseRefresh = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var loggingOut = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var logoutBeforeRefresh = false;
+            var logoutRequests = 0;
+            using (var fixture = Create(async request =>
+            {
+                switch (request.RequestUri!.AbsolutePath)
+                {
+                    case "/api/v1/auth/login":
+                        return Json(HttpStatusCode.OK, LoginJson.Replace("2099-01-01T00:00:00Z",
+                            DateTime.UtcNow.AddSeconds(20).ToString("O", CultureInfo.InvariantCulture)));
+                    case "/api/v1/auth/refresh":
+                        refreshStarted.SetResult(true);
+                        await releaseRefresh.Task.ConfigureAwait(false);
+                        return Json(HttpStatusCode.OK, LoginJson);
+                    case "/api/v1/auth/logout":
+                        logoutBeforeRefresh = !releaseRefresh.Task.IsCompleted;
+                        logoutRequests++;
+                        return Json(HttpStatusCode.OK, "{\"data\":{}}");
+                    default:
+                        throw new InvalidOperationException("No business read may use the signed-out session.");
+                }
+            }))
+            {
+                fixture.Session.SessionChanged += (_, _) =>
+                {
+                    if (fixture.Session.State == DesktopSessionState.LoggingOut)
+                        loggingOut.TrySetResult(true);
+                };
+                Assert.True((await fixture.Transport.LoginAsync(
+                    new LoginRequest("operator", "secret"), CancellationToken.None)).IsSuccess);
+                var read = fixture.Transport.GetCurrentUserAsync(CancellationToken.None);
+                await refreshStarted.Task;
+
+                var signOut = Task.Run(() => fixture.Session.SignOut());
+                await loggingOut.Task;
+                // A broken transport completes sign-out while rotation is still in flight.
+                await Task.WhenAny(signOut, Task.Delay(200));
+                releaseRefresh.SetResult(true);
+
+                Assert.Equal("Auth.SessionChanged", (await read).Error!.Code);
+                await signOut;
+                Assert.False(logoutBeforeRefresh);
+                Assert.Equal(1, logoutRequests);
+            }
+        }
+
+        [Theory]
+        [InlineData(false, true, false)]
+        [InlineData(true, true, false)]
+        [InlineData(true, false, false)]
+        [InlineData(false, true, true)]
+        public async Task Failed_refresh_preserves_unsent_sales_draft_for_manual_save_after_login(
+            bool web5, bool sameActor, bool clearFails)
+        {
+            var logins = 0;
+            var writes = 0;
+            using var fixture = Create(request =>
+            {
+                switch (request.RequestUri!.AbsolutePath)
+                {
+                    case "/api/v1/auth/login":
+                        return Json(HttpStatusCode.OK, ++logins == 1
+                            ? LoginJson.Replace("2099-01-01T00:00:00Z",
+                                DateTime.UtcNow.AddSeconds(20).ToString("O", CultureInfo.InvariantCulture))
+                            : sameActor ? LoginJson : LoginJson.Replace("\"userId\":7", "\"userId\":8"));
+                    case "/api/v1/auth/refresh":
+                        throw new HttpRequestException("Connection unavailable");
+                    case "/api/v2/operations/context":
+                        return Json(HttpStatusCode.OK, "{\"data\":{\"deploymentEpoch\":\"35f336a2-af15-4da2-aa43-9ff46828ffad\","
+                            + "\"contractVersion\":\"web5-resolution-v1\",\"sameKeyResendEnabled\":false,\"actorUserId\":7}}");
+                    case "/api/v1/sales-receipts":
+                        writes++;
+                        return Json(HttpStatusCode.BadRequest, "{\"error\":{\"code\":\"ValidationError\",\"message\":\"Test response\"}}");
+                    default:
+                        throw new InvalidOperationException("Unexpected request");
+                }
+            });
+            var credentials = new LoginRequest("operator", "secret");
+            Assert.True((await fixture.Transport.LoginAsync(credentials, CancellationToken.None)).IsSuccess);
+            using var recovery = new SalesDraftRecovery(fixture.Session);
+            var store = new TestPendingWriteStore { ClearFails = clearFails };
+            var operations = new HttpDesktopOperations(fixture.Transport, fixture.Session,
+                new HttpDesktopOperationSettings(web5 ? HttpDesktopOperationMode.Web5 : HttpDesktopOperationMode.LegacyWeb11), store);
+            var sales = new HttpSalesReceiptApiClient(fixture.Transport, operations);
+            SalesReceiptEditorViewModel OpenEditor()
+            {
+                var vm = new SalesReceiptEditorViewModel(sales, fixture.Session, new ImmediateUiDispatcher(),
+                    new HttpDesktopPreviewCalculator(), new MyDmsVn.Desktop.Tests.SalesBuffers(), recovery);
+                vm.SetAccess(true, true, true);
+                return vm;
+            }
+
+            using (var vm = OpenEditor())
+            {
+                vm.CustomerId = 1; vm.WarehouseId = 2; vm.EmployeeId = 3; vm.Note = "unsent sales draft";
+                var line = vm.AddLine()!;
+                line.ProductId = 4; line.Quantity = 2m; line.UnitPrice = 12.3456m;
+                await vm.SaveAsync();
+                Assert.Equal(DesktopSessionState.Expired, fixture.Session.State);
+                Assert.Equal(0, writes);
+                if (clearFails) Assert.NotNull(store.Load());
+                else Assert.Null(store.Load());
+                Assert.True(recovery.HasDraft);
+            }
+
+            Assert.True((await fixture.Transport.LoginAsync(credentials, CancellationToken.None)).IsSuccess);
+            using var reopened = OpenEditor();
+            if (!sameActor)
+            {
+                Assert.False(recovery.HasDraft);
+                Assert.False(reopened.TryRestoreDraft());
+                Assert.Empty(reopened.Lines);
+                Assert.Null(reopened.Note);
+                Assert.Equal(0, writes);
+                return;
+            }
+            reopened.SetAccess(true, false, false);
+            Assert.False(reopened.TryRestoreDraft());
+            reopened.SetAccess(true, true, true);
+            Assert.True(reopened.TryRestoreDraft());
+            Assert.True(reopened.IsDirty);
+            Assert.Equal("unsent sales draft", reopened.Note);
+            Assert.Equal(1, reopened.CustomerId);
+            Assert.Equal(2, reopened.WarehouseId);
+            Assert.Equal(3, reopened.EmployeeId);
+            var restoredLine = Assert.Single(reopened.Lines);
+            Assert.Equal(4, restoredLine.ProductId);
+            Assert.Equal(2m, restoredLine.Quantity);
+            Assert.Equal(12.3456m, restoredLine.UnitPrice);
+            Assert.Equal(0, writes);
+            await reopened.SaveAsync();
+            Assert.Equal(clearFails ? 0 : 1, writes);
+        }
+
+        [Fact]
+        public async Task Sign_out_sends_logout_after_a_stalled_refresh_body_times_out()
+        {
+            using var body = new StalledResponseBody();
+            var logoutRequests = 0;
+            var session = new HttpDesktopSession(DesktopSessionOptions.Default, new Clock());
+            using var transport = new HttpDesktopTransport(
+                new HttpDesktopOptions(Origin, TimeSpan.FromSeconds(2)), session,
+                new ReplyHandler(request => Task.FromResult(request.RequestUri!.AbsolutePath switch
+                {
+                    "/api/v1/auth/login" => Json(HttpStatusCode.OK, ShortLivedLogin()),
+                    "/api/v1/auth/refresh" => new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StreamContent(body)
+                        {
+                            Headers = { ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json") }
+                        }
+                    },
+                    "/api/v1/auth/logout" => Logout(),
+                    _ => throw new InvalidOperationException("Unexpected request"),
+                })));
+
+            HttpResponseMessage Logout()
+            {
+                Interlocked.Increment(ref logoutRequests);
+                return Json(HttpStatusCode.OK, "{\"data\":{}}");
+            }
+
+            Assert.True((await transport.LoginAsync(new LoginRequest("operator", "secret"),
+                CancellationToken.None)).IsSuccess);
+            var read = transport.GetCurrentUserAsync(CancellationToken.None);
+            try
+            {
+                Assert.Same(body.ReadStarted.Task, await Task.WhenAny(body.ReadStarted.Task, Task.Delay(5000)));
+                var signOut = session.SignOutAsync();
+                Assert.Same(signOut, await Task.WhenAny(signOut, Task.Delay(7000)));
+                await signOut;
+                Assert.Equal(1, logoutRequests);
+                Assert.Equal(DesktopSessionState.Unauthenticated, session.State);
+                Assert.Equal("Auth.SessionChanged", (await read).Error!.Code);
+            }
+            finally
+            {
+                body.ReleaseRead.TrySetResult(0);
+                await read;
+            }
+        }
+
+        [Fact]
+        public async Task New_login_waits_until_a_refresh_from_the_old_generation_finishes()
+        {
+            var enteredRefresh = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseRefresh = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var secondLoginSent = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var logins = 0;
+            var clock = new Clock();
+            using var fixture = Create(async request =>
+            {
+                switch (request.RequestUri!.AbsolutePath)
+                {
+                    case "/api/v1/auth/login":
+                        if (++logins == 1) return Json(HttpStatusCode.OK, ShortLivedLogin());
+                        secondLoginSent.TrySetResult(true);
+                        return Json(HttpStatusCode.OK, LoginJson);
+                    case "/api/v1/auth/refresh":
+                        enteredRefresh.TrySetResult(true);
+                        await releaseRefresh.Task;
+                        return Json(HttpStatusCode.OK, LoginJson);
+                    default:
+                        throw new InvalidOperationException("Unexpected request");
+                }
+            }, clock);
+            var credentials = new LoginRequest("operator", "secret");
+            Assert.True((await fixture.Transport.LoginAsync(credentials, CancellationToken.None)).IsSuccess);
+            var oldRead = fixture.Transport.GetCurrentUserAsync(CancellationToken.None);
+            Assert.Same(enteredRefresh.Task, await Task.WhenAny(enteredRefresh.Task, Task.Delay(5000)));
+            clock.Elapsed = DesktopSessionOptions.Default.IdleTimeout;
+            Assert.True(fixture.Session.ExpireIfIdle());
+            var newLogin = fixture.Transport.LoginAsync(credentials, CancellationToken.None);
+            try
+            {
+                Assert.NotSame(secondLoginSent.Task, await Task.WhenAny(secondLoginSent.Task, Task.Delay(150)));
+            }
+            finally
+            {
+                releaseRefresh.TrySetResult(true);
+                await Task.WhenAll(oldRead, newLogin);
+            }
+            Assert.Equal("Auth.SessionChanged", (await oldRead).Error!.Code);
+            Assert.True((await newLogin).IsSuccess);
+            Assert.True(fixture.Session.IsAuthenticated);
+        }
+
+        [Theory]
+        [InlineData("Auth.Unauthorized", "Auth.Unauthorized")]
+        [InlineData("Validation.Required", "Validation.Required")]
+        [InlineData("Operation.FenceUnavailable", "Operation.FenceUnavailable")]
+        [InlineData("Request.TooLarge", "Request.TooLarge")]
+        [InlineData("Auth.unrecognized_private_value", "UnrecognizedErrorCode")]
+        [InlineData("eyJhbGciOiJIUzI1NiJ9.c2VjcmV0.c2ln", "UnrecognizedErrorCode")]
+        public void Operation_and_logout_diagnostics_only_keep_recognized_codes(string code, string expected)
+        {
+            var diagnostics = typeof(HttpDesktopTransport).Assembly.GetType(
+                "MyDmsVn.Desktop.Infrastructure.Http.HttpDesktopOperationDiagnostics", throwOnError: true)!;
+            var safeCode = diagnostics.GetMethod("SafeCode",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            Assert.Equal(expected, safeCode.Invoke(null, new object[] { code }));
+        }
+
+        private static string ShortLivedLogin() => LoginJson.Replace("2099-01-01T00:00:00Z",
+            DateTime.UtcNow.AddSeconds(20).ToString("O", CultureInfo.InvariantCulture));
+
+        [Fact]
         public async Task In_flight_response_after_sign_out_cannot_repopulate_session()
         {
             var requestStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -525,9 +823,9 @@ namespace MyDmsVn.Desktop.Session.Tests
         private static Fixture Create(Func<HttpRequestMessage, HttpResponseMessage> handler) =>
             Create(request => Task.FromResult(handler(request)));
 
-        private static Fixture Create(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler)
+        private static Fixture Create(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler, Clock? clock = null)
         {
-            var session = new HttpDesktopSession(DesktopSessionOptions.Default, new Clock());
+            var session = new HttpDesktopSession(DesktopSessionOptions.Default, clock ?? new Clock());
             var transport = new HttpDesktopTransport(new HttpDesktopOptions(Origin),
                 session, new ReplyHandler(handler));
             return new Fixture(session, transport);
@@ -542,6 +840,7 @@ namespace MyDmsVn.Desktop.Session.Tests
         private sealed class TestPendingWriteStore : IHttpPendingWriteStore
         {
             private HttpPendingWriteRecord? _record;
+            public bool ClearFails { get; set; }
             public HttpPendingWriteRecord? Load() => _record;
             public void Save(HttpPendingWriteRecord record)
             {
@@ -552,7 +851,21 @@ namespace MyDmsVn.Desktop.Session.Tests
             {
                 if (_record?.OperationId != expected.OperationId)
                     throw new InvalidOperationException("Pending changed");
+                if (ClearFails) throw new IOException("Pending file could not be removed");
                 _record = null;
+            }
+        }
+
+        private sealed class StalledResponseBody : MemoryStream
+        {
+            public TaskCompletionSource<bool> ReadStarted { get; } =
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            public TaskCompletionSource<int> ReleaseRead { get; } =
+                new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            {
+                ReadStarted.TrySetResult(true);
+                return ReleaseRead.Task;
             }
         }
 
@@ -567,15 +880,24 @@ namespace MyDmsVn.Desktop.Session.Tests
 
         private sealed class Clock : IMonotonicClock
         {
-            public TimeSpan Elapsed => TimeSpan.Zero;
+            public TimeSpan Elapsed { get; set; }
+        }
+
+        private sealed class WaitingUiContext : SynchronizationContext
+        {
+            // The UI cannot dispatch posted work while its SignOut call is waiting.
+            public override void Post(SendOrPostCallback d, object? state) { }
         }
 
         private sealed class ReplyHandler : HttpMessageHandler
         {
-            private readonly Func<HttpRequestMessage, Task<HttpResponseMessage>> _reply;
-            public ReplyHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> reply) { _reply = reply; }
+            private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _reply;
+            public ReplyHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> reply)
+                : this((request, _) => reply(request)) { }
+            public ReplyHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> reply)
+            { _reply = reply; }
             protected override Task<HttpResponseMessage> SendAsync(
-                HttpRequestMessage request, CancellationToken cancellationToken) => _reply(request);
+                HttpRequestMessage request, CancellationToken cancellationToken) => _reply(request, cancellationToken);
         }
     }
 }

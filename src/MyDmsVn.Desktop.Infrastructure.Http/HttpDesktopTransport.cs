@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using MyDmsVn.Contracts;
+using MyDmsVn.Desktop.Application;
 using MyDmsVn.Desktop.Infrastructure.Http.Wire;
 using Newtonsoft.Json;
 
@@ -28,7 +29,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         private readonly HttpDesktopSession _session;
         private readonly HttpClient _client;
         private readonly CookieContainer? _cookies;
-        private readonly SemaphoreSlim _refreshGate = new SemaphoreSlim(1, 1);
+        // Serialize every request that can read or change the refresh-cookie family.
+        private readonly SemaphoreSlim _authGate = new SemaphoreSlim(1, 1);
         private readonly object _lifetime = new object();
         private bool _disposed;
 
@@ -67,15 +69,22 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 return Fail<CurrentUserDto>(ApiStatusCode.Conflict, "Auth.AlreadyAuthenticated",
                     "Sign out before signing in as another user.");
 
+            var entered = false;
             try
             {
+                await _authGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                entered = true;
+                if (!_session.IsAuthenticating(generation))
+                    return SessionChanged<CurrentUserDto>();
+
+                ClearRefreshCookie();
                 var result = await AuthAsync("login", credentials, cancellationToken)
                     .ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!result.IsSuccess)
                 {
-                    _session.CancelLogin(generation);
                     ClearRefreshCookie();
+                    _session.CancelLogin(generation);
                     return ApiResponse<CurrentUserDto>.Failure(result.Error!);
                 }
 
@@ -84,32 +93,35 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     !_session.TrySignIn(generation, ticket.User!, ticket.AccessToken!,
                         ticket.ExpiresAtUtc, cancellationToken))
                 {
-                    _session.CancelLogin(generation);
                     ClearRefreshCookie();
-                    return Fail<CurrentUserDto>(ApiStatusCode.Unauthorized, "Auth.SessionChanged",
-                        "The login response is no longer current. Sign in again.");
+                    _session.CancelLogin(generation);
+                    return SessionChanged<CurrentUserDto>();
                 }
 
                 return ApiResponse<CurrentUserDto>.Success(ticket.User!);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                _session.CancelLogin(generation);
-                ClearRefreshCookie();
-                throw;
-            }
             catch
             {
+                if (entered) ClearRefreshCookie();
                 _session.CancelLogin(generation);
-                ClearRefreshCookie();
                 throw;
+            }
+            finally
+            {
+                if (entered) _authGate.Release();
             }
         }
 
-        public async Task<ApiResponse<T>> SendAsync<T>(
+        public Task<ApiResponse<T>> SendAsync<T>(
             HttpMethod method, string route, object? body, CancellationToken cancellationToken,
             long? expectedSessionVersion = null,
-            IReadOnlyDictionary<string, string>? additionalHeaders = null)
+            IReadOnlyDictionary<string, string>? additionalHeaders = null) =>
+            SendAsync<T>(method, route, body, cancellationToken, expectedSessionVersion, additionalHeaders, null);
+
+        internal async Task<ApiResponse<T>> SendAsync<T>(
+            HttpMethod method, string route, object? body, CancellationToken cancellationToken,
+            long? expectedSessionVersion, IReadOnlyDictionary<string, string>? additionalHeaders,
+            Action? beforeConnectionReauthentication)
         {
             if (method == null) throw new ArgumentNullException(nameof(method));
             cancellationToken.ThrowIfCancellationRequested();
@@ -119,7 +131,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
             if (expiresUtc <= DateTime.UtcNow.AddSeconds(30))
             {
-                if (!await RefreshAsync(generation, cancellationToken).ConfigureAwait(false))
+                if (!await RefreshAsync(generation, cancellationToken, beforeConnectionReauthentication).ConfigureAwait(false))
                     return SessionChanged<T>();
                 if (!_session.TryCapture(generation, out _, out token, out _))
                     return SessionChanged<T>();
@@ -143,9 +155,11 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             SendAsync<CurrentUserDto>(HttpMethod.Get, "/api/v1/auth/me",
                 null, cancellationToken);
 
-        private async Task<bool> RefreshAsync(long generation, CancellationToken cancellationToken)
+        private async Task<bool> RefreshAsync(long generation, CancellationToken cancellationToken,
+            Action? beforeConnectionReauthentication)
         {
-            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await _authGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            RefreshAttempt? attempt = null;
             try
             {
                 if (!_session.TryCapture(generation, out _, out _, out var expiresUtc))
@@ -155,59 +169,88 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
 
                 // SQL rotation can commit even if the ACK is lost. Exactly one
                 // attempt: failure forces reauthentication, never replay refresh.
-                var refreshed = await AuthAsync("refresh", null, cancellationToken)
+                attempt = new RefreshAttempt();
+                var refreshed = await AuthAsync("refresh", null, cancellationToken, attempt)
                     .ConfigureAwait(false);
-                if (refreshed.IsSuccess && ValidTicket(refreshed.Data!) &&
-                    _session.TryRefresh(generation, refreshed.Data!.AccessToken!,
-                        refreshed.Data.ExpiresAtUtc))
-                    return true;
+                var errorCode = refreshed.Error?.Code;
+                if (refreshed.IsSuccess)
+                {
+                    var ticket = refreshed.Data!;
+                    var valid = ValidTicket(ticket);
+                    if (valid && _session.TryRefresh(generation, ticket.AccessToken!, ticket.ExpiresAtUtc))
+                    {
+                        attempt.Record("Succeeded", null);
+                        return true;
+                    }
+                    errorCode = valid ? "Auth.SessionChanged" : "Auth.InvalidRefreshTicket";
+                }
 
-                _session.RequireReauthentication(generation);
-                ClearRefreshCookie();
+                var connectionFailed = attempt.HttpStatus == null &&
+                    (errorCode == "Http.Unavailable" || errorCode == "Http.Timeout");
+                DiscardRefresh(generation, connectionFailed ? beforeConnectionReauthentication : null);
+                attempt.Record("Failed", errorCode);
                 return false;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // Rotation might already have committed: never allow another
                 // refresh on the old cookie after a caller-initiated cancellation.
-                _session.RequireReauthentication(generation);
-                ClearRefreshCookie();
+                attempt?.Record("Canceled", "Refresh.Canceled");
+                DiscardRefresh(generation);
                 throw;
             }
             catch
             {
-                _session.RequireReauthentication(generation);
-                ClearRefreshCookie();
+                attempt?.Record("Failed", "Refresh.Unexpected");
+                DiscardRefresh(generation);
                 return false;
             }
             finally
             {
-                _refreshGate.Release();
+                _authGate.Release();
+            }
+        }
+
+        private void DiscardRefresh(long generation, Action? beforeNotification = null)
+        {
+            try { _session.RequireReauthentication(generation, beforeNotification); }
+            finally
+            {
+                // Logout needs a refresh cookie from this family after rotation settles.
+                if (_session.State != DesktopSessionState.LoggingOut)
+                    ClearRefreshCookie();
             }
         }
 
         private Task<ApiResponse<AuthTicket>> AuthAsync(
-            string operation, object? body, CancellationToken token) =>
+            string operation, object? body, CancellationToken token, RefreshAttempt? refreshAttempt = null) =>
             RequestAsync<AuthTicket>(HttpMethod.Post, "/api/v1/auth/" + operation,
-                body, null, cookieEndpoint: true, token);
+                body, null, cookieEndpoint: true, token, refreshAttempt: refreshAttempt);
 
-        private async Task RevokeAsync(CancellationToken cancellationToken)
+        private async Task RevokeAsync()
         {
+            // Earlier auth requests have their own full-response deadline. Logout
+            // starts its request deadline only after the prior cookie writer settles.
+            await _authGate.WaitAsync().ConfigureAwait(false);
             try
             {
-                await RequestAsync<object>(HttpMethod.Post, "/api/v1/auth/logout",
-                    null, null, cookieEndpoint: true, cancellationToken).ConfigureAwait(false);
+                var response = await RequestAsync<object>(HttpMethod.Post, "/api/v1/auth/logout",
+                    null, null, cookieEndpoint: true, CancellationToken.None).ConfigureAwait(false);
+                HttpDesktopOperationDiagnostics.RecordLogout(response.IsSuccess ? "Acknowledged" : "Unconfirmed",
+                    response.Error?.Code);
             }
             finally
             {
-                ClearRefreshCookie();
+                try { ClearRefreshCookie(); }
+                finally { _authGate.Release(); }
             }
         }
 
         private async Task<ApiResponse<T>> RequestAsync<T>(
             HttpMethod method, string route, object? body, string? accessToken,
             bool cookieEndpoint, CancellationToken cancellationToken,
-            IReadOnlyDictionary<string, string>? additionalHeaders = null)
+            IReadOnlyDictionary<string, string>? additionalHeaders = null,
+            RefreshAttempt? refreshAttempt = null)
         {
             var exactWeb5Context = route == "/api/v2/operations/context";
             const string v2Prefix = "/api/v2/operations/";
@@ -236,7 +279,8 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             using (var request = new HttpRequestMessage(method, uri))
             {
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-                request.Headers.TryAddWithoutValidation("X-Correlation-ID", Guid.NewGuid().ToString("N"));
+                request.Headers.TryAddWithoutValidation("X-Correlation-ID",
+                    (refreshAttempt?.CorrelationId ?? Guid.NewGuid()).ToString("N"));
                 if (method != HttpMethod.Get && method != HttpMethod.Head)
                     request.Headers.TryAddWithoutValidation("Origin", _options.Origin.ToString().TrimEnd('/'));
                 if (cookieEndpoint)
@@ -260,16 +304,36 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     request.Content = new StringContent(V1WireMapper.SerializeRequest(body), Encoding.UTF8, "application/json");
                 }
 
+                using var authDeadline = cookieEndpoint
+                    ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+                    : null;
+                authDeadline?.CancelAfter(_options.RequestTimeout);
+                var requestToken = authDeadline?.Token ?? cancellationToken;
                 try
                 {
                     using (var response = await _client.SendAsync(
-                        request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                        request, HttpCompletionOption.ResponseHeadersRead, requestToken)
                         .ConfigureAwait(false))
                     {
+                        if (refreshAttempt != null)
+                            refreshAttempt.HttpStatus = (int)response.StatusCode;
+                        var hasId = request.Headers.TryGetValues("Idempotency-Key", out var operationKeys) &&
+                            operationKeys.Count() == 1;
+                        var id = hasId && Guid.TryParseExact(operationKeys!.Single(), "D", out var parsedId)
+                            ? parsedId : Guid.Empty;
+                        ApiResponse<T> Observe(ApiResponse<T> result)
+                        {
+                            if (id != Guid.Empty)
+                                HttpDesktopOperationDiagnostics.RecordResponse(id, (int)response.StatusCode, result.Error);
+                            return result;
+                        }
+
                         if (response.Content?.Headers.ContentType?.MediaType != "application/json")
-                            return InvalidResponse<T>();
-                        var json = await ReadBoundedAsync(response.Content, cancellationToken)
-                            .ConfigureAwait(false);
+                            return Observe(InvalidResponse<T>());
+                        var read = ReadBoundedAsync(response.Content, requestToken);
+                        var json = authDeadline == null
+                            ? await read.ConfigureAwait(false)
+                            : await AwaitAuthBodyAsync(read, requestToken).ConfigureAwait(false);
                         var status = (ApiStatusCode)(int)response.StatusCode;
                         ApiResponse<T> decoded;
                         try
@@ -280,31 +344,34 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                             error is ArgumentException || error is FormatException ||
                             error is OverflowException || error is NullReferenceException)
                         {
-                            return InvalidResponse<T>();
+                            return Observe(InvalidResponse<T>());
                         }
 
                         if (decoded == null ||
                             (response.IsSuccessStatusCode != decoded.IsSuccess))
-                            return InvalidResponse<T>();
-                        return decoded;
+                            return Observe(InvalidResponse<T>());
+                        return Observe(decoded);
                     }
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                     throw;
                 }
-                catch (TaskCanceledException)
+                catch (OperationCanceledException error) when (authDeadline?.IsCancellationRequested == true ||
+                    error is TaskCanceledException)
                 {
                     return Fail<T>(ApiStatusCode.InternalServerError,
                         "Http.Timeout", "The server did not respond before the timeout.");
                 }
-                catch (HttpRequestException)
+                catch (HttpRequestException error)
                 {
+                    refreshAttempt?.ObserveNetworkFailure(error);
                     return Fail<T>(ApiStatusCode.InternalServerError,
                         "Http.Unavailable", "The server is unavailable. Check the secure connection.");
                 }
-                catch (IOException)
+                catch (IOException error)
                 {
+                    refreshAttempt?.ObserveNetworkFailure(error);
                     return Fail<T>(ApiStatusCode.InternalServerError,
                         "Http.Unavailable", "The server connection failed.");
                 }
@@ -313,6 +380,26 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     return InvalidResponse<T>();
                 }
             }
+        }
+
+        private static async Task<string> AwaitAuthBodyAsync(Task<string> read, CancellationToken token)
+        {
+            if (!read.IsCompleted)
+            {
+                // Framework response streams may ignore cancellation of a pending read.
+                // Stop awaiting it at the deadline so the caller can dispose the response
+                // and release the cookie gate. Observe any fault from that abandoned read.
+                var canceled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                using (token.Register(() => canceled.TrySetResult(true)))
+                {
+                    if (await Task.WhenAny(read, canceled.Task).ConfigureAwait(false) != read)
+                        _ = read.ContinueWith(task => { _ = task.Exception; }, CancellationToken.None,
+                            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                            TaskScheduler.Default);
+                }
+            }
+            token.ThrowIfCancellationRequested();
+            return await read.ConfigureAwait(false);
         }
 
         private static async Task<string> ReadBoundedAsync(
@@ -369,7 +456,24 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 _disposed = true;
             }
             _client.Dispose();
-            _refreshGate.Dispose();
+            _authGate.Dispose();
+        }
+
+        private sealed class RefreshAttempt
+        {
+            public Guid CorrelationId { get; } = Guid.NewGuid();
+            public int? HttpStatus { get; set; }
+            private WebExceptionStatus? NetworkStatus { get; set; }
+
+            public void ObserveNetworkFailure(Exception error)
+            {
+                if (error.InnerException is WebException networkError)
+                    NetworkStatus = networkError.Status;
+            }
+
+            public void Record(string disposition, string? errorCode) =>
+                HttpDesktopOperationDiagnostics.RecordRefresh(
+                    CorrelationId, disposition, HttpStatus, errorCode, NetworkStatus?.ToString());
         }
 
         private sealed class AuthTicket

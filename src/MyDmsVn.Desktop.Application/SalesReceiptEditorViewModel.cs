@@ -19,6 +19,7 @@ public sealed class SalesReceiptEditorViewModel : ObservableObject, IDisposable
     private readonly IUiDispatcher _ui;
     private readonly ISalesReceiptPreviewCalculator _calculator;
     private readonly ISalesCommandBufferAdmission _buffers;
+    private readonly SalesDraftRecovery? _draftRecovery;
     private readonly ObservableCollection<SalesReceiptLineViewModel> _lines = new ObservableCollection<SalesReceiptLineViewModel>();
     private static readonly Regex LineFieldPattern = new Regex(@"^(?:request\.)?lines\[([0-9]+)\](?:\.(productId|qty|unitPrice|saleLineId))?$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -47,6 +48,10 @@ public sealed class SalesReceiptEditorViewModel : ObservableObject, IDisposable
 
     public SalesReceiptEditorViewModel(ISalesReceiptApiClient api, IDesktopSession session, IUiDispatcher ui,
         ISalesReceiptPreviewCalculator calculator, ISalesCommandBufferAdmission buffers)
+        : this(api, session, ui, calculator, buffers, null) { }
+
+    public SalesReceiptEditorViewModel(ISalesReceiptApiClient api, IDesktopSession session, IUiDispatcher ui,
+        ISalesReceiptPreviewCalculator calculator, ISalesCommandBufferAdmission buffers, SalesDraftRecovery? draftRecovery)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _sessionVersion = session.Version;
@@ -54,6 +59,7 @@ public sealed class SalesReceiptEditorViewModel : ObservableObject, IDisposable
         _ui = ui ?? throw new ArgumentNullException(nameof(ui));
         _calculator = calculator ?? throw new ArgumentNullException(nameof(calculator));
         _buffers = buffers ?? throw new ArgumentNullException(nameof(buffers));
+        _draftRecovery = draftRecovery;
         Lines = new ReadOnlyObservableCollection<SalesReceiptLineViewModel>(_lines);
         _session.SessionChanged += SessionChanged;
     }
@@ -312,9 +318,8 @@ public sealed class SalesReceiptEditorViewModel : ObservableObject, IDisposable
         _lastSubmittedRevision = EditRevision;
         _lastSaveStatus = WorkspaceSaveStatus.Unknown;
         Notify();
-        var result = create
-            ? await _api.CreateDraftAsync(new SaveSalesReceiptRequest(SaleDate, CustomerId, WarehouseId, EmployeeId, Note, requestLines), operation.Cancellation.Token).ConfigureAwait(false)
-            : await _api.UpdateDraftAsync(new UpdateSalesReceiptDraftRequest(SaleId, Version, SaleDate, CustomerId, WarehouseId, EmployeeId, Note, requestLines), operation.Cancellation.Token).ConfigureAwait(false);
+        var request = new SaveSalesReceiptRequest(SaleDate, CustomerId, WarehouseId, EmployeeId, Note, requestLines);
+        var result = await SaveDraftRequest(request, rows, operation.Cancellation.Token).ConfigureAwait(false);
         await Publish(operation, () =>
         {
             if (result.IsSuccess)
@@ -424,6 +429,40 @@ public sealed class SalesReceiptEditorViewModel : ObservableObject, IDisposable
         ValidationIssues = issues;
         OnPropertyChanged(nameof(ValidationIssues));
     }
+    private Task<ApiResponse<SalesReceiptDto>> SaveDraftRequest(SaveSalesReceiptRequest request,
+        SalesReceiptLineViewModel[] rows, CancellationToken token)
+    {
+        if (_draftRecovery is { } store && _api is ISalesDraftSaveRecovery recovery && _session.CurrentUser is { } owner)
+        {
+            var lines = rows.Select((row, index) => new SalesReceiptLineDto(row.SaleLineId, index + 1,
+                row.ProductId, row.Unit, row.Quantity, row.UnitPrice, row.IsGift, row.LineAmount!.Value,
+                null, null, row.ProductDisplayName, row.ProductIsActive)).ToArray();
+            var draft = new SalesReceiptDto(SaleId, SaleNumber, SaleDate, CustomerId, WarehouseId, EmployeeId,
+                "Draft", Note, null, Version, lines, TotalAmount!.Value, null, null,
+                CustomerDisplayName, CustomerIsActive, WarehouseDisplayName, WarehouseIsActive,
+                EmployeeDisplayName, EmployeeIsActive);
+            return recovery.SaveDraftAsync(draft.SaleId, draft.Version, request,
+                () => store.Preserve(owner, draft), token);
+        }
+        return SaleId == 0
+            ? _api.CreateDraftAsync(request, token)
+            : _api.UpdateDraftAsync(new UpdateSalesReceiptDraftRequest(SaleId, Version, request.SaleDate,
+                request.CustomerId, request.WarehouseId, request.EmployeeId, request.Note, request.Lines), token);
+    }
+
+    public bool TryRestoreDraft()
+    {
+        lock (_sync)
+        {
+            if (!CanEdit || IsDirty || SaleId != 0 || _draftRecovery?.Take(_sessionVersion) is not { } draft)
+                return false;
+            Apply(draft, null);
+            AdvanceDraftRevision();
+            Notify();
+            return true;
+        }
+    }
+
     private void BeginPostRecovery(long id)
     {
         RequiresPostOutcomeReload = true;

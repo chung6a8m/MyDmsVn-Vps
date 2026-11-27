@@ -30,6 +30,7 @@ namespace MyDmsVn.Desktop.WinForms
             services.AddSingleton<IUiDispatcher>(
                 new SynchronizationContextUiDispatcher(uiContext));
             services.AddTransient<FoundationViewModel>();
+            services.TryAddSingleton<SalesDraftRecovery>();
             services.AddTransient<LoginViewModel>();
             services.AddTransient<LoginForm>();
             services.AddTransient<ICatalogControlFactory, CatalogControlFactory>();

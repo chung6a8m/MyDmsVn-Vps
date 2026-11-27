@@ -25,10 +25,12 @@ load_instance() {
   regular_file "$file"
   INSTANCE_ID="$(read_setting "$file" INSTANCE_ID)"
   SOURCE_SHA="$(read_setting "$file" SOURCE_SHA)"
+  RELEASE_ID="$(read_setting "$file" RELEASE_ID)"
   PUBLIC_ORIGIN="$(read_setting "$file" PUBLIC_ORIGIN)"
   SQL_SERVER="$(read_setting "$file" SQL_SERVER)"
   [[ "$INSTANCE_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]] || fail 'LocalSimulation.InstanceInvalid'
   [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'LocalSimulation.SourceShaInvalid'
+  [[ "$RELEASE_ID" =~ ^[0-9a-f]{40}$ ]] || fail 'LocalSimulation.ReleaseIdentityMismatch'
   [[ "$PUBLIC_ORIGIN" == 'https://localhost:50443' ]] || fail 'LocalSimulation.OriginInvalid'
   [[ "$SQL_SERVER" == '127.0.0.1,11433' ]] || fail 'LocalSimulation.SqlServerInvalid'
 }
@@ -96,6 +98,15 @@ admit_lab() {
   done
 }
 
+protect_installation_tree() {
+  local root="$1"
+  regular_dir "$root"
+  [[ -z "$(find "$root" ! -type f ! -type d -print -quit)" ]] ||
+    fail 'LocalSimulation.ArtifactIdentityMismatch'
+  find "$root" -type d -exec chmod 0755 -- '{}' +
+  find "$root" -type f -exec chmod 0644 -- '{}' +
+}
+
 install_lab() {
   [[ $# == 4 ]] || fail 'LocalSimulation.InstallArgumentsInvalid'
   [[ "$(id -u)" == 0 ]] || fail 'LocalSimulation.RootRequired'
@@ -113,16 +124,19 @@ install_lab() {
   chmod 0600 /etc/mydmsvn-local-sim/instance-id /etc/mydmsvn-local-sim/source-sha
   useradd --system --no-create-home --shell /usr/sbin/nologin mydmsvn-local-sim
   install -d -o root -g root -m 0755 /opt/mydmsvn-local-sim /opt/mydmsvn-local-sim/releases /usr/local/libexec
-  cp -a -- "$state/runtime" /opt/mydmsvn-local-sim/runtime
-  chown -R root:root /opt/mydmsvn-local-sim/runtime
+  install -d -o root -g root -m 0700 /opt/mydmsvn-local-sim/runtime
+  cp -R --no-preserve=ownership,mode -- "$state/runtime/." /opt/mydmsvn-local-sim/runtime/
+  protect_installation_tree /opt/mydmsvn-local-sim/runtime
+  chmod 0755 -- /opt/mydmsvn-local-sim/runtime/dotnet
+  find /opt/mydmsvn-local-sim/runtime/shared -name createdump -type f -exec chmod 0755 -- '{}' +
   install -d -o root -g root -m 0700 /etc/mydmsvn-local-sim/credentials /etc/mydmsvn-local-sim/tls
   install -d -o mydmsvn-local-sim -g mydmsvn-local-sim -m 0700 /var/lib/mydmsvn-local-sim /var/lib/mydmsvn-local-sim/audit
   install -o mydmsvn-local-sim -g mydmsvn-local-sim -m 0600 /dev/null /var/lib/mydmsvn-local-sim/audit/security.jsonl
-  [[ ! -e "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA" ]] || fail 'LocalSimulation.ReleaseExists'
-  install -d -o root -g root -m 0755 "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA"
-  cp -a -- "$publish/." "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA/"
-  chown -R root:root "/opt/mydmsvn-local-sim/releases/$SOURCE_SHA"
-  ln -sfn "releases/$SOURCE_SHA" /opt/mydmsvn-local-sim/current
+  [[ ! -e "/opt/mydmsvn-local-sim/releases/$RELEASE_ID" ]] || fail 'LocalSimulation.ReleaseExists'
+  install -d -o root -g root -m 0700 "/opt/mydmsvn-local-sim/releases/$RELEASE_ID"
+  cp -R --no-preserve=ownership,mode -- "$publish/." "/opt/mydmsvn-local-sim/releases/$RELEASE_ID/"
+  protect_installation_tree "/opt/mydmsvn-local-sim/releases/$RELEASE_ID"
+  ln -sfn "releases/$RELEASE_ID" /opt/mydmsvn-local-sim/current
   install -o root -g root -m 0644 "$rendered/mydmsvn-local-sim.service" /etc/systemd/system/mydmsvn-local-sim.service
   install -o root -g root -m 0755 "$rendered/mydmsvn-local-sim-start" /usr/local/libexec/mydmsvn-local-sim-start
   install -o root -g mydmsvn-local-sim -m 0640 "$rendered/runtime.env" /etc/mydmsvn-local-sim/runtime.env
@@ -169,24 +183,224 @@ install_prerequisites() {
   printf '{"schemaVersion":1,"status":"PREREQUISITES_READY","notice":"LOCAL SIMULATION - NOT VPS-08/09 ACCEPTANCE"}\n'
 }
 
-identity_lab() {
-  [[ $# == 3 && "$(id -u)" == 0 ]] || fail 'LocalSimulation.IdentityArgumentsInvalid'
+verify_candidate_release() {
+  local release="$1" digest="$2" line relative
+  local manifest="$release/artifact-manifest.txt"
+  regular_dir "$release"
+  regular_file "$manifest"
+  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || fail 'LocalSimulation.ArtifactIdentityInvalid'
+  [[ "$(sha256sum -- "$manifest" | cut -d ' ' -f 1)" == "$digest" ]] ||
+    fail 'LocalSimulation.ArtifactIdentityMismatch'
+  [[ -z "$(find "$release" ! -type f ! -type d -print -quit)" ]] ||
+    fail 'LocalSimulation.ArtifactIdentityMismatch'
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[0-9a-f]{64}[[:space:]][[:space:]]([A-Za-z0-9_+.-]+(/[A-Za-z0-9_+.-]+)*)$ ]] ||
+      fail 'LocalSimulation.ArtifactIdentityMismatch'
+    relative="${BASH_REMATCH[1]}"
+    [[ ! "$relative" =~ (^|/)\.{1,2}(/|$) && "$relative" != artifact-manifest.txt ]] ||
+      fail 'LocalSimulation.ArtifactIdentityMismatch'
+  done <"$manifest"
+  [[ -s "$manifest" ]] || fail 'LocalSimulation.ArtifactIdentityMismatch'
+  diff -u \
+    <(cut -c 67- "$manifest" | sort) \
+    <(find "$release" -type f ! -path "$manifest" -printf '%P\n' | sort) \
+    >/dev/null || fail 'LocalSimulation.ArtifactIdentityMismatch'
+  (cd "$release" && sha256sum --strict --check --status artifact-manifest.txt) ||
+    fail 'LocalSimulation.ArtifactIdentityMismatch'
+}
+
+switch_candidate_release() (
+  [[ $# == 5 ]] || fail 'LocalSimulation.UpgradeArgumentsInvalid'
+  local root="$1" old="$2" new="$3" old_hash="$4" new_hash="$5" active stage lock_fd
+  [[ "$old" =~ ^[0-9a-f]{40}$ && "$new" =~ ^[0-9a-f]{40}$ && "$old" != "$new" ]] ||
+    fail 'LocalSimulation.ReleaseIdentityMismatch'
+  regular_dir "$root"
+  regular_dir "$root/releases"
+  local lock="$root/.release-switch.lock"
+  if [[ -e "$lock" || -L "$lock" ]]; then regular_file "$lock"; fi
+  exec {lock_fd}>"$lock"
+  flock -n "$lock_fd" || fail 'LocalSimulation.UpgradeLocked'
+  [[ -L "$root/current" ]] || fail 'LocalSimulation.ReleaseIdentityMismatch'
+  active="$(readlink -- "$root/current")"
+  [[ "$active" == "releases/$old" || "$active" == "releases/$new" ]] ||
+    fail 'LocalSimulation.ReleaseIdentityMismatch'
+  verify_candidate_release "$root/releases/$old" "$old_hash"
+  verify_candidate_release "$root/releases/$new" "$new_hash"
+  if [[ "$active" == "releases/$new" ]]; then printf '%s\n' ALREADY_ACTIVE; return 0; fi
+
+  stage="$(mktemp -d "$root/.release-switch.XXXXXXXX")"
+  trap 'rm -f -- "$stage/current"; rmdir -- "$stage"' EXIT
+  ln -s -- "releases/$new" "$stage/current"
+  mv -T -- "$stage/current" "$root/current"
+  sync -f "$root"
+  printf '%s\n' SWITCHED
+)
+
+assert_lab_owner() {
+  [[ $# == 2 && "$(id -u)" == 0 ]] || fail 'LocalSimulation.IdentityArgumentsInvalid'
   regular_file /etc/mydmsvn-local-sim/instance-id
   [[ "$(cat /etc/mydmsvn-local-sim/instance-id)" == "$1" ]] || fail 'LocalSimulation.InstanceMismatch'
   [[ "$2" =~ ^[0-9a-f]{40}$ ]] || fail 'LocalSimulation.SourceShaInvalid'
   regular_file /etc/mydmsvn-local-sim/source-sha
   [[ "$(cat /etc/mydmsvn-local-sim/source-sha)" == "$2" ]] || fail 'LocalSimulation.SourceShaInvalid'
-  [[ -L /opt/mydmsvn-local-sim/current && "$(readlink /opt/mydmsvn-local-sim/current)" == "releases/$2" ]] || fail 'LocalSimulation.ReleaseIdentityMismatch'
-  [[ "$3" =~ ^[0-9a-f]{64}$ ]] || fail 'LocalSimulation.ArtifactIdentityInvalid'
-  local release="/opt/mydmsvn-local-sim/releases/$2"
-  regular_file "$release/artifact-manifest.txt"
-  [[ "$(sha256sum "$release/artifact-manifest.txt" | awk '{print $1}')" == "$3" ]] || fail 'LocalSimulation.ArtifactIdentityMismatch'
-  [[ -z "$(find "$release" -type l -print -quit)" ]] || fail 'LocalSimulation.ArtifactIdentityMismatch'
-  diff -u \
-    <(sed -n 's/^[0-9a-f]\{64\}  //p' "$release/artifact-manifest.txt" | LC_ALL=C sort) \
-    <(find "$release" -type f ! -name artifact-manifest.txt -printf '%P\n' | LC_ALL=C sort) \
-    >/dev/null || fail 'LocalSimulation.ArtifactIdentityMismatch'
-  (cd "$release" && sha256sum --check --status artifact-manifest.txt) || fail 'LocalSimulation.ArtifactIdentityMismatch'
+}
+
+identity_lab() {
+  [[ $# == 3 || $# == 4 ]] || fail 'LocalSimulation.IdentityArgumentsInvalid'
+  assert_lab_owner "$1" "$2"
+  local active="${4:-$2}" root=/opt/mydmsvn-local-sim
+  [[ "$active" =~ ^[0-9a-f]{40}$ ]] || fail 'LocalSimulation.ReleaseIdentityMismatch'
+  regular_dir "$root"; regular_dir "$root/releases"
+  [[ -L "$root/current" && "$(readlink "$root/current")" == "releases/$active" ]] ||
+    fail 'LocalSimulation.ReleaseIdentityMismatch'
+  verify_candidate_release "$root/releases/$active" "$3"
+  [[ -z "$(find "$root/releases/$active" \( ! -user root -o -perm /022 \) -print -quit)" ]] ||
+    fail 'LocalSimulation.ArtifactIdentityMismatch'
+}
+
+assert_upgrade_service() {
+  local unit=/etc/systemd/system/mydmsvn-local-sim.service start=/usr/local/libexec/mydmsvn-local-sim-start
+  regular_file "$unit"; regular_file "$start"
+  [[ "$(sha256sum -- "$unit" | cut -d ' ' -f 1)" == "$1" &&
+     "$(sha256sum -- "$start" | cut -d ' ' -f 1)" == "$2" ]] ||
+    fail 'LocalSimulation.UpgradeServiceMismatch'
+  [[ "$(systemctl show mydmsvn-local-sim.service --property=FragmentPath --value)" == "$unit" &&
+     -z "$(systemctl show mydmsvn-local-sim.service --property=DropInPaths --value)" &&
+     "$(systemctl show mydmsvn-local-sim.service --property=User --value)" == mydmsvn-local-sim ]] ||
+    fail 'LocalSimulation.UpgradeServiceMismatch'
+}
+
+observe_upgrade_lab() {
+  [[ $# == 7 ]] || fail 'LocalSimulation.UpgradeArgumentsInvalid'
+  local instance="$1" tooling="$2" release="$3" hash="$4" unit="$5" start="$6" prefix="$7"
+  identity_lab "$instance" "$tooling" "$hash" "$release"
+  assert_upgrade_service "$unit" "$start"
+  local pid audit=/var/lib/mydmsvn-local-sim/audit/security.jsonl size identities prefix_hash
+  pid="$(systemctl show mydmsvn-local-sim.service --property=MainPID --value)"
+  regular_file "$audit"
+  [[ "$(stat -c '%a:%U' "$audit")" == '600:mydmsvn-local-sim' ]] || fail 'LocalSimulation.UpgradeAuditMismatch'
+  size="$(stat -c '%s' "$audit")"
+  [[ "$pid" =~ ^[0-9]+$ && "$size" =~ ^[0-9]+$ ]] || fail 'LocalSimulation.UpgradeIdentityUnavailable'
+  if [[ "$pid" != 0 ]]; then
+    local -a argv
+    mapfile -d '' -t argv <"/proc/$pid/cmdline"
+    [[ "${#argv[@]}" == 2 && "${argv[0]}" == /opt/mydmsvn-local-sim/runtime/dotnet &&
+       "${argv[1]}" == /opt/mydmsvn-local-sim/current/MyDmsVn.Server.AspNetCoreHost.dll ]] ||
+      fail 'LocalSimulation.UpgradeProcessMismatch'
+    [[ "$(readlink -f -- "/proc/$pid/cwd")" == "/opt/mydmsvn-local-sim/releases/$release" &&
+       "$(readlink -f -- "/proc/$pid/exe")" == /opt/mydmsvn-local-sim/runtime/dotnet ]] ||
+      fail 'LocalSimulation.UpgradeProcessMismatch'
+  fi
+  if [[ "$prefix" == current ]]; then prefix="$size"; fi
+  [[ "$prefix" =~ ^[0-9]{1,12}$ && "$prefix" -le "$size" ]] || fail 'LocalSimulation.UpgradeAuditMismatch'
+  prefix_hash="$(head -c "$prefix" -- "$audit" | sha256sum | cut -d ' ' -f 1)"
+  identities="$(
+    regular_file /etc/mydmsvn-local-sim/credentials/jwt_keys
+    regular_file /etc/mydmsvn-local-sim/credentials/proxy_token
+    regular_file /etc/mydmsvn-local-sim/credentials/sql_connection_string
+    regular_file /etc/mydmsvn-local-sim/runtime.env
+    regular_file /etc/mydmsvn-local-sim/tls/ca.crt
+    regular_file /etc/mydmsvn-local-sim/tls/nginx.crt
+    printf '%s\n' "$instance"
+    sha256sum /etc/mydmsvn-local-sim/credentials/{jwt_keys,proxy_token,sql_connection_string} \
+      /etc/mydmsvn-local-sim/runtime.env /etc/mydmsvn-local-sim/tls/{ca.crt,nginx.crt}
+    stat -c '%d:%i:%a:%U' "$(dirname -- "$audit")" "$audit"
+  )" || fail 'LocalSimulation.UpgradeIdentityUnavailable'
+  identities="$(printf '%s' "$identities" | sha256sum | cut -d ' ' -f 1)"
+  printf '{"pid":%d,"auditSize":%d,"auditPrefixSha256":"%s","continuitySha256":"%s"}\n' \
+    "$pid" "$size" "$prefix_hash" "$identities"
+}
+
+current_upgrade_release() {
+  [[ $# == 4 ]] || fail 'LocalSimulation.UpgradeArgumentsInvalid'
+  assert_lab_owner "$1" "$2"
+  local root=/opt/mydmsvn-local-sim active
+  regular_dir "$root"; regular_dir "$root/releases"
+  [[ -L "$root/current" ]] || fail 'LocalSimulation.ReleaseIdentityMismatch'
+  active="$(readlink -- "$root/current")"
+  [[ "$active" == "releases/$3" || "$active" == "releases/$4" ]] ||
+    fail 'LocalSimulation.ReleaseIdentityMismatch'
+  printf '%s\n' "${active#releases/}"
+}
+
+with_upgrade_lock() (
+  local operation="$1"; shift
+  assert_lab_owner "$1" "$2"
+  local directory=/etc/mydmsvn-local-sim lock_fd
+  regular_dir "$directory"
+  local lock="$directory/.upgrade-operation.lock"
+  if [[ -e "$lock" || -L "$lock" ]]; then regular_file "$lock"; fi
+  exec {lock_fd}>"$lock"
+  flock -n "$lock_fd" || fail 'LocalSimulation.UpgradeLocked'
+  "$operation" "$@"
+)
+
+record_upgrade_intent() {
+  local base="$1" id="$2" action="$3" from="$4" to="$5" state payload temporary
+  [[ "$id" =~ ^[0-9a-f]{32}$ && ( "$action" == Upgrade || "$action" == RollbackUpgrade ) ]] ||
+    fail 'LocalSimulation.UpgradeArgumentsInvalid'
+  regular_dir "$base"
+  state="$base/$id"
+  if [[ -e "$state" || -L "$state" ]]; then
+    regular_file "$state"
+    payload="$(cat -- "$state")"
+    if [[ "$payload" == "RollbackUpgrade $from $to" && "$action" == Upgrade ]]; then
+      fail 'LocalSimulation.UpgradeIntentCancelled'
+    fi
+    [[ "$payload" == "Upgrade $from $to" || "$payload" == "RollbackUpgrade $from $to" ]] ||
+      fail 'LocalSimulation.UpgradeJournalMismatch'
+    [[ "$payload" != "$action $from $to" ]] || return 0
+  fi
+  temporary="$(mktemp "$base/.intent.XXXXXXXX")"
+  printf '%s %s %s\n' "$action" "$from" "$to" >"$temporary"
+  mv -T -- "$temporary" "$state"
+  sync -f "$base"
+}
+
+activate_upgrade_lab() {
+  [[ $# == 11 ]] || fail 'LocalSimulation.UpgradeArgumentsInvalid'
+  local instance="$1" tooling="$2" old="$3" new="$4" old_hash="$5" new_hash="$6" publish="$7" unit="$8" start="$9"
+  local root=/opt/mydmsvn-local-sim active stage action="${10}" request="${11}"
+  assert_lab_owner "$instance" "$tooling"
+  assert_upgrade_service "$unit" "$start"
+  [[ "$old" =~ ^[0-9a-f]{40}$ && "$new" =~ ^[0-9a-f]{40}$ && "$old" != "$new" ]] ||
+    fail 'LocalSimulation.ReleaseIdentityMismatch'
+  regular_dir "$root"; regular_dir "$root/releases"
+  [[ -L "$root/current" ]] || fail 'LocalSimulation.ReleaseIdentityMismatch'
+  active="$(readlink -- "$root/current")"
+  [[ "$active" == "releases/$old" || "$active" == "releases/$new" ]] ||
+    fail 'LocalSimulation.ReleaseIdentityMismatch'
+  local intent=/etc/mydmsvn-local-sim/upgrade-intents
+  if [[ ! -e "$intent" && ! -L "$intent" ]]; then install -d -o root -g root -m 0700 "$intent"; fi
+  if [[ "$action" == RollbackUpgrade ]]; then
+    record_upgrade_intent "$intent" "$request" "$action" "$new:$new_hash" "$old:$old_hash"
+  else
+    record_upgrade_intent "$intent" "$request" "$action" "$old:$old_hash" "$new:$new_hash"
+  fi
+  if [[ "$active" == "releases/$old" ]]; then verify_candidate_release "$root/releases/$old" "$old_hash"; fi
+  if [[ ! -e "$root/releases/$new" && ! -L "$root/releases/$new" ]]; then
+    [[ "$active" == "releases/$old" && "$publish" != '-' ]] || fail 'LocalSimulation.ReleaseIdentityMismatch'
+    verify_candidate_release "$publish" "$new_hash"
+    stage="$(mktemp -d "$root/releases/.staged-$new.XXXXXXXX")"
+    cp -R --no-preserve=ownership,mode -- "$publish/." "$stage/"
+    verify_candidate_release "$stage" "$new_hash"
+    chmod 0755 -- "$stage"
+    find "$stage" -type d -exec chmod 0755 -- '{}' +
+    find "$stage" -type f -exec chmod 0644 -- '{}' +
+    mv -T --no-clobber -- "$stage" "$root/releases/$new"
+    sync -f "$root/releases"
+  fi
+  verify_candidate_release "$root/releases/$new" "$new_hash"
+  if [[ "$active" == "releases/$old" ]]; then
+    systemctl stop mydmsvn-local-sim.service
+    switch_candidate_release "$root" "$old" "$new" "$old_hash" "$new_hash" >/dev/null
+  fi
+  if ! systemctl is-active --quiet mydmsvn-local-sim.service; then
+    systemctl reset-failed mydmsvn-local-sim.service
+    systemctl start mydmsvn-local-sim.service
+  fi
+  verify_lab "$instance" "$tooling" "$new_hash" "$new" >/dev/null
+  observe_upgrade_lab "$instance" "$tooling" "$new" "$new_hash" "$unit" "$start" current
 }
 
 start_lab() {
@@ -251,8 +465,8 @@ recovery_result() {
 }
 
 reset_admission() {
-  [[ $# == 2 && "$(id -u)" == 0 ]] || fail 'LocalSimulation.ResetArgumentsInvalid'
-  local requested="$1" source="$2" path
+  [[ ( $# == 2 || $# == 3 ) && "$(id -u)" == 0 ]] || fail 'LocalSimulation.ResetArgumentsInvalid'
+  local requested="$1" source="$2" release="${3:-$2}" path
   [[ "$source" =~ ^[0-9a-f]{40}$ ]] || fail 'LocalSimulation.SourceShaInvalid'
   if [[ ! -e /etc/mydmsvn-local-sim/instance-id && ! -L /etc/mydmsvn-local-sim/instance-id ]]; then
     id mydmsvn-local-sim >/dev/null 2>&1 && fail 'LocalSimulation.WslIdentityMissing'
@@ -269,7 +483,7 @@ reset_admission() {
   regular_file /etc/mydmsvn-local-sim/source-sha
   [[ "$(cat /etc/mydmsvn-local-sim/source-sha)" == "$source" ]] || fail 'LocalSimulation.SourceShaInvalid'
   if [[ -e /opt/mydmsvn-local-sim/current || -L /opt/mydmsvn-local-sim/current ]]; then
-    [[ -L /opt/mydmsvn-local-sim/current && "$(readlink /opt/mydmsvn-local-sim/current)" == "releases/$source" ]] || fail 'LocalSimulation.ReleaseIdentityMismatch'
+    [[ -L /opt/mydmsvn-local-sim/current && "$(readlink /opt/mydmsvn-local-sim/current)" == "releases/$release" ]] || fail 'LocalSimulation.ReleaseIdentityMismatch'
   fi
 }
 
@@ -334,6 +548,9 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     reset) reset_lab "$@" ;;
     reset-sandbox) reset_sandbox "$@" ;;
     identity) identity_lab "$@" ;;
+    upgrade-observe) with_upgrade_lock observe_upgrade_lab "$@" ;;
+    upgrade-current) with_upgrade_lock current_upgrade_release "$@" ;;
+    upgrade-activate) with_upgrade_lock activate_upgrade_lab "$@" ;;
     *) fail 'LocalSimulation.CommandInvalid' ;;
   esac
 fi

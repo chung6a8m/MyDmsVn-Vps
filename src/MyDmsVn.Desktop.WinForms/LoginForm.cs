@@ -12,15 +12,19 @@ namespace MyDmsVn.Desktop.WinForms
     public sealed class LoginForm : Form
     {
         private readonly LoginViewModel _viewModel;
+        private readonly SalesDraftRecovery? _draftRecovery;
         private readonly CancellationTokenSource _lifetime = new CancellationTokenSource();
         private readonly BootstrapAlert _errorSummary;
         private readonly BootstrapProgressBar _busyIndicator;
         private readonly BootstrapCheckBox _showPassword;
         private bool _disposed;
 
-        public LoginForm(LoginViewModel viewModel)
+        public LoginForm(LoginViewModel viewModel) : this(viewModel, null) { }
+
+        public LoginForm(LoginViewModel viewModel, SalesDraftRecovery? draftRecovery)
         {
             _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+            _draftRecovery = draftRecovery;
 
             Text = "MyDmsVn — Đăng nhập";
             StartPosition = FormStartPosition.CenterScreen;
@@ -231,8 +235,13 @@ namespace MyDmsVn.Desktop.WinForms
             LoginButton.Enabled = !_viewModel.IsBusy;
             UsernameTextBox.Enabled = !_viewModel.IsBusy;
             PasswordTextBox.Enabled = !_viewModel.IsBusy;
-            _errorSummary.Text = _viewModel.ErrorMessage ?? string.Empty;
-            _errorSummary.Visible = !string.IsNullOrWhiteSpace(_viewModel.ErrorMessage);
+            var hasError = !string.IsNullOrWhiteSpace(_viewModel.ErrorMessage);
+            var hasDraft = _draftRecovery?.HasDraft == true;
+            _errorSummary.Variant = hasError ? BootstrapVariant.Danger : BootstrapVariant.Warning;
+            _errorSummary.Text = hasError ? _viewModel.ErrorMessage! : hasDraft
+                ? "Bản nháp được giữ trong phiên chạy này. Đăng nhập lại bằng cùng tài khoản rồi mở Phiếu bán để xem."
+                : string.Empty;
+            _errorSummary.Visible = hasError || hasDraft;
         }
     }
 }

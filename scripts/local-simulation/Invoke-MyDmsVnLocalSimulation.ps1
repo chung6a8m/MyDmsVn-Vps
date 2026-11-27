@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Preflight', 'Initialize', 'Start', 'Verify', 'Stop', 'Reset')]
+    [ValidateSet('Preflight', 'Initialize', 'Start', 'Verify', 'Stop', 'Reset', 'PlanUpgrade', 'Upgrade', 'VerifyUpgrade', 'RollbackUpgrade')]
     [string] $Action,
 
     [string] $StateRoot,
@@ -10,6 +10,13 @@ param(
     [string] $OutputFormat = 'Text',
 
     [string] $ConfirmInstanceId,
+
+    [string] $CandidateRoot,
+    [string] $CandidateSourceSha,
+    [string] $DesktopManifestSha256,
+    [string] $HostManifestSha256,
+    [string] $ExpectedDeploymentEpoch,
+    [string] $ExpectedPendingSha256,
 
     [switch] $DryRun
 )
@@ -23,6 +30,8 @@ if ([string]::IsNullOrWhiteSpace($StateRoot)) {
     $StateRoot = Join-Path $allowedStateParent 'active'
 }
 $resolvedStateRoot = [IO.Path]::GetFullPath($StateRoot)
+$operationMutex = $null
+$operationLocked = $false
 
 function Write-Outcome {
     param(
@@ -41,6 +50,8 @@ function Write-Outcome {
         }
         [Console]::Out.WriteLine($Value.notice)
     }
+    if ($operationLocked) { $operationMutex.ReleaseMutex() }
+    if ($null -ne $operationMutex) { $operationMutex.Dispose() }
     exit $ExitCode
 }
 
@@ -147,23 +158,8 @@ if (-not (Test-PathWithinAllowedStateParent)) {
 if (Test-ReparsePointInStatePath) {
     Refuse 'LocalSimulation.ReparsePointRefused'
 }
-if ($DryRun -and $Action -ne 'Initialize') {
+if ($DryRun -and $Action -notin @('Initialize', 'PlanUpgrade')) {
     Refuse 'LocalSimulation.DryRunUnsupported'
-}
-
-if ($Action -eq 'Initialize' -and $DryRun) {
-    Write-Outcome -Value @{
-        action = 'Initialize'
-        status = 'PLANNED'
-        resources = [ordered]@{
-            container = 'mydmsvn-local-sim-sql'
-            volume = 'mydmsvn-local-sim-sql-data'
-            service = 'mydmsvn-local-sim.service'
-            origin = 'https://localhost:50443'
-            kestrel = 'http://127.0.0.1:5080'
-            sql = 'localhost,11433'
-        }
-    } -ExitCode 0
 }
 
 function Invoke-RuntimeAction {
@@ -174,6 +170,37 @@ function Invoke-RuntimeAction {
         if ($code -notmatch '^LocalSimulation\.[A-Za-z0-9.]+$') { $code = 'LocalSimulation.UnexpectedFailure' }
         Refuse $code
     }
+}
+
+$candidate = $null
+$candidateInputs = @($CandidateRoot, $CandidateSourceSha, $DesktopManifestSha256, $HostManifestSha256)
+$providedCandidateInputs = @($candidateInputs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+$candidateOptionNames = @('CandidateRoot', 'CandidateSourceSha', 'DesktopManifestSha256', 'HostManifestSha256')
+if (@($candidateOptionNames | Where-Object { $PSBoundParameters.ContainsKey($_) }).Count -gt 0) {
+    if ($Action -notin @('Initialize', 'PlanUpgrade', 'Upgrade') -or $providedCandidateInputs.Count -ne $candidateInputs.Count) {
+        Refuse 'LocalSimulation.CandidateArgumentsInvalid'
+    }
+    Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
+    $candidate = Invoke-RuntimeAction {
+        Get-LocalSimulationCandidate $CandidateRoot $CandidateSourceSha $DesktopManifestSha256 $HostManifestSha256
+    }
+}
+
+if ($Action -eq 'Initialize' -and $DryRun) {
+    $plan = @{
+        action = 'Initialize'
+        status = 'PLANNED'
+        resources = [ordered]@{
+            container = 'mydmsvn-local-sim-sql'
+            volume = 'mydmsvn-local-sim-sql-data'
+            service = 'mydmsvn-local-sim.service'
+            origin = 'https://localhost:50443'
+            kestrel = 'http://127.0.0.1:5080'
+            sql = 'localhost,11433'
+        }
+    }
+    if ($null -ne $candidate) { $plan.candidate = $candidate.identity }
+    Write-Outcome -Value $plan -ExitCode 0
 }
 
 if ($Action -eq 'Preflight') {
@@ -187,7 +214,12 @@ if ($Action -eq 'Preflight') {
     $bindingPath = Join-Path (Join-Path $env:LOCALAPPDATA 'MyDmsVn\LocalSimulation') 'binding.json'
     Add-Check 'LocalRegistrationAvailable' (-not (Test-Path -LiteralPath $bindingPath)) 'No prior local simulation binding may exist.'
 
+    $dockerSqlMemory = $false
     try {
+        $memoryOutput = @(& docker info --format '{{.MemTotal}}' 2>$null)
+        $memoryBytes = 0L
+        $dockerSqlMemory = $LASTEXITCODE -eq 0 -and $memoryOutput.Count -eq 1 -and
+            [long]::TryParse($memoryOutput[0], [ref]$memoryBytes) -and $memoryBytes -ge 2GB
         $dockerOutput = @(& docker version --format '{{.Server.Os}}' 2>$null)
         $dockerCode = $LASTEXITCODE
         $dockerOs = $(if ($dockerOutput.Count -gt 0) { [string]$dockerOutput[0] } else { '' })
@@ -210,6 +242,9 @@ if ($Action -eq 'Preflight') {
         Add-Check 'DockerResourceNamesAvailable' $false 'Docker resource identity cannot be verified.'
     }
 
+    Add-Check 'DockerSqlMemory' $dockerSqlMemory 'The Docker Linux engine requires at least 2 GiB RAM to start SQL Server.'
+
+    $systemdReady = $false
     try {
         & wsl -d Ubuntu -- systemctl is-system-running --quiet 2>$null
         $systemdReady = $LASTEXITCODE -eq 0
@@ -218,6 +253,20 @@ if ($Action -eq 'Preflight') {
         Add-Check 'WslUbuntuSystemdSudo' ($systemdReady -and $sudoReady) 'Ubuntu must run systemd and allow noninteractive sudo.'
     }
     catch { Add-Check 'WslUbuntuSystemdSudo' $false 'Ubuntu/systemd/passwordless sudo is unavailable.' }
+
+    $wslLoopback = $false
+    if ($systemdReady) {
+        $probe = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+        try {
+            $probe.Start()
+            $probePort = ([Net.IPEndPoint]$probe.LocalEndpoint).Port
+            & wsl -d Ubuntu --exec timeout 5 bash -c 'echo >/dev/tcp/127.0.0.1/$1' _ $probePort 2>$null
+            $wslLoopback = $LASTEXITCODE -eq 0 -and $probe.Pending()
+        }
+        catch { $wslLoopback = $false }
+        finally { $probe.Stop() }
+    }
+    Add-Check 'WslWindowsLoopback' $wslLoopback 'Ubuntu must reach Windows IPv4 loopback, where Docker publishes the isolated SQL port.'
 
     try {
         $sdks = (& dotnet --list-sdks 2>$null) -join "`n"
@@ -257,6 +306,43 @@ if ($Action -eq 'Preflight') {
     } -ExitCode $(if ($blocked) { 2 } else { 0 })
 }
 
+$lockedActions = @('Initialize', 'Start', 'Verify', 'Stop', 'Reset', 'PlanUpgrade', 'Upgrade', 'VerifyUpgrade', 'RollbackUpgrade')
+if ($Action -in $lockedActions) {
+    $bindingPath = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'MyDmsVn\LocalSimulation')).ToUpperInvariant()
+    $hash = [Security.Cryptography.SHA256]::Create()
+    try { $key = [BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($bindingPath))).Replace('-', '') }
+    finally { $hash.Dispose() }
+    try {
+        $operationMutex = [Threading.Mutex]::new($false, "Global\MyDmsVn.LocalSimulation.$key")
+        try { $operationLocked = $operationMutex.WaitOne(0) }
+        catch [Threading.AbandonedMutexException] { $operationLocked = $true }
+    }
+    catch { Refuse 'LocalSimulation.OperationLockUnavailable' }
+    if (-not $operationLocked) { Refuse 'LocalSimulation.ConcurrentOperation' }
+}
+
+trap {
+    if ($operationLocked) { $operationMutex.ReleaseMutex() }
+    if ($null -ne $operationMutex) { $operationMutex.Dispose() }
+    throw $_
+}
+
+if ($Action -in @('PlanUpgrade', 'Upgrade', 'VerifyUpgrade', 'RollbackUpgrade')) {
+    if ($Action -in @('PlanUpgrade', 'Upgrade') -and $null -eq $candidate) { Refuse 'LocalSimulation.CandidateArgumentsInvalid' }
+    $epoch = [Guid]::Empty
+    if ($Action -ne 'PlanUpgrade' -and
+        (-not [Guid]::TryParseExact($ExpectedDeploymentEpoch, 'D', [ref]$epoch) -or $epoch -eq [Guid]::Empty -or
+         $ExpectedDeploymentEpoch -cne $epoch.ToString('D') -or $ExpectedPendingSha256 -cnotmatch '^[0-9a-f]{64}$')) {
+        Refuse 'LocalSimulation.UpgradeArgumentsInvalid'
+    }
+    $receipt = Read-ValidatedReceipt -RequireConfirmation -AllowStaleMirror
+    Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
+    $result = Invoke-RuntimeAction {
+        Invoke-LocalSimulationUpgrade -Action $Action -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt -Candidate $candidate -ExpectedDeploymentEpoch $ExpectedDeploymentEpoch -ExpectedPendingSha256 $ExpectedPendingSha256
+    }
+    Write-Outcome -Value $result -ExitCode 0
+}
+
 if ($Action -eq 'Initialize') {
     $engine = (Get-Process -Id $PID).Path
     $preflightText = & $engine -NoLogo -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Action Preflight -StateRoot $resolvedStateRoot -OutputFormat Json
@@ -265,7 +351,7 @@ if ($Action -eq 'Initialize') {
     catch { Refuse 'LocalSimulation.PreflightInvalid' }
     if ($preflightCode -ne 0 -or $preflight.status -ne 'READY') { Refuse 'LocalSimulation.PreflightBlocked' }
     Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
-    $result = Invoke-RuntimeAction { Initialize-MyDmsVnLocalSimulation -RepoRoot $repoRoot -StateRoot $resolvedStateRoot }
+    $result = Invoke-RuntimeAction { Initialize-MyDmsVnLocalSimulation -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Candidate $candidate }
     Write-Outcome -Value $result -ExitCode 0
 }
 
@@ -292,17 +378,26 @@ if ($Action -eq 'Reset') {
 
     Import-Module (Join-Path $PSScriptRoot 'LocalSimulation.Runtime.psm1') -Force -DisableNameChecking
     Invoke-RuntimeAction { Assert-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
-    Invoke-RuntimeAction { Reset-MyDmsVnLocalSimulationExternal -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
-    Invoke-RuntimeAction { Complete-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
+    $resetFence = Invoke-RuntimeAction { Enter-LocalSimulationResetFence $receipt }
+    try {
+        Invoke-RuntimeAction { Reset-MyDmsVnLocalSimulationExternal -RepoRoot $repoRoot -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
+        Invoke-RuntimeAction { Complete-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
 
-    $deleteTarget = (Get-Item -LiteralPath $resolvedStateRoot -Force).FullName
-    if (-not $deleteTarget.Equals($resolvedStateRoot, [StringComparison]::OrdinalIgnoreCase) -or
-        -not (Test-PathWithinAllowedStateParent)) {
-        Refuse 'LocalSimulation.DeleteTargetRefused'
+        $deleteTarget = (Get-Item -LiteralPath $resolvedStateRoot -Force).FullName
+        if (-not $deleteTarget.Equals($resolvedStateRoot, [StringComparison]::OrdinalIgnoreCase) -or
+            -not (Test-PathWithinAllowedStateParent)) {
+            Refuse 'LocalSimulation.DeleteTargetRefused'
+        }
+        Invoke-RuntimeAction { Assert-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
+        Remove-Item -LiteralPath $deleteTarget -Recurse -Force
+        Invoke-RuntimeAction { Remove-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
     }
-    Invoke-RuntimeAction { Assert-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
-    Remove-Item -LiteralPath $deleteTarget -Recurse -Force
-    Invoke-RuntimeAction { Remove-LocalSimulationRegistration -StateRoot $resolvedStateRoot -Receipt $receipt } | Out-Null
+    finally {
+        if ($null -ne $resetFence) {
+            try { $resetFence.ReleaseMutex() }
+            finally { $resetFence.Dispose() }
+        }
+    }
     Write-Outcome -Value @{ action = 'Reset'; status = 'RESET'; instanceId = $ConfirmInstanceId } -ExitCode 0
 }
 

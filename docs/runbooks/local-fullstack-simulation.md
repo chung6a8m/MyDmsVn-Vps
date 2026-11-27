@@ -6,7 +6,7 @@ This runbook operates a disposable MyDmsVn lab on one Windows workstation: SQL S
 
 ## Owned resources and prerequisites
 
-Run commands from the repository root in PowerShell 7 (`pwsh`). Preflight requires the local Docker Desktop `desktop-linux` named-pipe context with the Linux engine, WSL distribution `Ubuntu` with systemd and noninteractive sudo, .NET SDKs 8.0.428 and 10.0.404, the .NET Framework 4.8 targeting pack, ports 50443/5080/11433 free, and at least 15 GB free.
+Run commands from the repository root in PowerShell 7 (`pwsh`). Preflight requires the local Docker Desktop `desktop-linux` named-pipe context with the Linux engine and at least 2 GiB of Docker engine RAM, WSL distribution `Ubuntu` with systemd and noninteractive sudo, .NET SDKs 8.0.428 and 10.0.404, the .NET Framework 4.8 targeting pack, ports 50443/5080/11433 free, and at least 15 GB free. Ubuntu must be able to reach Windows IPv4 loopback for the Docker-published SQL port. On Windows 11 with WSL NAT, use mirrored networking in the workstation WSL settings and restart WSL before running Preflight again.
 
 The default instance state root is `TestResults/local-simulation/active`. When using a custom `-StateRoot`, select a dedicated child directory **inside** `TestResults/local-simulation` (not the parent itself), pass the same `-StateRoot` to every action, and adjust the example artifact/receipt paths below. The commands shown use the default root.
 
@@ -31,6 +31,21 @@ Initialization requires a clean Git source tree and an absent or empty state roo
 
 The final JSON includes `instanceId`, status `READY`, and `desktopPath`. Do not edit the receipt or secret files.
 
+For a reviewed prebuilt pair, verify the archive digests and source identity against the publication receipts before extracting. Put the verified Desktop and Host payloads in separate `desktop` and `host` children of an absolute local candidate directory. Retain `vps03-desktop-manifest.json` and `vps08-manifest.json` alongside their respective payloads. Pass the reviewed source SHA and the verified SHA-256 of each manifest to both initialization commands.
+
+```powershell
+$pair = @{
+    CandidateRoot = $verifiedCandidateDirectory
+    CandidateSourceSha = $reviewedCandidateSha
+    DesktopManifestSha256 = $verifiedDesktopManifestHash
+    HostManifestSha256 = $verifiedHostManifestHash
+}
+.\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action Initialize -DryRun -OutputFormat Json @pair
+.\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action Initialize -OutputFormat Json @pair
+```
+
+Dry run checks the pair without provisioning. Initialize copies and rechecks the exact pair, publishes the SQL tooling from the clean checkout, and records the candidate separately from the tooling source in the bound receipt. The initial prebuilt release uses the candidate SHA, so an upgrade can activate a different pair built from the owning tooling SHA. Start and Verify still require the owning tooling checkout. Use the `desktopPath` returned by Initialize for the attended workflow.
+
 ## Operate and verify
 
 ```powershell
@@ -51,6 +66,33 @@ $env:MYDMSVN_DESKTOP_OPERATION_MODE = 'web5'
 
 Confirm the login and representative read/write workflow using only the generated local synthetic credentials under `TestResults/local-simulation/active/secrets`. This is an attended checkpoint: record it separately as PASS/FAIL with the exact HEAD; never infer GUI PASS from publish or automated Verify. Do not copy these credentials to staging or production.
 
+## In-place prebuilt upgrade
+
+Use an initialized prebuilt pair on the same tooling checkout. Close the lab Desktop and recovery client after observing the durable pending operation. Keep the original Windows user and origin. Obtain the expected deployment epoch from the independent SQL observation and the expected pending ciphertext hash from the local pre-upgrade observation. Use the exact owned instance ID and the verified new pair arguments from Initialize.
+
+```powershell
+$upgrade = @{
+    ConfirmInstanceId = $instanceId
+    ExpectedDeploymentEpoch = $observedEpoch
+    ExpectedPendingSha256 = $observedPendingHash
+}
+.\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action PlanUpgrade -DryRun -ConfirmInstanceId $instanceId -OutputFormat Json @pair
+.\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action Upgrade -OutputFormat Json @upgrade @pair
+.\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action VerifyUpgrade -OutputFormat Json @upgrade
+```
+
+Plan reports the active and target pair, Host PID, deployment epoch and protected pending file hash. Upgrade takes a read lease on the existing pending file. It retains the previous pair and stages the verified target pair alongside it. It checks SQL and audit identity around the service switch and requires verified HTTPS before recording the new active pair. Launch the returned Desktop executable normally, using the existing lab origin and operation mode, after verifying the upgrade receipt. Observe and reconcile the pending operation before running the separate write exercises.
+
+If interrupted, keep the bound instance and rerun Upgrade with the same expected inputs. To explicitly return to the retained pair while the same fence is present, run:
+
+```powershell
+.\scripts\local-simulation\Invoke-MyDmsVnLocalSimulation.ps1 -Action RollbackUpgrade -OutputFormat Json @upgrade
+```
+
+Keep the lab and diagnostics if an identity check fails. The pending upgrade phase blocks normal lifecycle actions and reset until the cutover is verified or safely rolled back.
+
+Resume and rollback revalidate the Desktop files against the target release's pinned manifest before switching the Host. If this check fails, preserve the pending record and restore the verified target artifacts before retrying.
+
 ## Reset
 
 Read the instance ID, review it, and pass the exact value:
@@ -63,12 +105,18 @@ $receipt.instanceId
 
 Reset validates the receipt path, instance ID, Docker engine and labels, WSL marker/source link, and CA file/store subject and thumbprint before any deletion. It refuses missing/malformed receipts, mismatched identities, paths outside the ignored state tree, ancestor or leaf reparse points, and `-DryRun`. It removes only owned resources; unrelated Docker containers, volumes, WSL services, files, and certificates are preserved. A partial failed initialization is reset with the same command only when its acquisition marker proves ownership; otherwise state is retained for diagnosis.
 
+For both source-built and prebuilt labs, Reset takes the Desktop's owner/origin pending-write mutex before checking the slot and holds it through teardown. If a write holds the mutex, Reset returns `LocalSimulation.UpgradeFenceBusy` before removing resources. If the slot contains an intent or cannot be inspected safely, keep the lab and resolve the pending state before retrying.
+
 ## Troubleshooting
 
 - `Preflight` `BLOCKED`: fix only the named failed check; do not bypass it.
 - `StateAlreadyExists`: use the receipt-driven Reset above. An empty state directory is safe and accepted.
 - `LockedRestoreFailed`: restore with the exact conditional graph shown in the test commands; do not disable locked mode.
 - `Wsl.*Failed`: inspect `systemctl status mydmsvn-local-sim.service`, `journalctl -u mydmsvn-local-sim.service`, and `nginx -t` inside Ubuntu. These surfaces intentionally do not reveal secrets.
+
+For builds that include operation diagnostics, Native Host emits structured Serilog events to the systemd journal. Search by the operation UUID for the selected HTTP status and error codes, then compare the SQL transaction outcome for the same actor, deployment epoch, kind, target and fingerprint. `ResultStaged` indicates that the journal insert ran within the transaction. Check `TransactionOutcome` for its acknowledged outcome. `CommitUnknown` and `RollbackUnknown` require independent investigation.
+
+Desktop writes bounded Serilog files under `%LOCALAPPDATA%\MyDmsVn-Vps\Diagnostics`. Search by UUID for the received HTTP status, the safe envelope codes and the client's disposition. Operation diagnostics complement the protected security audit, SQL journal and operator runbook. Use [UNKNOWN write recovery](issue-7-unknown-write-recovery.md) for settlement and fence release.
 - SQL identity/ownership refusal: do not relabel or reuse an existing database/volume. Reset the owned instance and initialize again.
 
 For evidence, record base/head SHA, exact commands and environment, discovered/executed/skipped counts, failures, and explicit blockers. A skipped SQL/GUI check or empty filter is not PASS.

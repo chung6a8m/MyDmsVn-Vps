@@ -17,6 +17,23 @@ internal static class Program
 
             var settings = LocalSimulationSettings.Parse(ReadEnvironment());
             var lifecycle = new SqlLifecycle(settings);
+            if (args[0] == "observe-upgrade")
+            {
+                var identity = await lifecycle.ObserveUpgradeDatabaseAsync().ConfigureAwait(false);
+                Console.Out.WriteLine(JsonSerializer.Serialize(new
+                {
+                    schemaVersion = 1,
+                    command = args[0],
+                    status = "PASS",
+                    database = LocalSimulationSqlNames.Database,
+                    instanceId = settings.InstanceId,
+                    databaseGuid = identity.DatabaseGuid,
+                    deploymentEpoch = identity.DeploymentEpoch,
+                    databaseSchema = 13,
+                }));
+                return 0;
+            }
+
             await lifecycle.ExecuteAsync(args[0]).ConfigureAwait(false);
             Console.Out.WriteLine(JsonSerializer.Serialize(new
             {

@@ -88,11 +88,16 @@ function Protect-LocalDirectory {
     }
 }
 
+function Get-ByteSha256 {
+    param([byte[]] $Bytes)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { return (($sha.ComputeHash($Bytes) | ForEach-Object { $_.ToString('x2') }) -join '') }
+    finally { $sha.Dispose() }
+}
+
 function Get-FileSha256 {
     param([string] $Path)
-    $sha = [Security.Cryptography.SHA256]::Create()
-    try { return (($sha.ComputeHash([IO.File]::ReadAllBytes($Path)) | ForEach-Object { $_.ToString('x2') }) -join '') }
-    finally { $sha.Dispose() }
+    return (Get-ByteSha256 ([IO.File]::ReadAllBytes($Path)))
 }
 
 function New-ArtifactManifest {
@@ -108,6 +113,11 @@ function New-ArtifactManifest {
 
 function Assert-ArtifactManifest {
     param([string] $Root, [string] $ExpectedHash)
+    $directory = Get-Item -LiteralPath $Root -Force -ErrorAction SilentlyContinue
+    if ($null -eq $directory -or -not $directory.PSIsContainer -or ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw [InvalidOperationException]::new('LocalSimulation.ArtifactIdentityMismatch')
+    }
+    $Root = $directory.FullName
     $manifest = Join-Path $Root 'artifact-manifest.txt'
     if (-not (Test-Path -LiteralPath $manifest -PathType Leaf) -or [bool]((Get-Item -LiteralPath $manifest -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactManifestMismatch') }
     if ((Get-FileSha256 $manifest) -ne $ExpectedHash) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactManifestMismatch') }
@@ -125,6 +135,121 @@ function Assert-ArtifactManifest {
     if (@($tree | Where-Object { [bool]($_.Attributes -band [IO.FileAttributes]::ReparsePoint) }).Count -gt 0) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactIdentityMismatch') }
     $actualFiles = @($tree | Where-Object { -not $_.PSIsContainer -and $_.FullName -ne $manifest } | ForEach-Object { $_.FullName.Substring($Root.Length).TrimStart('\').Replace('\','/') } | Sort-Object)
     if (($actualFiles -join "`n") -cne (@($expectedFiles | Sort-Object) -join "`n")) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactIdentityMismatch') }
+}
+
+function Assert-CandidateDirectory {
+    param([string] $Path)
+    for ($current = [IO.DirectoryInfo]::new($Path); $null -ne $current; $current = $current.Parent) {
+        if (-not $current.Exists -or ($current.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw [InvalidOperationException]::new('LocalSimulation.CandidateArtifactMismatch')
+        }
+    }
+}
+
+function Get-CandidateTree {
+    param([string] $Root, [ValidateSet('desktop','host')] [string] $Kind, [string] $SourceSha, [string] $ManifestSha256, [switch] $AllowRuntimeManifest)
+    $artifactRoot = Join-Path $Root $Kind
+    Assert-CandidateDirectory $artifactRoot
+    $manifestName = if ($Kind -eq 'desktop') { 'vps03-desktop-manifest.json' } else { 'vps08-manifest.json' }
+    $allFiles = [Collections.Generic.Dictionary[string,IO.FileInfo]]::new([StringComparer]::Ordinal)
+    foreach ($item in Get-ChildItem -LiteralPath $artifactRoot -Force -Recurse) {
+        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw [InvalidOperationException]::new('LocalSimulation.CandidateArtifactMismatch')
+        }
+        if (-not $item.PSIsContainer) {
+            $relative = [IO.Path]::GetRelativePath($artifactRoot, $item.FullName).Replace('\', '/')
+            if ($AllowRuntimeManifest -and $relative -ceq 'artifact-manifest.txt') { continue }
+            $allFiles.Add($relative, $item)
+        }
+    }
+    if (-not $allFiles.ContainsKey($manifestName)) {
+        throw [InvalidOperationException]::new('LocalSimulation.CandidateArtifactMismatch')
+    }
+    $manifestBytes = [IO.File]::ReadAllBytes($allFiles[$manifestName].FullName)
+    if ((Get-ByteSha256 $manifestBytes) -cne $ManifestSha256) {
+        throw [InvalidOperationException]::new('LocalSimulation.CandidateArtifactMismatch')
+    }
+    $manifest = [Text.Encoding]::UTF8.GetString($manifestBytes).TrimStart([char]0xfeff) | ConvertFrom-Json -AsHashtable
+    if ($Kind -eq 'desktop') {
+        if ($manifest.sourceSha -cne $SourceSha -or $manifest.targetFramework -cne 'net48' -or $manifest.platformTarget -cne 'x86') {
+            throw [InvalidOperationException]::new('LocalSimulation.CandidateArtifactMismatch')
+        }
+        $required = @('MyDmsVn.Desktop.App.exe')
+        $entries = @($manifest.files)
+    }
+    else {
+        if ($manifest.source_sha -cne $SourceSha -or $manifest.format -cne 'vps08-linux-v1') {
+            throw [InvalidOperationException]::new('LocalSimulation.CandidateArtifactMismatch')
+        }
+        $required = @('MyDmsVn.Server.AspNetCoreHost.dll', 'MyDmsVn.Server.AspNetCoreHost.deps.json', 'MyDmsVn.Server.AspNetCoreHost.runtimeconfig.json')
+        $entries = @($manifest.files.GetEnumerator() | ForEach-Object {
+            @{ path = $_.Key; length = $_.Value.size; sha256 = $_.Value.sha256 }
+        })
+    }
+    $listed = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    if ($entries.Count -ne $allFiles.Count - 1 -or @($required | Where-Object { -not $allFiles.ContainsKey($_) }).Count -gt 0) {
+        throw [InvalidOperationException]::new('LocalSimulation.CandidateArtifactMismatch')
+    }
+    foreach ($entry in $entries) {
+        $path = [string]$entry.path
+        if ($path -notmatch '^[a-zA-Z0-9_+.-]+(/[a-zA-Z0-9_+.-]+)*$' -or $path -match '(^|/)\.{1,2}(/|$)|(^|/)[^/]*\.(/|$)' -or
+            $path -ieq $manifestName -or $path -ieq 'artifact-manifest.txt' -or -not $listed.Add($path) -or -not $allFiles.ContainsKey($path) -or
+            $entry.sha256 -cnotmatch '^[0-9a-f]{64}$' -or $allFiles[$path].Length -ne $entry.length -or
+            (Get-FileSha256 $allFiles[$path].FullName) -cne $entry.sha256) {
+            throw [InvalidOperationException]::new('LocalSimulation.CandidateArtifactMismatch')
+        }
+    }
+    $hashes = @{ $manifestName = $ManifestSha256 }
+    foreach ($entry in $entries) { $hashes[$entry.path] = $entry.sha256 }
+    [string[]]$paths = $allFiles.Keys
+    [Array]::Sort($paths, [StringComparer]::Ordinal)
+    $runtimeLines = @($paths | ForEach-Object { "$($hashes[$_])  $_" })
+    return [pscustomobject]@{ files = $allFiles; runtimeLines = $runtimeLines }
+}
+
+function Get-LocalSimulationCandidate {
+    param([string] $Root, [string] $SourceSha, [string] $DesktopManifestSha256, [string] $HostManifestSha256)
+    try {
+        if ($SourceSha -cnotmatch '^[0-9a-f]{40}$' -or $DesktopManifestSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+            $HostManifestSha256 -cnotmatch '^[0-9a-f]{64}$' -or -not [IO.Path]::IsPathFullyQualified($Root)) {
+            throw [InvalidOperationException]::new('LocalSimulation.CandidateArtifactMismatch')
+        }
+        $candidatePath = [IO.Path]::GetFullPath($Root)
+        return [pscustomobject]@{
+            identity = [ordered]@{ sourceSha = $SourceSha; desktopManifestSha256 = $DesktopManifestSha256; hostManifestSha256 = $HostManifestSha256 }
+            desktop = Get-CandidateTree $candidatePath 'desktop' $SourceSha $DesktopManifestSha256
+            host = Get-CandidateTree $candidatePath 'host' $SourceSha $HostManifestSha256
+        }
+    }
+    catch { throw [InvalidOperationException]::new('LocalSimulation.CandidateArtifactMismatch') }
+}
+
+function Copy-LocalSimulationCandidate {
+    param([pscustomobject] $Candidate, [string] $Destination)
+    Assert-CandidateDirectory $Destination
+    foreach ($kind in @('desktop', 'host')) {
+        if (Test-Path -LiteralPath (Join-Path $Destination $kind)) {
+            throw [InvalidOperationException]::new('LocalSimulation.CandidateArtifactMismatch')
+        }
+    }
+    foreach ($kind in @('desktop', 'host')) {
+        foreach ($file in $Candidate.$kind.files.GetEnumerator()) {
+            $target = Join-Path (Join-Path $Destination $kind) $file.Key
+            $targetParent = [IO.Path]::GetDirectoryName($target)
+            [IO.Directory]::CreateDirectory($targetParent) | Out-Null
+            Assert-CandidateDirectory $targetParent
+            [IO.File]::Copy($file.Value.FullName, $target, $false)
+        }
+    }
+    $id = $Candidate.identity
+    $staged = Get-LocalSimulationCandidate $Destination $id.sourceSha $id.desktopManifestSha256 $id.hostManifestSha256
+    [string[]]$lines = $staged.host.runtimeLines
+    $manifest = ($lines -join "`n") + "`n"
+    $manifestHash = Get-ByteSha256 ([Text.Encoding]::UTF8.GetBytes($manifest))
+    $hostRoot = Join-Path $Destination 'host'
+    Write-Utf8File (Join-Path $hostRoot 'artifact-manifest.txt') $manifest
+    Assert-ArtifactManifest $hostRoot $manifestHash
+    return $manifestHash
 }
 
 function Get-LocalSimulationBindingPath {
@@ -296,7 +421,7 @@ function Invoke-DotNet10 {
 }
 
 function Publish-LocalSimulationArtifacts {
-    param([string] $RepoRoot, [string] $StateRoot)
+    param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Candidate)
     $buildSettings = Set-ProcessSettings @{
         MSBUILDDISABLENODEREUSE = '1'
         DOTNET_CLI_USE_MSBUILD_SERVER = '0'
@@ -314,6 +439,9 @@ function Publish-LocalSimulationArtifacts {
     Invoke-DotNet10 $StateRoot @('publish', $helper, '-p:Vps04Server=true', '-p:Vps06bMediator=true', '-c', 'Release', '-f', 'net10.0', '--no-restore', '-o', (Join-Path $artifacts 'sql-helper')) 'LocalSimulation.SqlHelperPublishFailed' | Out-Null
     Invoke-DotNet10 $StateRoot @('restore', $migrator, '-p:Vps04Server=true', '--locked-mode') 'LocalSimulation.LockedRestoreFailed' | Out-Null
     Invoke-DotNet10 $StateRoot @('publish', $migrator, '-p:Vps04Server=true', '-c', 'Release', '-f', 'net10.0', '--no-restore', '-o', (Join-Path $artifacts 'migrator')) 'LocalSimulation.MigratorPublishFailed' | Out-Null
+    if ($null -ne $Candidate) {
+        return (Copy-LocalSimulationCandidate $Candidate $artifacts)
+    }
     Invoke-DotNet10 $StateRoot @('restore', $host, '-p:Vps04Server=true', '-p:Vps06bMediator=true', '--locked-mode') 'LocalSimulation.LockedRestoreFailed' | Out-Null
     Invoke-DotNet10 $StateRoot @('publish', $host, '-p:Vps04Server=true', '-p:Vps06bMediator=true', '-p:UseAppHost=false', '-c', 'Release', '-f', 'net10.0', '--no-restore', '-warnaserror', '-o', (Join-Path $artifacts 'host')) 'LocalSimulation.HostPublishFailed' | Out-Null
 
@@ -469,15 +597,53 @@ function Get-DockerInspectObject {
     catch { throw [InvalidOperationException]::new($FailureCode) }
 }
 
+function Get-LocalSimulationInitialReleaseId {
+    param([pscustomobject] $Receipt)
+    # Receipts created before the separate release ID used the owning tooling SHA in the initial path.
+    if ('initialReleaseId' -notin $Receipt.wsl.PSObject.Properties.Name) { return $Receipt.sourceSha }
+    if ($Receipt.wsl.initialReleaseId -cnotmatch '^[0-9a-f]{40}$') { throw [InvalidOperationException]::new('LocalSimulation.ReleaseIdentityMismatch') }
+    return $Receipt.wsl.initialReleaseId
+}
+
+function Get-LocalSimulationReleaseId {
+    param([pscustomobject] $Receipt)
+    if ('releaseId' -notin $Receipt.wsl.PSObject.Properties.Name) { return (Get-LocalSimulationInitialReleaseId $Receipt) }
+    if ($Receipt.wsl.releaseId -cnotmatch '^[0-9a-f]{40}$') { throw [InvalidOperationException]::new('LocalSimulation.ReleaseIdentityMismatch') }
+    return $Receipt.wsl.releaseId
+}
+
+function Get-LocalSimulationArtifactRoot {
+    param([string] $StateRoot, [pscustomobject] $Receipt, [string] $Release)
+    $base = Join-Path $StateRoot 'artifacts'
+    if ($Release -eq (Get-LocalSimulationInitialReleaseId $Receipt)) { return $base }
+    return (Join-Path (Join-Path $base 'releases') $Release)
+}
+
+function Get-LocalSimulationActiveArtifactRoot {
+    param([string] $StateRoot, [pscustomobject] $Receipt)
+    return (Get-LocalSimulationArtifactRoot $StateRoot $Receipt (Get-LocalSimulationReleaseId $Receipt))
+}
+
+function Get-LocalSimulationWslIdentityArgs {
+    param([pscustomobject] $Receipt)
+    return @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256, (Get-LocalSimulationReleaseId $Receipt))
+}
+
 function Assert-LocalSimulationIdentity {
-    param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Receipt)
+    param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Receipt, [switch] $Stopping, [switch] $UpgradeInProgress)
     Assert-LocalSimulationRegistration $StateRoot $Receipt
     $head = ([string](@(Invoke-ExternalSafe 'git' @('-C', $RepoRoot, 'rev-parse', 'HEAD') 'LocalSimulation.GitStateUnavailable')[0])).Trim()
     $dirty = @(Invoke-ExternalSafe 'git' @('-C', $RepoRoot, 'status', '--porcelain') 'LocalSimulation.GitStateUnavailable')
     if ($head -ne [string]$Receipt.sourceSha -or $dirty.Count -ne 0) { throw [InvalidOperationException]::new('LocalSimulation.SourceIdentityMismatch') }
     if ((Get-FileSha256 (Join-Path $RepoRoot 'scripts\local-simulation\mydmsvn-local-sim')) -ne [string]$Receipt.artifacts.bashSha256) { throw [InvalidOperationException]::new('LocalSimulation.ArtifactIdentityMismatch') }
     Assert-ArtifactManifest (Join-Path $StateRoot 'artifacts\sql-helper') ([string]$Receipt.artifacts.sqlHelperSha256)
-    Assert-ArtifactManifest (Join-Path $StateRoot 'artifacts\host') ([string]$Receipt.artifacts.hostSha256)
+    $candidateRoot = Get-LocalSimulationActiveArtifactRoot $StateRoot $Receipt
+    Assert-ArtifactManifest (Join-Path $candidateRoot 'host') ([string]$Receipt.artifacts.hostSha256)
+    if ('candidate' -in $Receipt.artifacts.PSObject.Properties.Name) {
+        $candidate = $Receipt.artifacts.candidate
+        if (-not $Stopping) { Get-CandidateTree $candidateRoot 'desktop' $candidate.sourceSha $candidate.desktopManifestSha256 | Out-Null }
+        Get-CandidateTree $candidateRoot 'host' $candidate.sourceSha $candidate.hostManifestSha256 -AllowRuntimeManifest | Out-Null
+    }
     $engineId = @(Invoke-ExternalSafe 'docker' @('info', '--format', '{{.ID}}') 'LocalSimulation.DockerBackendUnavailable')
     if (([string]$engineId[0]).Trim() -ne [string]$Receipt.docker.engineId) { throw [InvalidOperationException]::new('LocalSimulation.DockerEngineMismatch') }
     $container = Get-DockerInspectObject container 'mydmsvn-local-sim-sql' 'LocalSimulation.SqlContainerMissing'
@@ -488,7 +654,9 @@ function Assert-LocalSimulationIdentity {
         $mount.Count -ne 1 -or [string]$mount[0].Name -ne 'mydmsvn-local-sim-sql-data') {
         throw [InvalidOperationException]::new('LocalSimulation.ResourceIdentityMismatch')
     }
-    Invoke-WslHelper $RepoRoot 'identity' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256) -Sudo | Out-Null
+    if (-not $UpgradeInProgress) {
+        Invoke-WslHelper $RepoRoot 'identity' (Get-LocalSimulationWslIdentityArgs $Receipt) -Sudo | Out-Null
+    }
 }
 
 function Wait-LocalSimulationSqlReady {
@@ -503,7 +671,7 @@ function Wait-LocalSimulationSqlReady {
 }
 
 function Initialize-MyDmsVnLocalSimulation {
-    param([string] $RepoRoot, [string] $StateRoot)
+    param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Candidate)
     if (Test-Path -LiteralPath $StateRoot) {
         $stateItem = Get-Item -LiteralPath $StateRoot -Force
         if (-not $stateItem.PSIsContainer -or
@@ -532,6 +700,12 @@ function Initialize-MyDmsVnLocalSimulation {
         artifacts = [ordered]@{ bashSha256 = Get-FileSha256 (Join-Path $RepoRoot 'scripts\local-simulation\mydmsvn-local-sim'); sqlHelperSha256 = $null; hostSha256 = $null }
         certificateThumbprint = $null
     }
+    $initialReleaseId = $sourceSha
+    if ($null -ne $Candidate) {
+        $receipt.artifacts.candidate = $Candidate.identity
+        $initialReleaseId = $Candidate.identity.sourceSha
+    }
+    $receipt.wsl.initialReleaseId = $initialReleaseId
     $receiptPath = Join-Path $StateRoot 'receipt.json'
     Write-Receipt $receiptPath $receipt
     New-LocalSimulationRegistration $StateRoot $receipt $receiptPath
@@ -544,9 +718,11 @@ function Initialize-MyDmsVnLocalSimulation {
     }
     foreach ($name in $secretValues.Keys) { Write-Utf8File (Join-Path $StateRoot "secrets\$name") $secretValues[$name] }
 
-    Publish-LocalSimulationArtifacts $RepoRoot $StateRoot
+    $candidateRuntimeHash = Publish-LocalSimulationArtifacts $RepoRoot $StateRoot $Candidate
     $receipt.artifacts.sqlHelperSha256 = New-ArtifactManifest (Join-Path $StateRoot 'artifacts\sql-helper')
-    $receipt.artifacts.hostSha256 = New-ArtifactManifest (Join-Path $StateRoot 'artifacts\host')
+    $receipt.artifacts.hostSha256 = if ($null -eq $Candidate) {
+        New-ArtifactManifest (Join-Path $StateRoot 'artifacts\host')
+    } else { $candidateRuntimeHash }
     Write-BoundReceipt $StateRoot $receiptPath $receipt
     $stateWsl = Convert-ToWslPath $StateRoot
     Invoke-WslHelper $RepoRoot 'certificates' @($stateWsl, $instanceId) | Out-Null
@@ -597,7 +773,7 @@ function Initialize-MyDmsVnLocalSimulation {
 
     $runtimeSql = "Server=127.0.0.1,11433;Initial Catalog=MyDmsVnVps_LocalSimulation;User ID=mydmsvn_local_sim_runtime;Password=$($secretValues.runtime_password);Encrypt=True;TrustServerCertificate=False;Pooling=False"
     Write-Utf8File (Join-Path $StateRoot 'secrets\sql_connection_string') $runtimeSql
-    $instanceEnv = "INSTANCE_ID=$instanceId`nSOURCE_SHA=$sourceSha`nPUBLIC_ORIGIN=https://localhost:50443`nSQL_SERVER=127.0.0.1,11433`n"
+    $instanceEnv = "INSTANCE_ID=$instanceId`nSOURCE_SHA=$sourceSha`nRELEASE_ID=$initialReleaseId`nPUBLIC_ORIGIN=https://localhost:50443`nSQL_SERVER=127.0.0.1,11433`n"
     Write-Utf8File (Join-Path $StateRoot 'instance.env') $instanceEnv
     $rendered = Join-Path $StateRoot 'rendered'
     $renderedWsl = Convert-ToWslPath $rendered
@@ -607,8 +783,9 @@ function Initialize-MyDmsVnLocalSimulation {
     $receipt.wsl.installed = $true
     Write-BoundReceipt $StateRoot $receiptPath $receipt
     Invoke-WslHelper $RepoRoot 'install' @($stateWsl, $renderedWsl, $hostWsl, $instanceId) -Sudo | Out-Null
-    Invoke-WslHelper $RepoRoot 'start' @($instanceId, $sourceSha, [string]$receipt.artifacts.hostSha256) -Sudo | Out-Null
-    Invoke-WslHelper $RepoRoot 'verify' @($instanceId, $sourceSha, [string]$receipt.artifacts.hostSha256) -Sudo | Out-Null
+    $identityArgs = @($instanceId, $sourceSha, [string]$receipt.artifacts.hostSha256, $initialReleaseId)
+    Invoke-WslHelper $RepoRoot 'start' $identityArgs -Sudo | Out-Null
+    Invoke-WslHelper $RepoRoot 'verify' $identityArgs -Sudo | Out-Null
     $receipt.phase = 'ready'
     Write-BoundReceipt $StateRoot $receiptPath $receipt
     return [ordered]@{ action = 'Initialize'; status = 'READY'; instanceId = $instanceId; desktopPath = (Join-Path $StateRoot 'artifacts\desktop\MyDmsVn.Desktop.App.exe') }
@@ -620,7 +797,7 @@ function Start-MyDmsVnLocalSimulation {
     $container = Get-DockerInspectObject container 'mydmsvn-local-sim-sql' 'LocalSimulation.SqlContainerMissing'
     if ($container.State.Running -ne $true) { Invoke-ExternalSafe 'docker' @('start', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlStartFailed' | Out-Null }
     Wait-LocalSimulationSqlReady $StateRoot $Receipt
-    Invoke-WslHelper $RepoRoot 'start' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256) -Sudo | Out-Null
+    Invoke-WslHelper $RepoRoot 'start' (Get-LocalSimulationWslIdentityArgs $Receipt) -Sudo | Out-Null
     return [ordered]@{ action = 'Start'; status = 'STARTED'; instanceId = $Receipt.instanceId }
 }
 
@@ -628,16 +805,16 @@ function Verify-MyDmsVnLocalSimulation {
     param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Receipt)
     Assert-LocalSimulationIdentity $RepoRoot $StateRoot $Receipt
     Invoke-SqlHelper $StateRoot $Receipt 'verify' | Out-Null
-    Invoke-WslHelper $RepoRoot 'verify' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256) -Sudo | Out-Null
+    Invoke-WslHelper $RepoRoot 'verify' (Get-LocalSimulationWslIdentityArgs $Receipt) -Sudo | Out-Null
     Invoke-HttpExercise $StateRoot $Receipt
-    Invoke-WslHelper $RepoRoot 'recovery' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256) -Sudo | Out-Null
+    Invoke-WslHelper $RepoRoot 'recovery' (Get-LocalSimulationWslIdentityArgs $Receipt) -Sudo | Out-Null
     return [ordered]@{ action = 'Verify'; status = 'VERIFIED'; instanceId = $Receipt.instanceId; executed = 4; passed = 4; failed = 0; skipped = 0 }
 }
 
 function Stop-MyDmsVnLocalSimulation {
     param([string] $RepoRoot, [string] $StateRoot, [pscustomobject] $Receipt)
-    Assert-LocalSimulationIdentity $RepoRoot $StateRoot $Receipt
-    Invoke-WslHelper $RepoRoot 'stop' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, [string]$Receipt.artifacts.hostSha256) -Sudo | Out-Null
+    Assert-LocalSimulationIdentity $RepoRoot $StateRoot $Receipt -Stopping
+    Invoke-WslHelper $RepoRoot 'stop' (Get-LocalSimulationWslIdentityArgs $Receipt) -Sudo | Out-Null
     Invoke-ExternalSafe 'docker' @('stop', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlStopFailed' | Out-Null
     return [ordered]@{ action = 'Stop'; status = 'STOPPED'; instanceId = $Receipt.instanceId }
 }
@@ -678,7 +855,7 @@ function Reset-MyDmsVnLocalSimulationExternal {
     $engineId = @(Invoke-ExternalSafe 'docker' @('info', '--format', '{{.ID}}') 'LocalSimulation.DockerBackendUnavailable')
     if (([string]$engineId[0]).Trim() -ne [string]$Receipt.docker.engineId) { throw [InvalidOperationException]::new('LocalSimulation.DockerEngineMismatch') }
     if ([bool]$Receipt.wsl.installed) {
-        Invoke-WslHelper $RepoRoot 'reset-admission' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha) -Sudo | Out-Null
+        Invoke-WslHelper $RepoRoot 'reset-admission' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, (Get-LocalSimulationReleaseId $Receipt)) -Sudo | Out-Null
     }
     $containerLabel = $null
     $volumeLabel = $null
@@ -708,7 +885,7 @@ function Reset-MyDmsVnLocalSimulationExternal {
         }
     }
     if ([bool]$Receipt.wsl.installed) {
-        Invoke-WslHelper $RepoRoot 'reset' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha) -Sudo | Out-Null
+        Invoke-WslHelper $RepoRoot 'reset' @([string]$Receipt.instanceId, [string]$Receipt.sourceSha, (Get-LocalSimulationReleaseId $Receipt)) -Sudo | Out-Null
     }
     if ($null -ne $containerLabel) {
         Invoke-ExternalSafe 'docker' @('rm', '-f', '-v', 'mydmsvn-local-sim-sql') 'LocalSimulation.SqlContainerRemoveFailed' | Out-Null
@@ -721,4 +898,6 @@ function Reset-MyDmsVnLocalSimulationExternal {
     }
 }
 
-Export-ModuleMember -Function Initialize-MyDmsVnLocalSimulation,Start-MyDmsVnLocalSimulation,Verify-MyDmsVnLocalSimulation,Stop-MyDmsVnLocalSimulation,Reset-MyDmsVnLocalSimulationExternal,Assert-LocalSimulationRegistration,Complete-LocalSimulationRegistration,Remove-LocalSimulationRegistration
+. (Join-Path $PSScriptRoot 'LocalSimulation.Upgrade.ps1')
+
+Export-ModuleMember -Function Invoke-LocalSimulationUpgrade,Enter-LocalSimulationResetFence,Get-LocalSimulationCandidate,Initialize-MyDmsVnLocalSimulation,Start-MyDmsVnLocalSimulation,Verify-MyDmsVnLocalSimulation,Stop-MyDmsVnLocalSimulation,Reset-MyDmsVnLocalSimulationExternal,Assert-LocalSimulationRegistration,Complete-LocalSimulationRegistration,Remove-LocalSimulationRegistration

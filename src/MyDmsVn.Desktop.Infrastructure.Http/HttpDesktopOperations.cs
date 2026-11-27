@@ -55,9 +55,14 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
             }
         }
 
-        public async Task<ApiResponse<T>> SendAsync<T>(
+        public Task<ApiResponse<T>> SendAsync<T>(
             string kind, long? target, HttpMethod method, string route,
-            object body, long? expectedVersion, CancellationToken cancellationToken)
+            object body, long? expectedVersion, CancellationToken cancellationToken) =>
+            SendAsync<T>(kind, target, method, route, body, expectedVersion, cancellationToken, null);
+
+        internal async Task<ApiResponse<T>> SendAsync<T>(
+            string kind, long? target, HttpMethod method, string route,
+            object body, long? expectedVersion, CancellationToken cancellationToken, Action? preserveDraft)
         {
             cancellationToken.ThrowIfCancellationRequested();
             await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -80,7 +85,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                     var web5 = protocol == "web5";
                     var context = await _transport.SendAsync<JObject>(HttpMethod.Get,
                         web5 ? "/api/v2/operations/context" : "/api/v1/operations/context",
-                        null, cancellationToken, generation).ConfigureAwait(false);
+                        null, cancellationToken, generation, null, preserveDraft).ConfigureAwait(false);
                     if (!context.IsSuccess) return ApiResponse<T>.Failure(context.Error!);
                     epoch = (string?)context.Data!["deploymentEpoch"];
                     var contract = (string?)context.Data["contractVersion"];
@@ -112,7 +117,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                         ["Idempotency-Key"] = record.OperationId,
                         ["X-MyDmsVn-Deployment-Epoch"] = epoch!,
                     };
-                return await DispatchAsync<T>(record, method, route, body, generation, headers, cancellationToken)
+                return await DispatchAsync<T>(record, method, route, body, generation, headers, cancellationToken, preserveDraft)
                     .ConfigureAwait(false);
             }
             finally { _gate.Release(); }
@@ -152,21 +157,48 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         /// </summary>
         private async Task<ApiResponse<T>> DispatchAsync<T>(
             HttpPendingWriteRecord record, HttpMethod method, string route, object body,
-            long generation, IReadOnlyDictionary<string, string>? headers, CancellationToken token)
+            long generation, IReadOnlyDictionary<string, string>? headers, CancellationToken token,
+            Action? preserveDraft = null)
         {
             ApiResponse<T> result;
+            var notDispatched = false;
+            Action? beforeReauthentication = preserveDraft == null ? null : () =>
+            {
+                // Refresh failed before the transport attempted this request.
+                preserveDraft();
+                try { _store.Clear(record); }
+                catch (Exception error) when (error is IOException || error is UnauthorizedAccessException ||
+                    error is InvalidOperationException || error is CryptographicException)
+                {
+                    // Keep the durable fence and surface UNKNOWN if cleanup failed.
+                    return;
+                }
+                notDispatched = true;
+                NotifyPendingCleared();
+            };
             try
             {
                 result = await _transport.SendAsync<T>(method, route, body, token,
-                    generation, headers).ConfigureAwait(false);
+                    generation, headers, beforeReauthentication).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
+                HttpDesktopOperationDiagnostics.RecordDisposition(record.OperationId, "Unknown");
                 throw; // commit could have happened before cancellation
             }
 
-            if (!result.IsSuccess) return Unknown<T>(record);
+            if (notDispatched)
+            {
+                HttpDesktopOperationDiagnostics.RecordDisposition(record.OperationId, "NotDispatched");
+                return result;
+            }
+            if (!result.IsSuccess)
+            {
+                HttpDesktopOperationDiagnostics.RecordDisposition(record.OperationId, "Unknown");
+                return Unknown<T>(record);
+            }
             Clear(record); // no silent success if the file cannot be removed
+            HttpDesktopOperationDiagnostics.RecordDisposition(record.OperationId, "Acknowledged");
             return result;
         }
 
@@ -195,6 +227,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                 { return Unknown<T>(record); }
 
                 Clear(record);
+                HttpDesktopOperationDiagnostics.RecordDisposition(record.OperationId, "JournalCommitted");
                 return decoded;
             }
             finally { _gate.Release(); }
@@ -251,6 +284,7 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
                         "The original exact NOT_EXECUTED certificate cannot be authenticated.");
                 var caseId = (string?)terminal["caseId"];
                 Clear(record);
+                HttpDesktopOperationDiagnostics.RecordDisposition(record.OperationId, "CertifiedNotExecuted");
                 return new DesktopWriteRecoveryResult("NOT_EXECUTED",
                     "The original intent is certified NOT_EXECUTED. Obtain a fresh authorized baseline and create a NEW key; never resend the old one.",
                     true, caseId);
@@ -393,6 +427,11 @@ namespace MyDmsVn.Desktop.Infrastructure.Http
         private void Clear(HttpPendingWriteRecord record)
         {
             _store.Clear(record);
+            NotifyPendingCleared();
+        }
+
+        private void NotifyPendingCleared()
+        {
             _pending = null;
             PendingChanged?.Invoke(this, EventArgs.Empty);
         }

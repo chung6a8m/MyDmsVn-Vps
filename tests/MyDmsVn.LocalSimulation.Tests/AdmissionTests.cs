@@ -21,6 +21,7 @@ public sealed class AdmissionTests
     [InlineData("provision")]
     [InlineData("verify")]
     [InlineData("verify-exercise")]
+    [InlineData("observe-upgrade")]
     [InlineData("reset-admission")]
     public void OnlyBoundedLifecycleCommandsAreAdmitted(string command)
     {

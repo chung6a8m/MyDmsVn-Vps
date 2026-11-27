@@ -33,6 +33,8 @@ public sealed class SqlWebOperationJournal : IWebOperationJournal
         if (_admitted != null)
             throw new InvalidOperationException("One operation per transaction is required.");
         RequireCurrentActor(_current, actorUserId);
+        if (_context is SqlUnitOfWork unitOfWork)
+            unitOfWork.ObserveOperation(operation, actorUserId);
         await FenceAsync(_context, operation.DeploymentEpoch, actorUserId, operation.OperationId, token).ConfigureAwait(false);
         await AuthorizeSessionAsync(_context, actorUserId, operation.SessionId, token).ConfigureAwait(false);
         await AuthorizeOperationAsync(_context, _current, _registry, _superuser, actorUserId, operation.Kind, token).ConfigureAwait(false);
@@ -50,6 +52,8 @@ public sealed class SqlWebOperationJournal : IWebOperationJournal
                     throw new WebOperationException("Operation.ResultExpired");
                 if (reader.GetString(4) != "COMMITTED" || reader.IsDBNull(5) || reader.GetInt16(7) != 1 || reader.GetInt16(8) != 1 || reader.IsDBNull(9))
                     throw new WebOperationException("Operation.ResultUnavailable");
+                if (_context is SqlUnitOfWork replayUnitOfWork)
+                    replayUnitOfWork.JournalEffect = "ExistingResultRead";
                 return new WebOperationReplay(reader.GetInt64(9), (byte[])reader[5]);
             }
         }
@@ -73,6 +77,8 @@ public sealed class SqlWebOperationJournal : IWebOperationJournal
             SqlRead.P("@target", SqlDbType.BigInt, (object?)operation.RequestTargetId ?? DBNull.Value), SqlRead.P("@hash", SqlDbType.Binary, operation.Fingerprint),
             SqlRead.P("@result", SqlDbType.BigInt, resultDocumentId), SqlRead.P("@bytes", SqlDbType.VarBinary, bytes));
         await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+        if (_context is SqlUnitOfWork unitOfWork)
+            unitOfWork.JournalEffect = "ResultStaged";
         _admitted = null;
     }
 

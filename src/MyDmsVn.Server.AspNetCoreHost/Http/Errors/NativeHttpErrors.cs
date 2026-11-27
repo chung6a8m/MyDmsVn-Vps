@@ -23,6 +23,7 @@ internal static class NativeHttpErrors
 
     internal static async Task WriteAsync(HttpContext context, ApiError error)
     {
+        NativeOperationDiagnostics.RecordError(context, error);
         var bytes = JsonSerializer.SerializeToUtf8Bytes(new V1ErrorEnvelope(error), Json);
         context.Response.StatusCode = (int)error.Status;
         context.Response.ContentType = "application/json; charset=utf-8";

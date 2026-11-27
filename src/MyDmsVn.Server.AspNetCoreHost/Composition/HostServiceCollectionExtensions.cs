@@ -24,6 +24,8 @@ internal static class HostServiceCollectionExtensions
         services.AddSingleton(options);
         services.AddSingleton(deployment.Sessions);
         services.AddSingleton<AuthAttemptLimiter>();
+        services.TryAddSingleton<Serilog.ILogger>(_ => new Serilog.LoggerConfiguration()
+            .WriteTo.Sink(new NativeOperationDiagnostics.JournalSink()).CreateLogger());
         services.AddScoped<CoreApiAdmissionMiddleware>();
         services.AddSingleton<ISecurityAuditReadiness, CoreSecurityAuditReadiness>();
 

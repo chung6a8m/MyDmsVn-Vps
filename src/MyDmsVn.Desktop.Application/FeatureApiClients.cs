@@ -18,6 +18,13 @@ namespace MyDmsVn.Desktop.Application
         Task<ApiResponse<PostSalesReceiptResponse>> PostAsync(PostSalesReceiptRequest request, CancellationToken cancellationToken);
     }
 
+    public interface ISalesDraftSaveRecovery
+    {
+        // Invoked only on a refresh connection failure before the sales mutation is sent.
+        Task<ApiResponse<SalesReceiptDto>> SaveDraftAsync(long saleId, string version,
+            SaveSalesReceiptRequest request, System.Action preserveDraft, CancellationToken cancellationToken);
+    }
+
     public interface IProductApiClient
     {
         Task<ApiResponse<PagedResult<ProductDto>>> ListAsync(CatalogListRequest request, CancellationToken cancellationToken);
